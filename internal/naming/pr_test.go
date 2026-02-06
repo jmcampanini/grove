@@ -242,6 +242,7 @@ func TestIsValidBranchName(t *testing.T) {
 		name       string
 		branchName string
 		want       bool
+		wantReason string
 	}{
 		{
 			name:       "valid simple name",
@@ -272,41 +273,49 @@ func TestIsValidBranchName(t *testing.T) {
 			name:       "invalid empty string",
 			branchName: "",
 			want:       false,
+			wantReason: "empty",
 		},
 		{
 			name:       "invalid leading dash",
 			branchName: "-feature",
 			want:       false,
+			wantReason: "starts with '-'",
 		},
 		{
 			name:       "invalid double dots",
 			branchName: "feature..test",
 			want:       false,
+			wantReason: "contains '..'",
 		},
 		{
 			name:       "invalid double dots at start",
 			branchName: "..feature",
 			want:       false,
+			wantReason: "contains '..'",
 		},
 		{
 			name:       "invalid double dots at end",
 			branchName: "feature..",
 			want:       false,
+			wantReason: "contains '..'",
 		},
 		{
 			name:       "invalid control character tab",
 			branchName: "feature\ttest",
 			want:       false,
+			wantReason: "contains control character",
 		},
 		{
 			name:       "invalid control character newline",
 			branchName: "feature\ntest",
 			want:       false,
+			wantReason: "contains control character",
 		},
 		{
 			name:       "invalid DEL character",
 			branchName: "feature\x7ftest",
 			want:       false,
+			wantReason: "contains control character",
 		},
 		{
 			name:       "valid single dot",
@@ -322,8 +331,9 @@ func TestIsValidBranchName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := isValidBranchName(tt.branchName)
+			got, reason := isValidBranchName(tt.branchName)
 			assert.Equal(t, tt.want, got)
+			assert.Equal(t, tt.wantReason, reason)
 		})
 	}
 }

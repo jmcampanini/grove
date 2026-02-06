@@ -39,8 +39,8 @@ func NewPRWorktreeNamer(prCfg config.PRConfig, slugCfg config.SlugifyConfig) (*P
 	}
 
 	// 3. Validate output is valid git branch name
-	if !isValidBranchName(buf.String()) {
-		return nil, fmt.Errorf("branch_template produces invalid branch name: %s", buf.String())
+	if ok, reason := isValidBranchName(buf.String()); !ok {
+		return nil, fmt.Errorf("branch_template produces invalid branch name: %s", reason)
 	}
 
 	return &PRWorktreeNamer{
@@ -82,35 +82,28 @@ func (n *PRWorktreeNamer) GenerateWorktreeName(branchName string) string {
 	return n.worktreePrefix + slug
 }
 
-// TODO: make this return an error string or string, and have it be why it failed. this should simplify comments too
 // isValidBranchName validates git branch name with simplified rules.
-// Checks only the most common invalid patterns:
-// - No ".." anywhere
-// - No control characters (ASCII < 32, DEL which is 127)
-// - No leading "-"
+// Returns (true, "") if valid, or (false, reason) describing why it's invalid.
 // Edge cases not covered here will fail at git worktree creation time
 // with clear git error messages.
-func isValidBranchName(name string) bool {
+func isValidBranchName(name string) (bool, string) {
 	if name == "" {
-		return false
+		return false, "empty"
 	}
 
-	// No leading "-"
 	if strings.HasPrefix(name, "-") {
-		return false
+		return false, "starts with '-'"
 	}
 
-	// No ".." anywhere
 	if strings.Contains(name, "..") {
-		return false
+		return false, "contains '..'"
 	}
 
-	// No control characters (ASCII < 32 or DEL which is 127)
 	for _, r := range name {
 		if r < 32 || r == 127 {
-			return false
+			return false, "contains control character"
 		}
 	}
 
-	return true
+	return true, ""
 }
