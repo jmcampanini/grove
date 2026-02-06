@@ -3,7 +3,6 @@ package naming
 import (
 	"bytes"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"text/template"
 
@@ -83,16 +82,7 @@ func (n *PRWorktreeNamer) GenerateWorktreeName(branchName string) string {
 	return n.worktreePrefix + slug
 }
 
-// HasPrefix checks if the given directory name has the configured worktree prefix.
-func (n *PRWorktreeNamer) HasPrefix(name string) bool {
-	return strings.HasPrefix(name, n.worktreePrefix)
-}
-
-// ExtractFromAbsolutePath returns the worktree directory name from an absolute path.
-func (n *PRWorktreeNamer) ExtractFromAbsolutePath(absPath string) string {
-	return filepath.Base(absPath)
-}
-
+// TODO: make this return an error string or string, and have it be why it failed. this should simplify comments too
 // isValidBranchName validates git branch name with simplified rules.
 // Checks only the most common invalid patterns:
 // - No ".." anywhere
