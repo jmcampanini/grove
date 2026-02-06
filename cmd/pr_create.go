@@ -158,7 +158,11 @@ func createPRWorktree(stdout, stderr io.Writer, ctx *prCreateContext, prInfo git
 	}
 
 	if !branchExists {
-		if err := ctx.gitClient.FetchRemoteBranch("origin", prInfo.BranchName, localBranch); err != nil {
+		remote, err := ctx.gitClient.GetDefaultRemote("origin")
+		if err != nil {
+			return fmt.Errorf("failed to determine remote: %w", err)
+		}
+		if err := ctx.gitClient.FetchRemoteBranch(remote, prInfo.BranchName, localBranch); err != nil {
 			return fmt.Errorf("failed to fetch remote branch: %w", err)
 		}
 	}

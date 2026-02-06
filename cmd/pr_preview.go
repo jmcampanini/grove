@@ -121,8 +121,8 @@ func outputPRPreview(w io.Writer, pr github.PullRequest, files []github.PullRequ
 		fmt.Fprintf(&sb, "  %s (+%d, -%d)\n", f.Path, f.Additions, f.Deletions)
 	}
 
-	if len(files) > maxFiles {
-		fmt.Fprintf(&sb, "  (and %d more files...)\n", len(files)-maxFiles)
+	if remaining := pr.FilesChanged - displayCount; remaining > 0 {
+		fmt.Fprintf(&sb, "  (and %d more files...)\n", remaining)
 	}
 
 	sb.WriteString("\n")
