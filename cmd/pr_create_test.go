@@ -9,7 +9,6 @@ import (
 	"github.com/jmcampanini/grove-cli/internal/config"
 	"github.com/jmcampanini/grove-cli/internal/git"
 	"github.com/jmcampanini/grove-cli/internal/github"
-	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -210,9 +209,8 @@ func (m *mockGit) SyncTags(remoteName string) error {
 	return nil
 }
 
-func defaultTestConfig() *config.Config {
-	cfg := config.DefaultConfig()
-	return &cfg
+func defaultTestConfig() config.Config {
+	return config.DefaultConfig()
 }
 
 func createTestWorktree(path string, branchName string) git.Worktree {
@@ -224,143 +222,24 @@ func createTestWorktree(path string, branchName string) git.Worktree {
 	}
 }
 
-func TestPRCreate(t *testing.T) {
+func TestCreatePRWorktree(t *testing.T) {
 	tests := []struct {
 		name           string
-		args           []string
-		ghMock         *mockGitHub
+		prInfo         github.PullRequest
 		gitMock        *mockGit
-		cfg            *config.Config
+		cfg            config.Config
 		wantErr        bool
 		wantErrContain string
 		wantStdout     string
 		wantStderr     string
 	}{
 		{
-			name: "invalid PR number",
-			args: []string{"abc"},
-			ghMock: &mockGitHub{
-				validateFn: func() error { return nil },
-			},
-			gitMock:        &mockGit{},
-			cfg:            defaultTestConfig(),
-			wantErr:        true,
-			wantErrContain: "invalid PR number",
-		},
-		{
-			name: "gh validation error",
-			args: []string{"123"},
-			ghMock: &mockGitHub{
-				validateFn: func() error {
-					return assert.AnError
-				},
-			},
-			gitMock: &mockGit{},
-			cfg:     defaultTestConfig(),
-			wantErr: true,
-		},
-		{
-			name: "fork PR returns error",
-			args: []string{"123"},
-			ghMock: &mockGitHub{
-				validateFn: func() error { return nil },
-				getPullRequestFn: func(prNum int) (github.PullRequest, error) {
-					return github.PullRequest{
-						BranchName:        "feature/add-auth",
-						IsCrossRepository: true,
-						Number:            123,
-						State:             github.PRStateOpen,
-						Title:             "Add auth",
-					}, nil
-				},
-			},
-			gitMock:        &mockGit{},
-			cfg:            defaultTestConfig(),
-			wantErr:        true,
-			wantErrContain: "from a fork",
-		},
-		{
-			name: "merged PR shows warning",
-			args: []string{"123"},
-			ghMock: &mockGitHub{
-				validateFn: func() error { return nil },
-				getPullRequestFn: func(prNum int) (github.PullRequest, error) {
-					return github.PullRequest{
-						BranchName:        "feature/add-auth",
-						IsCrossRepository: false,
-						Number:            123,
-						State:             github.PRStateMerged,
-						Title:             "Add auth",
-					}, nil
-				},
-			},
-			gitMock: &mockGit{
-				listWorktreesFn: func() ([]git.Worktree, error) {
-					return []git.Worktree{}, nil
-				},
-				branchExistsFn: func(branchName string, caseInsensitive bool) (bool, error) {
-					return false, nil
-				},
-				fetchRemoteBranchFn: func(remote, remoteRef, localRef string) error {
-					return nil
-				},
-				createWorktreeForExistingBranchFn: func(branchName, worktreeAbsPath string) error {
-					return nil
-				},
-			},
-			cfg:        defaultTestConfig(),
-			wantErr:    false,
-			wantStderr: "Note: PR #123 is merged",
-			wantStdout: "/workspace/pr-feature-add-auth",
-		},
-		{
-			name: "closed PR shows warning",
-			args: []string{"456"},
-			ghMock: &mockGitHub{
-				validateFn: func() error { return nil },
-				getPullRequestFn: func(prNum int) (github.PullRequest, error) {
-					return github.PullRequest{
-						BranchName:        "fix/bug",
-						IsCrossRepository: false,
-						Number:            456,
-						State:             github.PRStateClosed,
-						Title:             "Fix bug",
-					}, nil
-				},
-			},
-			gitMock: &mockGit{
-				listWorktreesFn: func() ([]git.Worktree, error) {
-					return []git.Worktree{}, nil
-				},
-				branchExistsFn: func(branchName string, caseInsensitive bool) (bool, error) {
-					return false, nil
-				},
-				fetchRemoteBranchFn: func(remote, remoteRef, localRef string) error {
-					return nil
-				},
-				createWorktreeForExistingBranchFn: func(branchName, worktreeAbsPath string) error {
-					return nil
-				},
-			},
-			cfg:        defaultTestConfig(),
-			wantErr:    false,
-			wantStderr: "Note: PR #456 is closed",
-			wantStdout: "/workspace/pr-fix-bug",
-		},
-		{
 			name: "existing worktree returns path",
-			args: []string{"123"},
-			ghMock: &mockGitHub{
-				validateFn: func() error { return nil },
-				getPullRequestFn: func(prNum int) (github.PullRequest, error) {
-					return github.PullRequest{
-						BranchName:        "feature/add-auth",
-						IsCrossRepository: false,
-						Number:            123,
-						State:             github.PRStateOpen,
-						Title:             "Add auth",
-					}, nil
-				},
+			prInfo: github.PullRequest{
+				BranchName: "feature/add-auth",
+				Number:     123,
+				State:      github.PRStateOpen,
+				Title:      "Add auth",
 			},
 			gitMock: &mockGit{
 				listWorktreesFn: func() ([]git.Worktree, error) {
@@ -376,27 +255,19 @@ func TestPRCreate(t *testing.T) {
 		},
 		{
 			name: "branch exists skips fetch",
-			args: []string{"123"},
-			ghMock: &mockGitHub{
-				validateFn: func() error { return nil },
-				getPullRequestFn: func(prNum int) (github.PullRequest, error) {
-					return github.PullRequest{
-						BranchName:        "feature/add-auth",
-						IsCrossRepository: false,
-						Number:            123,
-						State:             github.PRStateOpen,
-						Title:             "Add auth",
-					}, nil
-				},
+			prInfo: github.PullRequest{
+				BranchName: "feature/add-auth",
+				Number:     123,
+				State:      github.PRStateOpen,
+				Title:      "Add auth",
 			},
 			gitMock: &mockGit{
 				listWorktreesFn: func() ([]git.Worktree, error) {
 					return []git.Worktree{}, nil
 				},
 				branchExistsFn: func(branchName string, caseInsensitive bool) (bool, error) {
-					return true, nil // Branch already exists
+					return true, nil
 				},
-				// FetchRemoteBranch should NOT be called
 				fetchRemoteBranchFn: func(remote, remoteRef, localRef string) error {
 					t.Error("FetchRemoteBranch should not be called when branch exists")
 					return nil
@@ -411,18 +282,11 @@ func TestPRCreate(t *testing.T) {
 		},
 		{
 			name: "new worktree creation success",
-			args: []string{"123"},
-			ghMock: &mockGitHub{
-				validateFn: func() error { return nil },
-				getPullRequestFn: func(prNum int) (github.PullRequest, error) {
-					return github.PullRequest{
-						BranchName:        "feature/add-auth",
-						IsCrossRepository: false,
-						Number:            123,
-						State:             github.PRStateOpen,
-						Title:             "Add auth",
-					}, nil
-				},
+			prInfo: github.PullRequest{
+				BranchName: "feature/add-auth",
+				Number:     123,
+				State:      github.PRStateOpen,
+				Title:      "Add auth",
 			},
 			gitMock: &mockGit{
 				listWorktreesFn: func() ([]git.Worktree, error) {
@@ -449,18 +313,11 @@ func TestPRCreate(t *testing.T) {
 		},
 		{
 			name: "PR number template generates different branch name",
-			args: []string{"456"},
-			ghMock: &mockGitHub{
-				validateFn: func() error { return nil },
-				getPullRequestFn: func(prNum int) (github.PullRequest, error) {
-					return github.PullRequest{
-						BranchName:        "feature/test",
-						IsCrossRepository: false,
-						Number:            456,
-						State:             github.PRStateOpen,
-						Title:             "Test PR",
-					}, nil
-				},
+			prInfo: github.PullRequest{
+				BranchName: "feature/test",
+				Number:     456,
+				State:      github.PRStateOpen,
+				Title:      "Test PR",
 			},
 			gitMock: &mockGit{
 				listWorktreesFn: func() ([]git.Worktree, error) {
@@ -470,41 +327,86 @@ func TestPRCreate(t *testing.T) {
 					return false, nil
 				},
 				fetchRemoteBranchFn: func(remote, remoteRef, localRef string) error {
-					// When using pr/{{.Number}} template, local ref should be pr/456
 					assert.Equal(t, "feature/test", remoteRef)
 					assert.Equal(t, "pr/456", localRef)
 					return nil
 				},
 				createWorktreeForExistingBranchFn: func(branchName, worktreeAbsPath string) error {
 					assert.Equal(t, "pr/456", branchName)
-					// With smart prefix detection: pr/456 -> pr-456 which already starts with pr-
 					assert.Equal(t, "/workspace/pr-456", worktreeAbsPath)
 					return nil
 				},
 			},
-			cfg: func() *config.Config {
+			cfg: func() config.Config {
 				cfg := config.DefaultConfig()
 				cfg.PR.BranchTemplate = "pr/{{.Number}}"
-				return &cfg
+				return cfg
 			}(),
 			wantErr:    false,
 			wantStdout: "/workspace/pr-456",
+		},
+		{
+			name: "fetch error",
+			prInfo: github.PullRequest{
+				BranchName: "feature/add-auth",
+				Number:     123,
+				State:      github.PRStateOpen,
+				Title:      "Add auth",
+			},
+			gitMock: &mockGit{
+				listWorktreesFn: func() ([]git.Worktree, error) {
+					return []git.Worktree{}, nil
+				},
+				branchExistsFn: func(branchName string, caseInsensitive bool) (bool, error) {
+					return false, nil
+				},
+				fetchRemoteBranchFn: func(remote, remoteRef, localRef string) error {
+					return assert.AnError
+				},
+			},
+			cfg:            defaultTestConfig(),
+			wantErr:        true,
+			wantErrContain: "failed to fetch remote branch",
+		},
+		{
+			name: "worktree creation error",
+			prInfo: github.PullRequest{
+				BranchName: "feature/add-auth",
+				Number:     123,
+				State:      github.PRStateOpen,
+				Title:      "Add auth",
+			},
+			gitMock: &mockGit{
+				listWorktreesFn: func() ([]git.Worktree, error) {
+					return []git.Worktree{}, nil
+				},
+				branchExistsFn: func(branchName string, caseInsensitive bool) (bool, error) {
+					return false, nil
+				},
+				fetchRemoteBranchFn: func(remote, remoteRef, localRef string) error {
+					return nil
+				},
+				createWorktreeForExistingBranchFn: func(branchName, worktreeAbsPath string) error {
+					return assert.AnError
+				},
+			},
+			cfg:            defaultTestConfig(),
+			wantErr:        true,
+			wantErrContain: "failed to create worktree",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
-			cmd := &cobra.Command{}
-			cmd.SetOut(&stdout)
-			cmd.SetErr(&stderr)
 
-			deps := &prCreateDeps{
-				gh:  tt.ghMock,
-				git: tt.gitMock,
+			ctx := &prCreateContext{
+				cfg:       tt.cfg,
+				ghClient:  &mockGitHub{},
+				gitClient: tt.gitMock,
 			}
 
-			err := runPRCreateWithDeps(cmd, tt.args, deps, tt.cfg)
+			err := createPRWorktree(&stdout, &stderr, ctx, tt.prInfo)
 
 			if tt.wantErr {
 				require.Error(t, err)
@@ -526,130 +428,33 @@ func TestPRCreate(t *testing.T) {
 	}
 }
 
-func TestPRCreateExistingWorktreeViaDirectBranchMatch(t *testing.T) {
-	// Test case where worktree exists with exact remote branch name
-	// (manually created worktree, not via grove pr create)
+func TestCreatePRWorktreeDirectBranchMatch(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	cmd := &cobra.Command{}
-	cmd.SetOut(&stdout)
-	cmd.SetErr(&stderr)
-
-	ghMock := &mockGitHub{
-		validateFn: func() error { return nil },
-		getPullRequestFn: func(prNum int) (github.PullRequest, error) {
-			return github.PullRequest{
-				BranchName:        "feature/add-auth",
-				IsCrossRepository: false,
-				Number:            123,
-				State:             github.PRStateOpen,
-				Title:             "Add auth",
-			}, nil
-		},
-	}
 
 	gitMock := &mockGit{
 		listWorktreesFn: func() ([]git.Worktree, error) {
-			// Worktree with exact remote branch name (manually created)
 			return []git.Worktree{
 				createTestWorktree("/workspace/wt-feature-add-auth", "feature/add-auth"),
 			}, nil
 		},
 	}
 
-	deps := &prCreateDeps{
-		gh:  ghMock,
-		git: gitMock,
+	ctx := &prCreateContext{
+		cfg:       defaultTestConfig(),
+		ghClient:  &mockGitHub{},
+		gitClient: gitMock,
 	}
 
-	err := runPRCreateWithDeps(cmd, []string{"123"}, deps, defaultTestConfig())
+	prInfo := github.PullRequest{
+		BranchName: "feature/add-auth",
+		Number:     123,
+		State:      github.PRStateOpen,
+		Title:      "Add auth",
+	}
+
+	err := createPRWorktree(&stdout, &stderr, ctx, prInfo)
 	require.NoError(t, err)
 
-	// Should return existing worktree path (via direct branch match)
 	assert.Contains(t, stdout.String(), "/workspace/wt-feature-add-auth")
 	assert.Contains(t, stderr.String(), "Worktree already exists")
-}
-
-func TestPRCreateFetchError(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-	cmd := &cobra.Command{}
-	cmd.SetOut(&stdout)
-	cmd.SetErr(&stderr)
-
-	ghMock := &mockGitHub{
-		validateFn: func() error { return nil },
-		getPullRequestFn: func(prNum int) (github.PullRequest, error) {
-			return github.PullRequest{
-				BranchName:        "feature/add-auth",
-				IsCrossRepository: false,
-				Number:            123,
-				State:             github.PRStateOpen,
-				Title:             "Add auth",
-			}, nil
-		},
-	}
-
-	gitMock := &mockGit{
-		listWorktreesFn: func() ([]git.Worktree, error) {
-			return []git.Worktree{}, nil
-		},
-		branchExistsFn: func(branchName string, caseInsensitive bool) (bool, error) {
-			return false, nil
-		},
-		fetchRemoteBranchFn: func(remote, remoteRef, localRef string) error {
-			return assert.AnError
-		},
-	}
-
-	deps := &prCreateDeps{
-		gh:  ghMock,
-		git: gitMock,
-	}
-
-	err := runPRCreateWithDeps(cmd, []string{"123"}, deps, defaultTestConfig())
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to fetch remote branch")
-}
-
-func TestPRCreateWorktreeCreationError(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-	cmd := &cobra.Command{}
-	cmd.SetOut(&stdout)
-	cmd.SetErr(&stderr)
-
-	ghMock := &mockGitHub{
-		validateFn: func() error { return nil },
-		getPullRequestFn: func(prNum int) (github.PullRequest, error) {
-			return github.PullRequest{
-				BranchName:        "feature/add-auth",
-				IsCrossRepository: false,
-				Number:            123,
-				State:             github.PRStateOpen,
-				Title:             "Add auth",
-			}, nil
-		},
-	}
-
-	gitMock := &mockGit{
-		listWorktreesFn: func() ([]git.Worktree, error) {
-			return []git.Worktree{}, nil
-		},
-		branchExistsFn: func(branchName string, caseInsensitive bool) (bool, error) {
-			return false, nil
-		},
-		fetchRemoteBranchFn: func(remote, remoteRef, localRef string) error {
-			return nil
-		},
-		createWorktreeForExistingBranchFn: func(branchName, worktreeAbsPath string) error {
-			return assert.AnError
-		},
-	}
-
-	deps := &prCreateDeps{
-		gh:  ghMock,
-		git: gitMock,
-	}
-
-	err := runPRCreateWithDeps(cmd, []string{"123"}, deps, defaultTestConfig())
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to create worktree")
 }

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -30,84 +31,48 @@ func init() {
 }
 
 func runPRCreate(cmd *cobra.Command, args []string) error {
-	return runPRCreateWithDeps(cmd, args, nil, nil)
+	prNum, err := strconv.Atoi(args[0])
+	if err != nil {
+		return fmt.Errorf("invalid PR number: %s", args[0])
+	}
+
+	ctx, err := initPRCreateContextFromEnv()
+	if err != nil {
+		return err
+	}
+
+	if err := ctx.ghClient.Validate(); err != nil {
+		return err
+	}
+
+	prInfo, err := ctx.ghClient.GetPullRequest(prNum)
+	if err != nil {
+		return fmt.Errorf("failed to get pull request: %w", err)
+	}
+
+	if prInfo.IsCrossRepository {
+		return fmt.Errorf("PR #%d is from a fork, which is not yet supported.\nTip: You can manually add the fork as a remote and create a worktree with 'git worktree add'", prInfo.Number)
+	}
+
+	if prInfo.State == github.PRStateMerged || prInfo.State == github.PRStateClosed {
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Note: PR #%d is %s\n", prInfo.Number, strings.ToLower(string(prInfo.State)))
+	}
+
+	return createPRWorktree(cmd.OutOrStdout(), cmd.ErrOrStderr(), ctx, prInfo)
 }
 
-// prCreateDeps holds injectable dependencies for testing.
-type prCreateDeps struct {
-	gh  github.GitHub
-	git git.Git
-}
-
-// prCreateContext holds the resolved dependencies for the pr create command.
 type prCreateContext struct {
 	cfg       config.Config
 	ghClient  github.GitHub
 	gitClient git.Git
 }
 
-func runPRCreateWithDeps(cmd *cobra.Command, args []string, deps *prCreateDeps, cfg *config.Config) error {
-	// Step 1: Parse PR number from args
-	prNum, err := strconv.Atoi(args[0])
-	if err != nil {
-		return fmt.Errorf("invalid PR number: %s", args[0])
-	}
-
-	// Initialize context with deps or from environment
-	ctx, err := initPRCreateContext(deps, cfg)
-	if err != nil {
-		return err
-	}
-
-	// Step 2: Validate gh CLI
-	if err := ctx.ghClient.Validate(); err != nil {
-		return err
-	}
-
-	// Step 3: Fetch PR info
-	prInfo, err := ctx.ghClient.GetPullRequest(prNum)
-	if err != nil {
-		return fmt.Errorf("failed to get pull request: %w", err)
-	}
-
-	// Step 4: Detect fork PRs (fail fast)
-	if prInfo.IsCrossRepository {
-		return fmt.Errorf("PR #%d is from a fork, which is not yet supported.\nTip: You can manually add the fork as a remote and create a worktree with 'git worktree add'", prInfo.Number)
-	}
-
-	// Step 5: Warn if merged/closed (but continue)
-	if prInfo.State == github.PRStateMerged || prInfo.State == github.PRStateClosed {
-		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Note: PR #%d is %s\n", prInfo.Number, strings.ToLower(string(prInfo.State)))
-	}
-
-	return createPRWorktree(cmd, ctx, prInfo)
-}
-
-// initPRCreateContext initializes the context from deps (for testing) or from environment.
-func initPRCreateContext(deps *prCreateDeps, cfg *config.Config) (*prCreateContext, error) {
-	if deps != nil {
-		loadedCfg := config.DefaultConfig()
-		if cfg != nil {
-			loadedCfg = *cfg
-		}
-		return &prCreateContext{
-			cfg:       loadedCfg,
-			ghClient:  deps.gh,
-			gitClient: deps.git,
-		}, nil
-	}
-
-	return initPRCreateContextFromEnv()
-}
-
-// initPRCreateContextFromEnv loads config and creates clients from the environment.
 func initPRCreateContextFromEnv() (*prCreateContext, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current directory: %w", err)
 	}
 
-	// Create git client with default timeout first
 	gitClient := git.New(false, cwd, config.DefaultConfig().Git.Timeout)
 
 	worktreeRoot, err := gitClient.GetWorktreeRoot()
@@ -135,7 +100,6 @@ func initPRCreateContextFromEnv() (*prCreateContext, error) {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Recreate git client with configured timeout
 	return &prCreateContext{
 		cfg:       loadResult.Config,
 		ghClient:  github.New(cwd, loadResult.Config.Git.Timeout),
@@ -143,9 +107,7 @@ func initPRCreateContextFromEnv() (*prCreateContext, error) {
 	}, nil
 }
 
-// createPRWorktree handles the worktree creation logic after PR validation.
-func createPRWorktree(cmd *cobra.Command, ctx *prCreateContext, prInfo github.PullRequest) error {
-	// Step 6: Generate local branch name via template
+func createPRWorktree(stdout, stderr io.Writer, ctx *prCreateContext, prInfo github.PullRequest) error {
 	namer, err := naming.NewPRWorktreeNamer(ctx.cfg.PR, ctx.cfg.Slugify)
 	if err != nil {
 		return fmt.Errorf("failed to create PR namer: %w", err)
@@ -160,13 +122,11 @@ func createPRWorktree(cmd *cobra.Command, ctx *prCreateContext, prInfo github.Pu
 		return fmt.Errorf("failed to generate branch name: %w", err)
 	}
 
-	// Step 7: Generate worktree name
 	worktreeName := namer.GenerateWorktreeName(localBranch)
 	if worktreeName == "" {
 		return fmt.Errorf("failed to generate worktree name: empty result")
 	}
 
-	// Step 8: Check if worktree exists using Matcher
 	worktrees, err := ctx.gitClient.ListWorktrees()
 	if err != nil {
 		return fmt.Errorf("failed to list worktrees: %w", err)
@@ -176,13 +136,11 @@ func createPRWorktree(cmd *cobra.Command, ctx *prCreateContext, prInfo github.Pu
 	existingWorktree := matcher.FindWorktreeForPR(prInfo, worktrees)
 
 	if existingWorktree != nil {
-		// Output path to stdout, info message to stderr
-		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Worktree already exists\n")
-		_, err := fmt.Fprintln(cmd.OutOrStdout(), existingWorktree.AbsolutePath)
+		_, _ = fmt.Fprintf(stderr, "Worktree already exists\n")
+		_, err := fmt.Fprintln(stdout, existingWorktree.AbsolutePath)
 		return err
 	}
 
-	// Step 9: Check for path collision
 	workspacePath, err := ctx.gitClient.GetWorkspacePath()
 	if err != nil {
 		return fmt.Errorf("failed to get workspace path: %w", err)
@@ -191,29 +149,24 @@ func createPRWorktree(cmd *cobra.Command, ctx *prCreateContext, prInfo github.Pu
 	wtPath := filepath.Join(workspacePath, worktreeName)
 
 	if _, err := os.Stat(wtPath); err == nil {
-		// Path exists but Matcher didn't find a matching worktree
 		return fmt.Errorf("worktree path %s already exists (not a PR worktree or different branch)", wtPath)
 	}
 
-	// Step 10: Check if local branch already exists
 	branchExists, err := ctx.gitClient.BranchExists(localBranch, false)
 	if err != nil {
 		return fmt.Errorf("failed to check branch existence: %w", err)
 	}
 
-	// Step 11: Fetch remote branch (if local branch doesn't exist)
 	if !branchExists {
 		if err := ctx.gitClient.FetchRemoteBranch("origin", prInfo.BranchName, localBranch); err != nil {
 			return fmt.Errorf("failed to fetch remote branch: %w", err)
 		}
 	}
 
-	// Step 12: Create worktree
 	if err := ctx.gitClient.CreateWorktreeForExistingBranch(localBranch, wtPath); err != nil {
 		return fmt.Errorf("failed to create worktree: %w", err)
 	}
 
-	// Step 13: Output absolute path to stdout
-	_, err = fmt.Fprintln(cmd.OutOrStdout(), wtPath)
+	_, err = fmt.Fprintln(stdout, wtPath)
 	return err
 }

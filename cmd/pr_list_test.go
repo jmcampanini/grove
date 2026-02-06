@@ -8,7 +8,6 @@ import (
 
 	"github.com/jmcampanini/grove-cli/internal/github"
 	"github.com/jmcampanini/grove-cli/internal/pr"
-	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -238,10 +237,8 @@ func TestOutputPRListFzf(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
-			cmd := &cobra.Command{}
-			cmd.SetOut(&buf)
 
-			err := outputPRListFzf(cmd, tt.matches)
+			err := outputPRListFzf(&buf, tt.matches)
 			require.NoError(t, err)
 
 			output := buf.String()
@@ -360,10 +357,8 @@ func TestOutputPRListTable(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
-			cmd := &cobra.Command{}
-			cmd.SetOut(&buf)
 
-			err := outputPRListTable(cmd, tt.matches)
+			err := outputPRListTable(&buf, tt.matches)
 			require.NoError(t, err)
 
 			output := buf.String()
@@ -405,10 +400,8 @@ func TestOutputPRListFzfStateFormats(t *testing.T) {
 			}
 
 			var buf bytes.Buffer
-			cmd := &cobra.Command{}
-			cmd.SetOut(&buf)
 
-			err := outputPRListFzf(cmd, matches)
+			err := outputPRListFzf(&buf, matches)
 			require.NoError(t, err)
 
 			output := buf.String()

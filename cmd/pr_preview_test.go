@@ -149,10 +149,8 @@ func TestOutputPRPreview(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
-			cmd := &cobra.Command{}
-			cmd.SetOut(&buf)
 
-			err := outputPRPreview(cmd, tt.pr, tt.files)
+			err := outputPRPreview(&buf, tt.pr, tt.files)
 			require.NoError(t, err)
 
 			output := buf.String()
@@ -193,10 +191,8 @@ func TestOutputPRPreviewFileLimit(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	cmd := &cobra.Command{}
-	cmd.SetOut(&buf)
 
-	err := outputPRPreview(cmd, pr, files)
+	err := outputPRPreview(&buf, pr, files)
 	require.NoError(t, err)
 
 	output := buf.String()
@@ -244,10 +240,8 @@ func TestOutputPRPreviewExactly30Files(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	cmd := &cobra.Command{}
-	cmd.SetOut(&buf)
 
-	err := outputPRPreview(cmd, pr, files)
+	err := outputPRPreview(&buf, pr, files)
 	require.NoError(t, err)
 
 	output := buf.String()
@@ -334,10 +328,8 @@ func TestOutputPRPreviewAllStates(t *testing.T) {
 			}
 
 			var buf bytes.Buffer
-			cmd := &cobra.Command{}
-			cmd.SetOut(&buf)
 
-			err := outputPRPreview(cmd, pr, []github.PullRequestFile{})
+			err := outputPRPreview(&buf, pr, []github.PullRequestFile{})
 			require.NoError(t, err)
 
 			output := buf.String()
