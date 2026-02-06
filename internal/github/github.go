@@ -18,9 +18,5 @@ type GitHub interface {
 
 	// Validate checks if gh CLI is available and authenticated.
 	// Returns nil if ready to use, or a descriptive error:
-	// - "gh CLI not found: install from https://cli.github.com"
-	// - "gh CLI not authenticated: run 'gh auth login'"
-	// Note: Does not check if current directory is a GitHub repo.
-	// Non-GitHub repos will fail naturally when gh commands are executed.
 	Validate() error
 }

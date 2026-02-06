@@ -85,7 +85,6 @@ func runPRList(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("failed to create PR namer: %w", err)
 	}
 
-	// TODO: add --state flag to allow filtering by state
 	query := github.PRQuery{State: github.PRStateOpen}
 	prs, err := gh.ListPullRequests(query, github.DefaultPRLimit)
 	if err != nil {

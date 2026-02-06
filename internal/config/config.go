@@ -48,6 +48,7 @@ type GitConfig struct {
 // PRConfig configures pull request worktree naming.
 type PRConfig struct {
 	BranchTemplate string `toml:"branch_template"` // Template for local branch name (e.g., "{{.BranchName}}")
+
 	WorktreePrefix string `toml:"worktree_prefix"` // Prefix for PR worktree directories (e.g., "pr-")
 }
 
