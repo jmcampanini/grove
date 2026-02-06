@@ -94,9 +94,9 @@ type PullRequest struct {
 
 // PullRequestFile represents a file changed in a pull request.
 type PullRequestFile struct {
-	Additions int
-	Deletions int
-	Path      string
+	Additions int    `json:"additions"`
+	Deletions int    `json:"deletions"`
+	Path      string `json:"path"`
 }
 
 const prJsonFields = "additions,author,body,changedFiles,createdAt,deletions,headRefName,isCrossRepository,isDraft,number,state,title,updatedAt,url"

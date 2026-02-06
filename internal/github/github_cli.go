@@ -121,26 +121,13 @@ func (g *GitHubCli) GetPullRequestFiles(prNum int) ([]PullRequestFile, error) {
 
 	// gh returns: {"files": [{"path": "...", "additions": N, "deletions": N}, ...]}
 	var result struct {
-		Files []struct {
-			Additions int    `json:"additions"`
-			Deletions int    `json:"deletions"`
-			Path      string `json:"path"`
-		} `json:"files"`
+		Files []PullRequestFile `json:"files"`
 	}
 	if err := json.Unmarshal([]byte(output), &result); err != nil {
 		return nil, fmt.Errorf("failed to parse files for pull request #%d: %w", prNum, err)
 	}
 
-	files := make([]PullRequestFile, len(result.Files))
-	for i, f := range result.Files {
-		files[i] = PullRequestFile{
-			Additions: f.Additions,
-			Deletions: f.Deletions,
-			Path:      f.Path,
-		}
-	}
-
-	return files, nil
+	return result.Files, nil
 }
 
 func (g *GitHubCli) ListPullRequests(query PRQuery, limit int) ([]PullRequest, error) {
