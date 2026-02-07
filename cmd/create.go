@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -36,11 +37,13 @@ func init() {
 	rootCmd.AddCommand(createCmd)
 }
 
+type createContext struct {
+	cfg       config.Config
+	gitClient git.Git
+}
+
 func runCreate(cmd *cobra.Command, args []string) error {
 	phrase := args[0]
-	if strings.TrimSpace(phrase) == "" {
-		return errors.New("phrase cannot be empty")
-	}
 
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -73,19 +76,29 @@ func runCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
-	cfg := loadResult.Config
 
-	// recreate the git client using the config timeout
-	gitClient = git.New(false, cwd, cfg.Git.Timeout)
-	namer := naming.NewLocalBranchNamer(cfg.LocalBranch, cfg.Slugify)
+	ctx := &createContext{
+		cfg:       loadResult.Config,
+		gitClient: git.New(false, cwd, loadResult.Config.Git.Timeout),
+	}
 
-	workspacePath, err := gitClient.GetWorkspacePath()
+	return executeCreate(cmd.OutOrStdout(), ctx, phrase)
+}
+
+func executeCreate(stdout io.Writer, ctx *createContext, phrase string) error {
+	if strings.TrimSpace(phrase) == "" {
+		return errors.New("phrase cannot be empty")
+	}
+
+	namer := naming.NewLocalBranchNamer(ctx.cfg.LocalBranch, ctx.cfg.Slugify)
+
+	workspacePath, err := ctx.gitClient.GetWorkspacePath()
 	if err != nil {
 		return fmt.Errorf("failed to get workspace path: %w", err)
 	}
 
 	branchName := namer.GenerateBranchName(phrase)
-	if branchName == "" || branchName == cfg.LocalBranch.BranchPrefix {
+	if branchName == "" || branchName == ctx.cfg.LocalBranch.BranchPrefix {
 		return fmt.Errorf(`phrase %q produces an empty branch name after slugification
 
 Please provide a phrase with at least one alphanumeric character.
@@ -94,7 +107,7 @@ Examples:
   grove create "fix-bug-123"`, phrase)
 	}
 
-	exists, err := gitClient.BranchExists(branchName, false)
+	exists, err := ctx.gitClient.BranchExists(branchName, false)
 	if err != nil {
 		return fmt.Errorf("failed to check if branch exists: %w", err)
 	}
@@ -109,10 +122,10 @@ Examples:
 		return fmt.Errorf("worktree path %q already exists; to remove it: git worktree remove %s", worktreePath, worktreeName)
 	}
 
-	if err := gitClient.CreateWorktreeForNewBranchFromRef(branchName, worktreePath, ""); err != nil {
+	if err := ctx.gitClient.CreateWorktreeForNewBranchFromRef(branchName, worktreePath, ""); err != nil {
 		return fmt.Errorf("failed to create branch and worktree: %w", err)
 	}
 
-	_, err = fmt.Fprintln(cmd.OutOrStdout(), worktreePath)
+	_, err = fmt.Fprintln(stdout, worktreePath)
 	return err
 }
