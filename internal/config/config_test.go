@@ -13,9 +13,6 @@ import (
 func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
 
-	// Branch defaults
-	assert.Equal(t, "feature/", cfg.Branch.NewPrefix)
-
 	// Git defaults
 	assert.Equal(t, 5*time.Second, cfg.Git.Timeout)
 
@@ -28,8 +25,9 @@ func TestDefaultConfig(t *testing.T) {
 	assert.True(t, cfg.Slugify.TrimDashes)
 
 	// LocalBranch defaults
-	assert.Equal(t, "wt-", cfg.LocalBranch.WorktreePrefix)
+	assert.Equal(t, "feature/", cfg.LocalBranch.BranchPrefix)
 	assert.Equal(t, []string{"feature/"}, cfg.LocalBranch.StripBranchPrefix)
+	assert.Equal(t, "wt-", cfg.LocalBranch.WorktreePrefix)
 
 	// Default config should be valid
 	assert.NoError(t, cfg.Validate())
@@ -293,11 +291,11 @@ func TestLoad_SingleFile(t *testing.T) {
 	}{
 		{
 			name: "branch prefix only",
-			content: `[branch]
-new_prefix = "fix/"
+			content: `[local_branch]
+branch_prefix = "fix/"
 `,
 			check: func(t *testing.T, cfg Config) {
-				assert.Equal(t, "fix/", cfg.Branch.NewPrefix)
+				assert.Equal(t, "fix/", cfg.LocalBranch.BranchPrefix)
 				// Other defaults should remain
 				assert.Equal(t, 5*time.Second, cfg.Git.Timeout)
 			},
@@ -329,10 +327,12 @@ lowercase = false
 		{
 			name: "local branch config",
 			content: `[local_branch]
-new_prefix = "work-"
+branch_prefix = "fix/"
+worktree_prefix = "work-"
 strip_branch_prefix = ["fix/", "feature/", "chore/"]
 `,
 			check: func(t *testing.T, cfg Config) {
+				assert.Equal(t, "fix/", cfg.LocalBranch.BranchPrefix)
 				assert.Equal(t, "work-", cfg.LocalBranch.WorktreePrefix)
 				assert.Equal(t, []string{"fix/", "feature/", "chore/"}, cfg.LocalBranch.StripBranchPrefix)
 			},
@@ -369,15 +369,15 @@ func TestLoad_SequentialOverlay(t *testing.T) {
 	lowPriorityPath := filepath.Join(tmpDir, "low.toml")
 	highPriorityPath := filepath.Join(tmpDir, "high.toml")
 
-	lowPriorityContent := `[branch]
-new_prefix = "low/"
+	lowPriorityContent := `[local_branch]
+branch_prefix = "low/"
 
 [slugify]
 max_length = 100
 `
 
-	highPriorityContent := `[branch]
-new_prefix = "high/"
+	highPriorityContent := `[local_branch]
+branch_prefix = "high/"
 `
 
 	require.NoError(t, os.WriteFile(lowPriorityPath, []byte(lowPriorityContent), 0644))
@@ -387,8 +387,8 @@ new_prefix = "high/"
 	result, err := loader.Load([]string{lowPriorityPath, highPriorityPath})
 	require.NoError(t, err)
 
-	// High priority should override branch.new_prefix
-	assert.Equal(t, "high/", result.Config.Branch.NewPrefix)
+	// High priority should override local_branch.branch_prefix
+	assert.Equal(t, "high/", result.Config.LocalBranch.BranchPrefix)
 	// Low priority should still apply for non-overridden fields
 	assert.Equal(t, 100, result.Config.Slugify.MaxLength)
 	// Both paths should be in source paths
@@ -424,8 +424,8 @@ func TestLoad_InvalidTOML(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "grove.toml")
 
-	invalidContent := `[branch
-new_prefix = "broken`
+	invalidContent := `[local_branch
+branch_prefix = "broken`
 	require.NoError(t, os.WriteFile(configPath, []byte(invalidContent), 0644))
 
 	loader := NewDefaultLoader()
@@ -486,8 +486,8 @@ func TestLoad_ReturnsSourcePaths(t *testing.T) {
 	path2 := filepath.Join(tmpDir, "two.toml")
 	path3 := filepath.Join(tmpDir, "nonexistent.toml")
 
-	require.NoError(t, os.WriteFile(path1, []byte("[branch]\nnew_prefix = \"one/\""), 0644))
-	require.NoError(t, os.WriteFile(path2, []byte("[branch]\nnew_prefix = \"two/\""), 0644))
+	require.NoError(t, os.WriteFile(path1, []byte("[local_branch]\nbranch_prefix = \"one/\""), 0644))
+	require.NoError(t, os.WriteFile(path2, []byte("[local_branch]\nbranch_prefix = \"two/\""), 0644))
 
 	loader := NewDefaultLoader()
 	result, err := loader.Load([]string{path1, path3, path2})

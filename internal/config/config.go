@@ -7,7 +7,6 @@ import (
 
 // Config represents the complete grove configuration.
 type Config struct {
-	Branch      BranchConfig      `toml:"branch"`
 	Git         GitConfig         `toml:"git"`
 	LocalBranch LocalBranchConfig `toml:"local_branch"`
 	PullRequest PullRequestConfig `toml:"pull_request"`
@@ -35,11 +34,6 @@ func (c Config) Validate() error {
 	return nil
 }
 
-// BranchConfig configures branch naming.
-type BranchConfig struct {
-	NewPrefix string `toml:"new_prefix"` // e.g., "feature/"
-}
-
 // GitConfig configures git command execution.
 type GitConfig struct {
 	Timeout time.Duration `toml:"timeout"` // Timeout for git commands (e.g., "5s")
@@ -48,7 +42,6 @@ type GitConfig struct {
 // PullRequestConfig configures pull request worktree naming.
 type PullRequestConfig struct {
 	BranchTemplate string `toml:"branch_template"` // Template for local branch name (e.g., "{{.BranchName}}")
-
 	WorktreePrefix string `toml:"worktree_prefix"` // Prefix for PR worktree directories (e.g., "pr-")
 }
 
@@ -64,10 +57,12 @@ type SlugifyConfig struct {
 
 // LocalBranchConfig configures local branch worktree naming.
 type LocalBranchConfig struct {
-	WorktreePrefix string `toml:"worktree_prefix"` // e.g., "wt-"
+	BranchPrefix string `toml:"branch_prefix"` // e.g., "feature/"
 
 	// StripBranchPrefix is a list of prefixes to strip from branch names.
 	// Only the first matching prefix is stripped (checked in list order).
 	// e.g., branch "feature/add-auth" with ["fix/", "feature/"] -> "add-auth"
 	StripBranchPrefix []string `toml:"strip_branch_prefix"`
+
+	WorktreePrefix string `toml:"worktree_prefix"` // e.g., "wt-"
 }

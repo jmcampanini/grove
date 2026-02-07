@@ -79,10 +79,10 @@ func runCreate(cmd *cobra.Command, args []string) error {
 	// recreate the git client using the config timeout
 	gitClient = git.New(false, cwd, cfg.Git.Timeout)
 
-	branchGen := naming.NewBranchNameGenerator(cfg.Branch, cfg.Slugify)
-	branchName := branchGen.Generate(phrase)
+	namer := naming.NewLocalBranchNamer(cfg.LocalBranch, cfg.Slugify)
+	branchName := namer.GenerateBranchName(phrase)
 
-	if branchName == "" || branchName == cfg.Branch.NewPrefix {
+	if branchName == "" || branchName == cfg.LocalBranch.BranchPrefix {
 		return fmt.Errorf(`phrase %q produces an empty branch name after slugification
 
 Please provide a phrase with at least one alphanumeric character.
@@ -99,8 +99,7 @@ Examples:
 		return fmt.Errorf("branch %q already exists; to use it: git worktree add <path> %s", branchName, branchName)
 	}
 
-	worktreeNamer := naming.NewLocalBranchNamer(cfg.LocalBranch, cfg.Slugify)
-	worktreeName := worktreeNamer.Generate(branchName)
+	worktreeName := namer.GenerateWorktreeName(branchName)
 
 	workspacePath, err := gitClient.GetWorkspacePath()
 	if err != nil {

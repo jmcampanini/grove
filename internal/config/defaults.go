@@ -5,15 +5,13 @@ import "time"
 // DefaultConfig returns sensible defaults for all configuration.
 func DefaultConfig() Config {
 	return Config{
-		Branch: BranchConfig{
-			NewPrefix: "feature/",
-		},
 		Git: GitConfig{
 			Timeout: 5 * time.Second,
 		},
 		LocalBranch: LocalBranchConfig{
-			WorktreePrefix:    "wt-",
+			BranchPrefix:      "feature/",
 			StripBranchPrefix: []string{"feature/"},
+			WorktreePrefix:    "wt-",
 		},
 		PullRequest: PullRequestConfig{
 			BranchTemplate: "{{.BranchName}}",

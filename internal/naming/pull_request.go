@@ -25,20 +25,17 @@ type PullRequestNamer struct {
 // NewPullRequestNamer creates a namer from pull request and slugify config.
 // Returns an error if the template is invalid or produces invalid branch names.
 func NewPullRequestNamer(prCfg config.PullRequestConfig, slugCfg config.SlugifyConfig) (*PullRequestNamer, error) {
-	// 1. Parse template
 	tmpl, err := template.New("branch").Parse(prCfg.BranchTemplate)
 	if err != nil {
 		return nil, fmt.Errorf("invalid branch_template: %w", err)
 	}
 
-	// 2. Execute with test data to verify fields exist
 	var buf bytes.Buffer
 	testData := PullRequestTemplateData{BranchName: "test/branch", Number: 1}
 	if err := tmpl.Execute(&buf, testData); err != nil {
 		return nil, fmt.Errorf("branch_template uses invalid field: %w", err)
 	}
 
-	// 3. Validate output is valid git branch name
 	if ok, reason := isValidBranchName(buf.String()); !ok {
 		return nil, fmt.Errorf("branch_template produces invalid branch name: %s", reason)
 	}
