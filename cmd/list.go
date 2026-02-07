@@ -38,13 +38,13 @@ func init() {
 }
 
 func runList(cmd *cobra.Command, _ []string) error {
-	env, err := initFromEnv()
+	rt, err := loadCommandRuntime()
 	if err != nil {
 		return err
 	}
-	cfg := env.cfg
+	cfg := rt.cfg
 
-	worktrees, err := env.gitClient.ListWorktrees()
+	worktrees, err := rt.gitClient.ListWorktrees()
 	if err != nil {
 		return fmt.Errorf("failed to list worktrees: %w", err)
 	}
@@ -52,7 +52,7 @@ func runList(cmd *cobra.Command, _ []string) error {
 	var mainWT *git.Worktree
 	var others []git.Worktree
 	for i := range worktrees {
-		if worktrees[i].AbsolutePath == env.mainWorktreePath {
+		if worktrees[i].AbsolutePath == rt.mainWorktreePath {
 			mainWT = &worktrees[i]
 		} else {
 			others = append(others, worktrees[i])
@@ -140,8 +140,8 @@ func shortSHASafe(sha string, maxLen int) string {
 
 // formatWorktreeName adds a [PR] marker to the display name if the worktree
 // directory name starts with the PR prefix.
-func formatWorktreeName(displayName, dirName, prWorktreefprefix string) string {
-	if prWorktreefprefix != "" && strings.HasPrefix(dirName, prWorktreefprefix) {
+func formatWorktreeName(displayName, dirName, prWorktreePrefix string) string {
+	if prWorktreePrefix != "" && strings.HasPrefix(dirName, prWorktreePrefix) {
 		return "[PR] " + displayName
 	}
 	return displayName

@@ -26,14 +26,14 @@ func init() {
 }
 
 func runConfig(cmd *cobra.Command, _ []string) error {
-	env, err := initFromEnv()
+	rt, err := loadCommandRuntime()
 	if err != nil {
 		return err
 	}
 
 	var buf bytes.Buffer
 	encoder := toml.NewEncoder(&buf)
-	if err := encoder.Encode(env.cfg); err != nil {
+	if err := encoder.Encode(rt.cfg); err != nil {
 		return fmt.Errorf("failed to encode config: %w", err)
 	}
 

@@ -45,21 +45,22 @@ func runPRPreview(cmd *cobra.Command, args []string) error {
 		return handlePreviewError(cmd, fmt.Errorf("invalid PR number: %s", args[0]))
 	}
 
-	env, err := initFromEnv()
+	rt, err := loadCommandRuntime()
 	if err != nil {
 		return handlePreviewError(cmd, err)
 	}
 
-	if err := env.ghClient.Validate(); err != nil {
+	gh := rt.newGitHubClient()
+	if err := gh.Validate(); err != nil {
 		return handlePreviewError(cmd, err)
 	}
 
-	pr, err := env.ghClient.GetPullRequest(prNum)
+	pr, err := gh.GetPullRequest(prNum)
 	if err != nil {
 		return handlePreviewError(cmd, err)
 	}
 
-	files, err := env.ghClient.GetPullRequestFiles(prNum)
+	files, err := gh.GetPullRequestFiles(prNum)
 	if err != nil {
 		return handlePreviewError(cmd, err)
 	}

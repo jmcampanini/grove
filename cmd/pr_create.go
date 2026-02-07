@@ -36,15 +36,15 @@ func runPRCreate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid PR number: %s", args[0])
 	}
 
-	env, err := initFromEnv()
+	rt, err := loadCommandRuntime()
 	if err != nil {
 		return err
 	}
 
 	ctx := &prCreateContext{
-		cfg:       env.cfg,
-		ghClient:  env.ghClient,
-		gitClient: env.gitClient,
+		cfg:       rt.cfg,
+		ghClient:  rt.newGitHubClient(),
+		gitClient: rt.gitClient,
 	}
 
 	if err := ctx.ghClient.Validate(); err != nil {

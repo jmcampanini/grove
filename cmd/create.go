@@ -45,14 +45,14 @@ type createContext struct {
 func runCreate(cmd *cobra.Command, args []string) error {
 	phrase := args[0]
 
-	env, err := initFromEnv()
+	rt, err := loadCommandRuntime()
 	if err != nil {
 		return err
 	}
 
 	ctx := &createContext{
-		cfg:       env.cfg,
-		gitClient: env.gitClient,
+		cfg:       rt.cfg,
+		gitClient: rt.gitClient,
 	}
 
 	return executeCreate(cmd.OutOrStdout(), ctx, phrase)

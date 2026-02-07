@@ -12,14 +12,18 @@ import (
 
 var errNotGitRepo = errors.New("grove must be run inside a git repository")
 
-type cmdenv struct {
+type commandRuntime struct {
 	cfg              config.Config
-	ghClient         github.GitHub
+	cwd              string
 	gitClient        git.Git
 	mainWorktreePath string
 }
 
-func initFromEnv() (*cmdenv, error) {
+func (rt *commandRuntime) newGitHubClient() github.GitHub {
+	return github.New(rt.cwd, rt.cfg.Git.Timeout)
+}
+
+func loadCommandRuntime() (*commandRuntime, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current directory: %w", err)
@@ -30,9 +34,9 @@ func initFromEnv() (*cmdenv, error) {
 		return nil, fmt.Errorf("failed to get user home directory: %w", err)
 	}
 
-	gitClient := git.New(false, cwd, config.DefaultConfig().Git.Timeout)
+	initGit := git.New(false, cwd, config.DefaultConfig().Git.Timeout)
 
-	worktreeRoot, err := gitClient.GetWorktreeRoot()
+	worktreeRoot, err := initGit.GetWorktreeRoot()
 	if err != nil {
 		return nil, fmt.Errorf("git error: %w", err)
 	}
@@ -40,7 +44,7 @@ func initFromEnv() (*cmdenv, error) {
 		return nil, errNotGitRepo
 	}
 
-	mainWorktreePath, err := gitClient.GetMainWorktreePath()
+	mainWorktreePath, err := initGit.GetMainWorktreePath()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get main worktree path: %w", err)
 	}
@@ -51,11 +55,10 @@ func initFromEnv() (*cmdenv, error) {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	cfg := loadResult.Config
-	return &cmdenv{
-		cfg:              cfg,
-		ghClient:         github.New(cwd, cfg.Git.Timeout),
-		gitClient:        git.New(false, cwd, cfg.Git.Timeout),
+	return &commandRuntime{
+		cfg:              loadResult.Config,
+		cwd:              cwd,
+		gitClient:        git.New(false, cwd, loadResult.Config.Git.Timeout),
 		mainWorktreePath: mainWorktreePath,
 	}, nil
 }

@@ -37,13 +37,14 @@ func init() {
 }
 
 func runPRList(cmd *cobra.Command, _ []string) error {
-	env, err := initFromEnv()
+	rt, err := loadCommandRuntime()
 	if err != nil {
 		return err
 	}
-	cfg := env.cfg
+	cfg := rt.cfg
 
-	if err := env.ghClient.Validate(); err != nil {
+	gh := rt.newGitHubClient()
+	if err := gh.Validate(); err != nil {
 		return err
 	}
 
@@ -53,12 +54,12 @@ func runPRList(cmd *cobra.Command, _ []string) error {
 	}
 
 	query := github.PRQuery{State: github.PRStateOpen}
-	prs, err := env.ghClient.ListPullRequests(query, github.DefaultPRLimit)
+	prs, err := gh.ListPullRequests(query, github.DefaultPRLimit)
 	if err != nil {
 		return fmt.Errorf("failed to list pull requests: %w", err)
 	}
 
-	worktrees, err := env.gitClient.ListWorktrees()
+	worktrees, err := rt.gitClient.ListWorktrees()
 	if err != nil {
 		return fmt.Errorf("failed to list worktrees: %w", err)
 	}
