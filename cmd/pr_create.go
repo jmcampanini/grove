@@ -36,9 +36,15 @@ func runPRCreate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid PR number: %s", args[0])
 	}
 
-	ctx, err := initPRCreateContextFromEnv()
+	env, err := initFromEnv()
 	if err != nil {
 		return err
+	}
+
+	ctx := &prCreateContext{
+		cfg:       env.cfg,
+		ghClient:  env.ghClient,
+		gitClient: env.gitClient,
 	}
 
 	if err := ctx.ghClient.Validate(); err != nil {
@@ -65,46 +71,6 @@ type prCreateContext struct {
 	cfg       config.Config
 	ghClient  github.GitHub
 	gitClient git.Git
-}
-
-func initPRCreateContextFromEnv() (*prCreateContext, error) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get current directory: %w", err)
-	}
-
-	gitClient := git.New(false, cwd, config.DefaultConfig().Git.Timeout)
-
-	worktreeRoot, err := gitClient.GetWorktreeRoot()
-	if err != nil {
-		return nil, fmt.Errorf("git error: %w", err)
-	}
-	if worktreeRoot == "" {
-		return nil, fmt.Errorf("grove must be run inside a git repository")
-	}
-
-	mainWorktreePath, err := gitClient.GetMainWorktreePath()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get main worktree path: %w", err)
-	}
-
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get user home directory: %w", err)
-	}
-
-	configPaths := config.ConfigPaths(cwd, worktreeRoot, mainWorktreePath, homeDir)
-	loader := config.NewDefaultLoader()
-	loadResult, err := loader.Load(configPaths)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load config: %w", err)
-	}
-
-	return &prCreateContext{
-		cfg:       loadResult.Config,
-		ghClient:  github.New(cwd, loadResult.Config.Git.Timeout),
-		gitClient: git.New(false, cwd, loadResult.Config.Git.Timeout),
-	}, nil
 }
 
 func createPRWorktree(stdout, stderr io.Writer, ctx *prCreateContext, prInfo github.PullRequest) error {

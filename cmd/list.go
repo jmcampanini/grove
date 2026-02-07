@@ -2,12 +2,10 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
-	"github.com/jmcampanini/grove-cli/internal/config"
 	"github.com/jmcampanini/grove-cli/internal/git"
 	"github.com/jmcampanini/grove-cli/internal/naming"
 	"github.com/spf13/cobra"
@@ -40,43 +38,13 @@ func init() {
 }
 
 func runList(cmd *cobra.Command, _ []string) error {
-	cwd, err := os.Getwd()
+	env, err := initFromEnv()
 	if err != nil {
-		return fmt.Errorf("failed to get current directory: %w", err)
+		return err
 	}
+	cfg := env.cfg
 
-	gitClient := git.New(false, cwd, config.DefaultConfig().Git.Timeout)
-
-	worktreeRoot, err := gitClient.GetWorktreeRoot()
-	if err != nil {
-		return fmt.Errorf("git error: %w", err)
-	}
-	if worktreeRoot == "" {
-		return fmt.Errorf("grove must be run inside a git repository")
-	}
-
-	mainWorktreePath, err := gitClient.GetMainWorktreePath()
-	if err != nil {
-		return fmt.Errorf("failed to get main worktree path: %w", err)
-	}
-
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("failed to get user home directory: %w", err)
-	}
-
-	configPaths := config.ConfigPaths(cwd, worktreeRoot, mainWorktreePath, homeDir)
-	loader := config.NewDefaultLoader()
-	loadResult, err := loader.Load(configPaths)
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
-	cfg := loadResult.Config
-
-	// Recreate the git client using the config timeout
-	gitClient = git.New(false, cwd, cfg.Git.Timeout)
-
-	worktrees, err := gitClient.ListWorktrees()
+	worktrees, err := env.gitClient.ListWorktrees()
 	if err != nil {
 		return fmt.Errorf("failed to list worktrees: %w", err)
 	}
@@ -84,7 +52,7 @@ func runList(cmd *cobra.Command, _ []string) error {
 	var mainWT *git.Worktree
 	var others []git.Worktree
 	for i := range worktrees {
-		if worktrees[i].AbsolutePath == mainWorktreePath {
+		if worktrees[i].AbsolutePath == env.mainWorktreePath {
 			mainWT = &worktrees[i]
 		} else {
 			others = append(others, worktrees[i])

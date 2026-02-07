@@ -45,41 +45,14 @@ type createContext struct {
 func runCreate(cmd *cobra.Command, args []string) error {
 	phrase := args[0]
 
-	cwd, err := os.Getwd()
+	env, err := initFromEnv()
 	if err != nil {
-		return fmt.Errorf("failed to get current directory: %w", err)
-	}
-
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("failed to get user home directory: %w", err)
-	}
-
-	gitClient := git.New(false, cwd, config.DefaultConfig().Git.Timeout)
-
-	worktreeRoot, err := gitClient.GetWorktreeRoot()
-	if err != nil {
-		return fmt.Errorf("git error: %w", err)
-	}
-	if worktreeRoot == "" {
-		return errors.New("grove must be run inside a git repository")
-	}
-
-	mainWorktreePath, err := gitClient.GetMainWorktreePath()
-	if err != nil {
-		return fmt.Errorf("failed to get main worktree path: %w", err)
-	}
-
-	configPaths := config.ConfigPaths(cwd, worktreeRoot, mainWorktreePath, homeDir)
-	loader := config.NewDefaultLoader()
-	loadResult, err := loader.Load(configPaths)
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+		return err
 	}
 
 	ctx := &createContext{
-		cfg:       loadResult.Config,
-		gitClient: git.New(false, cwd, loadResult.Config.Git.Timeout),
+		cfg:       env.cfg,
+		gitClient: env.gitClient,
 	}
 
 	return executeCreate(cmd.OutOrStdout(), ctx, phrase)

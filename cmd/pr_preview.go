@@ -3,12 +3,9 @@ package cmd
 import (
 	"fmt"
 	"io"
-	"os"
 	"strconv"
 	"strings"
 
-	"github.com/jmcampanini/grove-cli/internal/config"
-	"github.com/jmcampanini/grove-cli/internal/git"
 	"github.com/jmcampanini/grove-cli/internal/github"
 	"github.com/spf13/cobra"
 )
@@ -48,50 +45,21 @@ func runPRPreview(cmd *cobra.Command, args []string) error {
 		return handlePreviewError(cmd, fmt.Errorf("invalid PR number: %s", args[0]))
 	}
 
-	cwd, err := os.Getwd()
-	if err != nil {
-		return handlePreviewError(cmd, fmt.Errorf("failed to get current directory: %w", err))
-	}
-
-	gitClient := git.New(false, cwd, config.DefaultConfig().Git.Timeout)
-
-	worktreeRoot, err := gitClient.GetWorktreeRoot()
-	if err != nil {
-		return handlePreviewError(cmd, fmt.Errorf("git error: %w", err))
-	}
-	if worktreeRoot == "" {
-		return handlePreviewError(cmd, fmt.Errorf("grove must be run inside a git repository"))
-	}
-
-	mainWorktreePath, err := gitClient.GetMainWorktreePath()
-	if err != nil {
-		return handlePreviewError(cmd, fmt.Errorf("failed to get main worktree path: %w", err))
-	}
-
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return handlePreviewError(cmd, fmt.Errorf("failed to get user home directory: %w", err))
-	}
-
-	configPaths := config.ConfigPaths(cwd, worktreeRoot, mainWorktreePath, homeDir)
-	loader := config.NewDefaultLoader()
-	loadResult, err := loader.Load(configPaths)
-	if err != nil {
-		return handlePreviewError(cmd, fmt.Errorf("failed to load config: %w", err))
-	}
-	cfg := loadResult.Config
-
-	gh := github.New(cwd, cfg.Git.Timeout)
-	if err := gh.Validate(); err != nil {
-		return handlePreviewError(cmd, err)
-	}
-
-	pr, err := gh.GetPullRequest(prNum)
+	env, err := initFromEnv()
 	if err != nil {
 		return handlePreviewError(cmd, err)
 	}
 
-	files, err := gh.GetPullRequestFiles(prNum)
+	if err := env.ghClient.Validate(); err != nil {
+		return handlePreviewError(cmd, err)
+	}
+
+	pr, err := env.ghClient.GetPullRequest(prNum)
+	if err != nil {
+		return handlePreviewError(cmd, err)
+	}
+
+	files, err := env.ghClient.GetPullRequestFiles(prNum)
 	if err != nil {
 		return handlePreviewError(cmd, err)
 	}
