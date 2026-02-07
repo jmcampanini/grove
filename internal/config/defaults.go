@@ -12,7 +12,7 @@ func DefaultConfig() Config {
 			Timeout: 5 * time.Second,
 		},
 		LocalBranch: LocalBranchConfig{
-			NewPrefix:         "wt-",
+			WorktreePrefix:    "wt-",
 			StripBranchPrefix: []string{"feature/"},
 		},
 		PullRequest: PullRequestConfig{

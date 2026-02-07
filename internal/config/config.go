@@ -64,7 +64,8 @@ type SlugifyConfig struct {
 
 // LocalBranchConfig configures local branch worktree naming.
 type LocalBranchConfig struct {
-	NewPrefix string `toml:"new_prefix"` // e.g., "wt-"
+	WorktreePrefix string `toml:"worktree_prefix"` // e.g., "wt-"
+
 	// StripBranchPrefix is a list of prefixes to strip from branch names.
 	// Only the first matching prefix is stripped (checked in list order).
 	// e.g., branch "feature/add-auth" with ["fix/", "feature/"] -> "add-auth"

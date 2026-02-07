@@ -97,15 +97,15 @@ func runList(cmd *cobra.Command, _ []string) error {
 		return others[i].AbsolutePath < others[j].AbsolutePath
 	})
 
-	prPrefix := cfg.PullRequest.WorktreePrefix
+	prWorktreePrefix := cfg.PullRequest.WorktreePrefix
 
 	if mainWT != nil {
-		if err := outputWorktree(cmd, *mainWT, namer, prPrefix, fzfFlag); err != nil {
+		if err := outputWorktree(cmd, *mainWT, namer, prWorktreePrefix, fzfFlag); err != nil {
 			return err
 		}
 	}
 	for _, wt := range others {
-		if err := outputWorktree(cmd, wt, namer, prPrefix, fzfFlag); err != nil {
+		if err := outputWorktree(cmd, wt, namer, prWorktreePrefix, fzfFlag); err != nil {
 			return err
 		}
 	}
@@ -113,9 +113,9 @@ func runList(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-func outputWorktree(cmd *cobra.Command, wt git.Worktree, namer *naming.LocalBranchNamer, prPrefix string, fzf bool) error {
+func outputWorktree(cmd *cobra.Command, wt git.Worktree, namer *naming.LocalBranchNamer, prWorktreePrefix string, fzf bool) error {
 	if fzf {
-		path, display := formatWorktree(wt, namer, prPrefix)
+		path, display := formatWorktree(wt, namer, prWorktreePrefix)
 		_, err := fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\n", path, display)
 		return err
 	}
@@ -123,9 +123,9 @@ func outputWorktree(cmd *cobra.Command, wt git.Worktree, namer *naming.LocalBran
 	return err
 }
 
-func formatWorktree(wt git.Worktree, namer *naming.LocalBranchNamer, prPrefix string) (path, display string) {
+func formatWorktree(wt git.Worktree, namer *naming.LocalBranchNamer, prWorktreePrefix string) (path, display string) {
 	name := getDisplayName(namer, wt.AbsolutePath)
-	name = formatWorktreeName(name, filepath.Base(wt.AbsolutePath), prPrefix)
+	name = formatWorktreeName(name, filepath.Base(wt.AbsolutePath), prWorktreePrefix)
 
 	switch wt.Ref.Type() {
 	case git.WorktreeRefTypeBranch:
@@ -172,8 +172,8 @@ func shortSHASafe(sha string, maxLen int) string {
 
 // formatWorktreeName adds a [PR] marker to the display name if the worktree
 // directory name starts with the PR prefix.
-func formatWorktreeName(displayName, dirName, prPrefix string) string {
-	if prPrefix != "" && strings.HasPrefix(dirName, prPrefix) {
+func formatWorktreeName(displayName, dirName, prWorktreefprefix string) string {
+	if prWorktreefprefix != "" && strings.HasPrefix(dirName, prWorktreefprefix) {
 		return "[PR] " + displayName
 	}
 	return displayName

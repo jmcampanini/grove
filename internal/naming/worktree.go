@@ -17,7 +17,7 @@ type LocalBranchNamer struct {
 // NewLocalBranchNamer creates a namer from config.
 func NewLocalBranchNamer(localBranchCfg config.LocalBranchConfig, slugCfg config.SlugifyConfig) *LocalBranchNamer {
 	return &LocalBranchNamer{
-		prefix:            localBranchCfg.NewPrefix,
+		prefix:            localBranchCfg.WorktreePrefix,
 		stripBranchPrefix: localBranchCfg.StripBranchPrefix,
 		slugifyOpts: SlugifyOptions{
 			CollapseDashes:     slugCfg.CollapseDashes,

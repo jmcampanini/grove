@@ -14,7 +14,7 @@ import (
 // testNamer creates a LocalBranchNamer with the given prefix for testing.
 func testNamer(prefix string) *naming.LocalBranchNamer {
 	return naming.NewLocalBranchNamer(
-		config.LocalBranchConfig{NewPrefix: prefix},
+		config.LocalBranchConfig{WorktreePrefix: prefix},
 		config.SlugifyConfig{},
 	)
 }

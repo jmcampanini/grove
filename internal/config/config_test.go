@@ -28,7 +28,7 @@ func TestDefaultConfig(t *testing.T) {
 	assert.True(t, cfg.Slugify.TrimDashes)
 
 	// LocalBranch defaults
-	assert.Equal(t, "wt-", cfg.LocalBranch.NewPrefix)
+	assert.Equal(t, "wt-", cfg.LocalBranch.WorktreePrefix)
 	assert.Equal(t, []string{"feature/"}, cfg.LocalBranch.StripBranchPrefix)
 
 	// Default config should be valid
@@ -333,7 +333,7 @@ new_prefix = "work-"
 strip_branch_prefix = ["fix/", "feature/", "chore/"]
 `,
 			check: func(t *testing.T, cfg Config) {
-				assert.Equal(t, "work-", cfg.LocalBranch.NewPrefix)
+				assert.Equal(t, "work-", cfg.LocalBranch.WorktreePrefix)
 				assert.Equal(t, []string{"fix/", "feature/", "chore/"}, cfg.LocalBranch.StripBranchPrefix)
 			},
 		},
