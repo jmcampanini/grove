@@ -38,7 +38,6 @@ func init() {
 
 func runCreate(cmd *cobra.Command, args []string) error {
 	phrase := args[0]
-
 	if strings.TrimSpace(phrase) == "" {
 		return errors.New("phrase cannot be empty")
 	}
@@ -78,10 +77,14 @@ func runCreate(cmd *cobra.Command, args []string) error {
 
 	// recreate the git client using the config timeout
 	gitClient = git.New(false, cwd, cfg.Git.Timeout)
-
 	namer := naming.NewLocalBranchNamer(cfg.LocalBranch, cfg.Slugify)
-	branchName := namer.GenerateBranchName(phrase)
 
+	workspacePath, err := gitClient.GetWorkspacePath()
+	if err != nil {
+		return fmt.Errorf("failed to get workspace path: %w", err)
+	}
+
+	branchName := namer.GenerateBranchName(phrase)
 	if branchName == "" || branchName == cfg.LocalBranch.BranchPrefix {
 		return fmt.Errorf(`phrase %q produces an empty branch name after slugification
 
@@ -100,11 +103,6 @@ Examples:
 	}
 
 	worktreeName := namer.GenerateWorktreeName(branchName)
-
-	workspacePath, err := gitClient.GetWorkspacePath()
-	if err != nil {
-		return fmt.Errorf("failed to get workspace path: %w", err)
-	}
 	worktreePath := filepath.Join(workspacePath, worktreeName)
 
 	if _, err := os.Stat(worktreePath); err == nil {
