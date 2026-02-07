@@ -11,7 +11,11 @@ func DefaultConfig() Config {
 		Git: GitConfig{
 			Timeout: 5 * time.Second,
 		},
-		PR: PRConfig{
+		LocalBranch: LocalBranchConfig{
+			NewPrefix:         "wt-",
+			StripBranchPrefix: []string{"feature/"},
+		},
+		PullRequest: PullRequestConfig{
 			BranchTemplate: "{{.BranchName}}",
 			WorktreePrefix: "pr-",
 		},
@@ -22,10 +26,6 @@ func DefaultConfig() Config {
 			MaxLength:          50,
 			ReplaceNonAlphanum: true,
 			TrimDashes:         true,
-		},
-		Worktree: WorktreeConfig{
-			NewPrefix:         "wt-",
-			StripBranchPrefix: []string{"feature/"},
 		},
 	}
 }

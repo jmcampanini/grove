@@ -80,7 +80,7 @@ func runPRList(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	namer, err := naming.NewPRWorktreeNamer(cfg.PR, cfg.Slugify)
+	namer, err := naming.NewPullRequestNamer(cfg.PullRequest, cfg.Slugify)
 	if err != nil {
 		return fmt.Errorf("failed to create PR namer: %w", err)
 	}
@@ -97,7 +97,7 @@ func runPRList(cmd *cobra.Command, _ []string) error {
 	}
 
 	matcher := pr.NewMatcher(namer)
-	matches := matcher.Match(prs, worktrees)
+	matches := matcher.MatchAll(prs, worktrees)
 
 	if prListFzfFlag {
 		return outputPRListFzf(cmd.OutOrStdout(), matches)
@@ -105,7 +105,7 @@ func runPRList(cmd *cobra.Command, _ []string) error {
 	return outputPRListTable(cmd.OutOrStdout(), matches)
 }
 
-func outputPRListTable(w io.Writer, matches []pr.WorktreeMatch) error {
+func outputPRListTable(w io.Writer, matches []pr.Match) error {
 	if len(matches) == 0 {
 		_, err := fmt.Fprintln(w, "No open pull requests found.")
 		return err
@@ -162,7 +162,7 @@ func outputPRListTable(w io.Writer, matches []pr.WorktreeMatch) error {
 }
 
 // Format: <number>\t<searchable>\t<display>
-func outputPRListFzf(w io.Writer, matches []pr.WorktreeMatch) error {
+func outputPRListFzf(w io.Writer, matches []pr.Match) error {
 	for _, match := range matches {
 		number := fmt.Sprintf("%d", match.PR.Number)
 

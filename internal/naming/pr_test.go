@@ -8,17 +8,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNewPRWorktreeNamer(t *testing.T) {
+func TestNewPullRequestNamer(t *testing.T) {
 	tests := []struct {
 		name      string
-		prCfg     config.PRConfig
+		prCfg     config.PullRequestConfig
 		slugCfg   config.SlugifyConfig
 		wantErr   bool
 		errSubstr string
 	}{
 		{
 			name: "valid template with BranchName",
-			prCfg: config.PRConfig{
+			prCfg: config.PullRequestConfig{
 				BranchTemplate: "{{.BranchName}}",
 				WorktreePrefix: "pr-",
 			},
@@ -27,7 +27,7 @@ func TestNewPRWorktreeNamer(t *testing.T) {
 		},
 		{
 			name: "valid template with Number",
-			prCfg: config.PRConfig{
+			prCfg: config.PullRequestConfig{
 				BranchTemplate: "pr/{{.Number}}",
 				WorktreePrefix: "pr-",
 			},
@@ -36,7 +36,7 @@ func TestNewPRWorktreeNamer(t *testing.T) {
 		},
 		{
 			name: "valid template with both fields",
-			prCfg: config.PRConfig{
+			prCfg: config.PullRequestConfig{
 				BranchTemplate: "pr-{{.Number}}-{{.BranchName}}",
 				WorktreePrefix: "pr-",
 			},
@@ -45,7 +45,7 @@ func TestNewPRWorktreeNamer(t *testing.T) {
 		},
 		{
 			name: "invalid template syntax",
-			prCfg: config.PRConfig{
+			prCfg: config.PullRequestConfig{
 				BranchTemplate: "{{.BranchName",
 				WorktreePrefix: "pr-",
 			},
@@ -55,7 +55,7 @@ func TestNewPRWorktreeNamer(t *testing.T) {
 		},
 		{
 			name: "template with unknown field",
-			prCfg: config.PRConfig{
+			prCfg: config.PullRequestConfig{
 				BranchTemplate: "{{.UnknownField}}",
 				WorktreePrefix: "pr-",
 			},
@@ -65,7 +65,7 @@ func TestNewPRWorktreeNamer(t *testing.T) {
 		},
 		{
 			name: "template produces leading dash",
-			prCfg: config.PRConfig{
+			prCfg: config.PullRequestConfig{
 				BranchTemplate: "-{{.BranchName}}",
 				WorktreePrefix: "pr-",
 			},
@@ -75,7 +75,7 @@ func TestNewPRWorktreeNamer(t *testing.T) {
 		},
 		{
 			name: "template produces double dots",
-			prCfg: config.PRConfig{
+			prCfg: config.PullRequestConfig{
 				BranchTemplate: "{{.BranchName}}..test",
 				WorktreePrefix: "pr-",
 			},
@@ -85,7 +85,7 @@ func TestNewPRWorktreeNamer(t *testing.T) {
 		},
 		{
 			name: "empty template produces empty output",
-			prCfg: config.PRConfig{
+			prCfg: config.PullRequestConfig{
 				BranchTemplate: "",
 				WorktreePrefix: "pr-",
 			},
@@ -97,7 +97,7 @@ func TestNewPRWorktreeNamer(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			namer, err := NewPRWorktreeNamer(tt.prCfg, tt.slugCfg)
+			namer, err := NewPullRequestNamer(tt.prCfg, tt.slugCfg)
 			if tt.wantErr {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errSubstr)
@@ -110,52 +110,52 @@ func TestNewPRWorktreeNamer(t *testing.T) {
 	}
 }
 
-func TestPRWorktreeNamer_GenerateBranchName(t *testing.T) {
+func TestPullRequestNamer_GenerateBranchName(t *testing.T) {
 	tests := []struct {
 		name           string
 		branchTemplate string
-		prData         PRTemplateData
+		prData         PullRequestTemplateData
 		want           string
 	}{
 		{
 			name:           "simple BranchName template",
 			branchTemplate: "{{.BranchName}}",
-			prData:         PRTemplateData{BranchName: "feature/add-auth", Number: 123},
+			prData:         PullRequestTemplateData{BranchName: "feature/add-auth", Number: 123},
 			want:           "feature/add-auth",
 		},
 		{
 			name:           "simple Number template",
 			branchTemplate: "pr/{{.Number}}",
-			prData:         PRTemplateData{BranchName: "feature/add-auth", Number: 123},
+			prData:         PullRequestTemplateData{BranchName: "feature/add-auth", Number: 123},
 			want:           "pr/123",
 		},
 		{
 			name:           "combined template",
 			branchTemplate: "pr-{{.Number}}-{{.BranchName}}",
-			prData:         PRTemplateData{BranchName: "feature/add-auth", Number: 456},
+			prData:         PullRequestTemplateData{BranchName: "feature/add-auth", Number: 456},
 			want:           "pr-456-feature/add-auth",
 		},
 		{
 			name:           "static prefix template",
 			branchTemplate: "review/{{.BranchName}}",
-			prData:         PRTemplateData{BranchName: "fix/bug", Number: 789},
+			prData:         PullRequestTemplateData{BranchName: "fix/bug", Number: 789},
 			want:           "review/fix/bug",
 		},
 		{
 			name:           "zero PR number",
 			branchTemplate: "pr/{{.Number}}",
-			prData:         PRTemplateData{BranchName: "main", Number: 0},
+			prData:         PullRequestTemplateData{BranchName: "main", Number: 0},
 			want:           "pr/0",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			prCfg := config.PRConfig{
+			prCfg := config.PullRequestConfig{
 				BranchTemplate: tt.branchTemplate,
 				WorktreePrefix: "pr-",
 			}
-			namer, err := NewPRWorktreeNamer(prCfg, defaultSlugifyConfig())
+			namer, err := NewPullRequestNamer(prCfg, defaultSlugifyConfig())
 			require.NoError(t, err)
 
 			got, err := namer.GenerateBranchName(tt.prData)
@@ -165,7 +165,7 @@ func TestPRWorktreeNamer_GenerateBranchName(t *testing.T) {
 	}
 }
 
-func TestPRWorktreeNamer_GenerateWorktreeName(t *testing.T) {
+func TestPullRequestNamer_GenerateWorktreeName(t *testing.T) {
 	tests := []struct {
 		name           string
 		worktreePrefix string
@@ -224,11 +224,11 @@ func TestPRWorktreeNamer_GenerateWorktreeName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			prCfg := config.PRConfig{
+			prCfg := config.PullRequestConfig{
 				BranchTemplate: "{{.BranchName}}",
 				WorktreePrefix: tt.worktreePrefix,
 			}
-			namer, err := NewPRWorktreeNamer(prCfg, defaultSlugifyConfig())
+			namer, err := NewPullRequestNamer(prCfg, defaultSlugifyConfig())
 			require.NoError(t, err)
 
 			got := namer.GenerateWorktreeName(tt.branchName)
@@ -338,52 +338,52 @@ func TestIsValidBranchName(t *testing.T) {
 	}
 }
 
-func TestPRWorktreeNamer_SmartPrefixDetection(t *testing.T) {
+func TestPullRequestNamer_SmartPrefixDetection(t *testing.T) {
 	// Specifically test the smart prefix detection feature
 	tests := []struct {
 		name           string
 		branchTemplate string
 		worktreePrefix string
-		prData         PRTemplateData
+		prData         PullRequestTemplateData
 		wantWorktree   string
 	}{
 		{
 			name:           "template produces prefix pattern - skip duplicate",
 			branchTemplate: "pr/{{.Number}}",
 			worktreePrefix: "pr-",
-			prData:         PRTemplateData{BranchName: "feature/add-auth", Number: 123},
+			prData:         PullRequestTemplateData{BranchName: "feature/add-auth", Number: 123},
 			wantWorktree:   "pr-123",
 		},
 		{
 			name:           "template does not produce prefix - add prefix",
 			branchTemplate: "{{.BranchName}}",
 			worktreePrefix: "pr-",
-			prData:         PRTemplateData{BranchName: "feature/add-auth", Number: 123},
+			prData:         PullRequestTemplateData{BranchName: "feature/add-auth", Number: 123},
 			wantWorktree:   "pr-feature-add-auth",
 		},
 		{
 			name:           "branch already has prefix - skip duplicate",
 			branchTemplate: "{{.BranchName}}",
 			worktreePrefix: "pr-",
-			prData:         PRTemplateData{BranchName: "pr-fix/bug", Number: 456},
+			prData:         PullRequestTemplateData{BranchName: "pr-fix/bug", Number: 456},
 			wantWorktree:   "pr-fix-bug",
 		},
 		{
 			name:           "different prefix pattern",
 			branchTemplate: "review/{{.Number}}",
 			worktreePrefix: "review-",
-			prData:         PRTemplateData{BranchName: "feature", Number: 789},
+			prData:         PullRequestTemplateData{BranchName: "feature", Number: 789},
 			wantWorktree:   "review-789",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			prCfg := config.PRConfig{
+			prCfg := config.PullRequestConfig{
 				BranchTemplate: tt.branchTemplate,
 				WorktreePrefix: tt.worktreePrefix,
 			}
-			namer, err := NewPRWorktreeNamer(prCfg, defaultSlugifyConfig())
+			namer, err := NewPullRequestNamer(prCfg, defaultSlugifyConfig())
 			require.NoError(t, err)
 
 			branchName, err := namer.GenerateBranchName(tt.prData)

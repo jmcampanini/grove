@@ -7,17 +7,17 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestWorktreeNamer_Generate(t *testing.T) {
+func TestLocalBranchNamer_Generate(t *testing.T) {
 	tests := []struct {
 		name        string
-		worktreeCfg config.WorktreeConfig
+		worktreeCfg config.LocalBranchConfig
 		slugifyCfg  config.SlugifyConfig
 		branchName  string
 		want        string
 	}{
 		{
 			name: "strip feature prefix",
-			worktreeCfg: config.WorktreeConfig{
+			worktreeCfg: config.LocalBranchConfig{
 				NewPrefix:         "wt-",
 				StripBranchPrefix: []string{"feature/"},
 			},
@@ -27,7 +27,7 @@ func TestWorktreeNamer_Generate(t *testing.T) {
 		},
 		{
 			name: "strip fix prefix",
-			worktreeCfg: config.WorktreeConfig{
+			worktreeCfg: config.LocalBranchConfig{
 				NewPrefix:         "wt-",
 				StripBranchPrefix: []string{"feature/", "fix/"},
 			},
@@ -37,7 +37,7 @@ func TestWorktreeNamer_Generate(t *testing.T) {
 		},
 		{
 			name: "first matching prefix stripped",
-			worktreeCfg: config.WorktreeConfig{
+			worktreeCfg: config.LocalBranchConfig{
 				NewPrefix:         "wt-",
 				StripBranchPrefix: []string{"fix/", "feature/"},
 			},
@@ -47,7 +47,7 @@ func TestWorktreeNamer_Generate(t *testing.T) {
 		},
 		{
 			name: "no matching prefix",
-			worktreeCfg: config.WorktreeConfig{
+			worktreeCfg: config.LocalBranchConfig{
 				NewPrefix:         "wt-",
 				StripBranchPrefix: []string{"feature/", "fix/"},
 			},
@@ -57,7 +57,7 @@ func TestWorktreeNamer_Generate(t *testing.T) {
 		},
 		{
 			name: "empty strip prefix list",
-			worktreeCfg: config.WorktreeConfig{
+			worktreeCfg: config.LocalBranchConfig{
 				NewPrefix:         "wt-",
 				StripBranchPrefix: []string{},
 			},
@@ -67,7 +67,7 @@ func TestWorktreeNamer_Generate(t *testing.T) {
 		},
 		{
 			name: "different worktree prefix",
-			worktreeCfg: config.WorktreeConfig{
+			worktreeCfg: config.LocalBranchConfig{
 				NewPrefix:         "work-",
 				StripBranchPrefix: []string{"feature/"},
 			},
@@ -77,7 +77,7 @@ func TestWorktreeNamer_Generate(t *testing.T) {
 		},
 		{
 			name: "empty worktree prefix",
-			worktreeCfg: config.WorktreeConfig{
+			worktreeCfg: config.LocalBranchConfig{
 				NewPrefix:         "",
 				StripBranchPrefix: []string{"feature/"},
 			},
@@ -87,7 +87,7 @@ func TestWorktreeNamer_Generate(t *testing.T) {
 		},
 		{
 			name: "empty branch name returns empty",
-			worktreeCfg: config.WorktreeConfig{
+			worktreeCfg: config.LocalBranchConfig{
 				NewPrefix:         "wt-",
 				StripBranchPrefix: []string{"feature/"},
 			},
@@ -97,7 +97,7 @@ func TestWorktreeNamer_Generate(t *testing.T) {
 		},
 		{
 			name: "branch name with uppercase gets lowercased",
-			worktreeCfg: config.WorktreeConfig{
+			worktreeCfg: config.LocalBranchConfig{
 				NewPrefix:         "wt-",
 				StripBranchPrefix: []string{"feature/"},
 			},
@@ -107,7 +107,7 @@ func TestWorktreeNamer_Generate(t *testing.T) {
 		},
 		{
 			name: "branch name with special chars gets slugified",
-			worktreeCfg: config.WorktreeConfig{
+			worktreeCfg: config.LocalBranchConfig{
 				NewPrefix:         "wt-",
 				StripBranchPrefix: []string{"feature/"},
 			},
@@ -117,7 +117,7 @@ func TestWorktreeNamer_Generate(t *testing.T) {
 		},
 		{
 			name: "branch name only has prefix returns empty",
-			worktreeCfg: config.WorktreeConfig{
+			worktreeCfg: config.LocalBranchConfig{
 				NewPrefix:         "wt-",
 				StripBranchPrefix: []string{"feature/"},
 			},
@@ -127,7 +127,7 @@ func TestWorktreeNamer_Generate(t *testing.T) {
 		},
 		{
 			name: "main branch without prefix",
-			worktreeCfg: config.WorktreeConfig{
+			worktreeCfg: config.LocalBranchConfig{
 				NewPrefix:         "wt-",
 				StripBranchPrefix: []string{"feature/"},
 			},
@@ -137,7 +137,7 @@ func TestWorktreeNamer_Generate(t *testing.T) {
 		},
 		{
 			name: "nested prefix pattern",
-			worktreeCfg: config.WorktreeConfig{
+			worktreeCfg: config.LocalBranchConfig{
 				NewPrefix:         "wt-",
 				StripBranchPrefix: []string{"feature/jcamp/", "feature/"},
 			},
@@ -149,15 +149,15 @@ func TestWorktreeNamer_Generate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			namer := NewWorktreeNamer(tt.worktreeCfg, tt.slugifyCfg)
+			namer := NewLocalBranchNamer(tt.worktreeCfg, tt.slugifyCfg)
 			got := namer.Generate(tt.branchName)
 			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
-func TestNewWorktreeNamer(t *testing.T) {
-	worktreeCfg := config.WorktreeConfig{
+func TestNewLocalBranchNamer(t *testing.T) {
+	worktreeCfg := config.LocalBranchConfig{
 		NewPrefix:         "test-",
 		StripBranchPrefix: []string{"a/", "b/"},
 	}
@@ -170,7 +170,7 @@ func TestNewWorktreeNamer(t *testing.T) {
 		TrimDashes:         false,
 	}
 
-	namer := NewWorktreeNamer(worktreeCfg, slugCfg)
+	namer := NewLocalBranchNamer(worktreeCfg, slugCfg)
 
 	assert.Equal(t, "test-", namer.prefix)
 	assert.Equal(t, []string{"a/", "b/"}, namer.stripBranchPrefix)
@@ -179,16 +179,16 @@ func TestNewWorktreeNamer(t *testing.T) {
 	assert.Equal(t, 75, namer.slugifyOpts.MaxLength)
 }
 
-func TestWorktreeNamer_ExtractFromAbsolutePath(t *testing.T) {
+func TestLocalBranchNamer_ExtractFromAbsolutePath(t *testing.T) {
 	tests := []struct {
 		name        string
-		worktreeCfg config.WorktreeConfig
+		worktreeCfg config.LocalBranchConfig
 		absPath     string
 		want        string
 	}{
 		{
 			name: "standard prefix stripping",
-			worktreeCfg: config.WorktreeConfig{
+			worktreeCfg: config.LocalBranchConfig{
 				NewPrefix: "wt-",
 			},
 			absPath: "/workspace/wt-add-auth",
@@ -196,7 +196,7 @@ func TestWorktreeNamer_ExtractFromAbsolutePath(t *testing.T) {
 		},
 		{
 			name: "no prefix match",
-			worktreeCfg: config.WorktreeConfig{
+			worktreeCfg: config.LocalBranchConfig{
 				NewPrefix: "wt-",
 			},
 			absPath: "/workspace/main",
@@ -204,7 +204,7 @@ func TestWorktreeNamer_ExtractFromAbsolutePath(t *testing.T) {
 		},
 		{
 			name: "empty prefix config",
-			worktreeCfg: config.WorktreeConfig{
+			worktreeCfg: config.LocalBranchConfig{
 				NewPrefix: "",
 			},
 			absPath: "/workspace/add-auth",
@@ -212,7 +212,7 @@ func TestWorktreeNamer_ExtractFromAbsolutePath(t *testing.T) {
 		},
 		{
 			name: "empty input",
-			worktreeCfg: config.WorktreeConfig{
+			worktreeCfg: config.LocalBranchConfig{
 				NewPrefix: "wt-",
 			},
 			absPath: "",
@@ -220,7 +220,7 @@ func TestWorktreeNamer_ExtractFromAbsolutePath(t *testing.T) {
 		},
 		{
 			name: "deep nested path",
-			worktreeCfg: config.WorktreeConfig{
+			worktreeCfg: config.LocalBranchConfig{
 				NewPrefix: "wt-",
 			},
 			absPath: "/deep/nested/path/wt-feature",
@@ -228,7 +228,7 @@ func TestWorktreeNamer_ExtractFromAbsolutePath(t *testing.T) {
 		},
 		{
 			name: "partial prefix match not at start",
-			worktreeCfg: config.WorktreeConfig{
+			worktreeCfg: config.LocalBranchConfig{
 				NewPrefix: "wt-",
 			},
 			absPath: "/workspace/foo-wt-bar",
@@ -236,7 +236,7 @@ func TestWorktreeNamer_ExtractFromAbsolutePath(t *testing.T) {
 		},
 		{
 			name: "different prefix",
-			worktreeCfg: config.WorktreeConfig{
+			worktreeCfg: config.LocalBranchConfig{
 				NewPrefix: "work-",
 			},
 			absPath: "/workspace/work-feature",
@@ -246,7 +246,7 @@ func TestWorktreeNamer_ExtractFromAbsolutePath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			namer := NewWorktreeNamer(tt.worktreeCfg, defaultSlugifyConfig())
+			namer := NewLocalBranchNamer(tt.worktreeCfg, defaultSlugifyConfig())
 			got := namer.ExtractFromAbsolutePath(tt.absPath)
 			assert.Equal(t, tt.want, got)
 		})

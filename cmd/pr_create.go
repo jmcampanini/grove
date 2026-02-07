@@ -108,12 +108,12 @@ func initPRCreateContextFromEnv() (*prCreateContext, error) {
 }
 
 func createPRWorktree(stdout, stderr io.Writer, ctx *prCreateContext, prInfo github.PullRequest) error {
-	namer, err := naming.NewPRWorktreeNamer(ctx.cfg.PR, ctx.cfg.Slugify)
+	namer, err := naming.NewPullRequestNamer(ctx.cfg.PullRequest, ctx.cfg.Slugify)
 	if err != nil {
 		return fmt.Errorf("failed to create PR namer: %w", err)
 	}
 
-	prData := naming.PRTemplateData{
+	prData := naming.PullRequestTemplateData{
 		BranchName: prInfo.BranchName,
 		Number:     prInfo.Number,
 	}

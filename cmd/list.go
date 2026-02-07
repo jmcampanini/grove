@@ -91,13 +91,13 @@ func runList(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
-	namer := naming.NewWorktreeNamer(cfg.Worktree, cfg.Slugify)
+	namer := naming.NewLocalBranchNamer(cfg.LocalBranch, cfg.Slugify)
 
 	sort.Slice(others, func(i, j int) bool {
 		return others[i].AbsolutePath < others[j].AbsolutePath
 	})
 
-	prPrefix := cfg.PR.WorktreePrefix
+	prPrefix := cfg.PullRequest.WorktreePrefix
 
 	if mainWT != nil {
 		if err := outputWorktree(cmd, *mainWT, namer, prPrefix, fzfFlag); err != nil {
@@ -113,7 +113,7 @@ func runList(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-func outputWorktree(cmd *cobra.Command, wt git.Worktree, namer *naming.WorktreeNamer, prPrefix string, fzf bool) error {
+func outputWorktree(cmd *cobra.Command, wt git.Worktree, namer *naming.LocalBranchNamer, prPrefix string, fzf bool) error {
 	if fzf {
 		path, display := formatWorktree(wt, namer, prPrefix)
 		_, err := fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\n", path, display)
@@ -123,7 +123,7 @@ func outputWorktree(cmd *cobra.Command, wt git.Worktree, namer *naming.WorktreeN
 	return err
 }
 
-func formatWorktree(wt git.Worktree, namer *naming.WorktreeNamer, prPrefix string) (path, display string) {
+func formatWorktree(wt git.Worktree, namer *naming.LocalBranchNamer, prPrefix string) (path, display string) {
 	name := getDisplayName(namer, wt.AbsolutePath)
 	name = formatWorktreeName(name, filepath.Base(wt.AbsolutePath), prPrefix)
 
@@ -149,7 +149,7 @@ func formatWorktree(wt git.Worktree, namer *naming.WorktreeNamer, prPrefix strin
 // getDisplayName returns the display name for a worktree.
 // If the basename has the configured prefix, strip it.
 // Otherwise, wrap in brackets to indicate non-standard naming.
-func getDisplayName(namer *naming.WorktreeNamer, absPath string) string {
+func getDisplayName(namer *naming.LocalBranchNamer, absPath string) string {
 	basename := filepath.Base(absPath)
 	if namer.HasPrefix(basename) {
 		return namer.ExtractFromAbsolutePath(absPath)

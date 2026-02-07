@@ -23,15 +23,15 @@ func defaultSlugifyConfig() config.SlugifyConfig {
 	}
 }
 
-func defaultPRConfig() config.PRConfig {
-	return config.PRConfig{
+func defaultPRConfig() config.PullRequestConfig {
+	return config.PullRequestConfig{
 		BranchTemplate: "{{.BranchName}}",
 		WorktreePrefix: "pr-",
 	}
 }
 
-func createNamer(t *testing.T, prCfg config.PRConfig) *naming.PRWorktreeNamer {
-	namer, err := naming.NewPRWorktreeNamer(prCfg, defaultSlugifyConfig())
+func createNamer(t *testing.T, prCfg config.PullRequestConfig) *naming.PullRequestNamer {
+	namer, err := naming.NewPullRequestNamer(prCfg, defaultSlugifyConfig())
 	require.NoError(t, err)
 	return namer
 }
@@ -66,7 +66,7 @@ func createPR(number int, branchName string) github.PullRequest {
 func TestMatcher_FindWorktreeForPR(t *testing.T) {
 	tests := []struct {
 		name           string
-		prCfg          config.PRConfig
+		prCfg          config.PullRequestConfig
 		pr             github.PullRequest
 		worktrees      []git.Worktree
 		wantWorktree   *git.Worktree
@@ -84,7 +84,7 @@ func TestMatcher_FindWorktreeForPR(t *testing.T) {
 		},
 		{
 			name: "template with PR number match",
-			prCfg: config.PRConfig{
+			prCfg: config.PullRequestConfig{
 				BranchTemplate: "pr/{{.Number}}",
 				WorktreePrefix: "pr-",
 			},
@@ -160,10 +160,10 @@ func TestMatcher_FindWorktreeForPR(t *testing.T) {
 	}
 }
 
-func TestMatcher_Match(t *testing.T) {
+func TestMatcher_MatchAll(t *testing.T) {
 	tests := []struct {
 		name        string
-		prCfg       config.PRConfig
+		prCfg       config.PullRequestConfig
 		prs         []github.PullRequest
 		worktrees   []git.Worktree
 		wantMatches []bool   // HasWorktree for each PR
@@ -228,7 +228,7 @@ func TestMatcher_Match(t *testing.T) {
 			namer := createNamer(t, tt.prCfg)
 			matcher := NewMatcher(namer)
 
-			got := matcher.Match(tt.prs, tt.worktrees)
+			got := matcher.MatchAll(tt.prs, tt.worktrees)
 
 			require.Len(t, got, len(tt.prs))
 			for i, match := range got {

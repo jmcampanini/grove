@@ -27,9 +27,9 @@ func TestDefaultConfig(t *testing.T) {
 	assert.True(t, cfg.Slugify.ReplaceNonAlphanum)
 	assert.True(t, cfg.Slugify.TrimDashes)
 
-	// Worktree defaults
-	assert.Equal(t, "wt-", cfg.Worktree.NewPrefix)
-	assert.Equal(t, []string{"feature/"}, cfg.Worktree.StripBranchPrefix)
+	// LocalBranch defaults
+	assert.Equal(t, "wt-", cfg.LocalBranch.NewPrefix)
+	assert.Equal(t, []string{"feature/"}, cfg.LocalBranch.StripBranchPrefix)
 
 	// Default config should be valid
 	assert.NoError(t, cfg.Validate())
@@ -327,14 +327,14 @@ lowercase = false
 			},
 		},
 		{
-			name: "worktree config",
-			content: `[worktree]
+			name: "local branch config",
+			content: `[local_branch]
 new_prefix = "work-"
 strip_branch_prefix = ["fix/", "feature/", "chore/"]
 `,
 			check: func(t *testing.T, cfg Config) {
-				assert.Equal(t, "work-", cfg.Worktree.NewPrefix)
-				assert.Equal(t, []string{"fix/", "feature/", "chore/"}, cfg.Worktree.StripBranchPrefix)
+				assert.Equal(t, "work-", cfg.LocalBranch.NewPrefix)
+				assert.Equal(t, []string{"fix/", "feature/", "chore/"}, cfg.LocalBranch.StripBranchPrefix)
 			},
 		},
 		{

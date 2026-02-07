@@ -6,8 +6,8 @@ import (
 	"github.com/jmcampanini/grove-cli/internal/naming"
 )
 
-// WorktreeMatch represents a PR with its worktree matching status.
-type WorktreeMatch struct {
+// Match represents a PR with its worktree matching status.
+type Match struct {
 	HasWorktree  bool
 	PR           github.PullRequest
 	WorktreePath string
@@ -15,22 +15,22 @@ type WorktreeMatch struct {
 
 // Matcher matches pull requests to existing worktrees.
 type Matcher struct {
-	namer *naming.PRWorktreeNamer
+	namer *naming.PullRequestNamer
 }
 
-// NewMatcher creates a new Matcher with the given PRWorktreeNamer.
-func NewMatcher(namer *naming.PRWorktreeNamer) *Matcher {
+// NewMatcher creates a new Matcher with the given PullRequestNamer.
+func NewMatcher(namer *naming.PullRequestNamer) *Matcher {
 	return &Matcher{
 		namer: namer,
 	}
 }
 
-// Match returns a WorktreeMatch for each PR, indicating whether a worktree exists.
-func (m *Matcher) Match(prs []github.PullRequest, worktrees []git.Worktree) []WorktreeMatch {
-	result := make([]WorktreeMatch, len(prs))
+// MatchAll returns a Match for each PR, indicating whether a worktree exists.
+func (m *Matcher) MatchAll(prs []github.PullRequest, worktrees []git.Worktree) []Match {
+	result := make([]Match, len(prs))
 	for i, pr := range prs {
 		wt := m.FindWorktreeForPR(pr, worktrees)
-		match := WorktreeMatch{
+		match := Match{
 			PR: pr,
 		}
 		if wt != nil {
@@ -49,7 +49,7 @@ func (m *Matcher) Match(prs []github.PullRequest, worktrees []git.Worktree) []Wo
 // Returns nil if no match is found.
 func (m *Matcher) FindWorktreeForPR(pr github.PullRequest, worktrees []git.Worktree) *git.Worktree {
 	// Apply template to get expected local branch name
-	prData := naming.PRTemplateData{
+	prData := naming.PullRequestTemplateData{
 		BranchName: pr.BranchName,
 		Number:     pr.Number,
 	}

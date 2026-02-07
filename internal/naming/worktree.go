@@ -7,18 +7,18 @@ import (
 	"github.com/jmcampanini/grove-cli/internal/config"
 )
 
-// WorktreeNamer handles worktree directory name operations.
-type WorktreeNamer struct {
+// LocalBranchNamer handles worktree directory name operations.
+type LocalBranchNamer struct {
 	prefix            string
 	slugifyOpts       SlugifyOptions
 	stripBranchPrefix []string
 }
 
-// NewWorktreeNamer creates a namer from config.
-func NewWorktreeNamer(worktreeCfg config.WorktreeConfig, slugCfg config.SlugifyConfig) *WorktreeNamer {
-	return &WorktreeNamer{
-		prefix:            worktreeCfg.NewPrefix,
-		stripBranchPrefix: worktreeCfg.StripBranchPrefix,
+// NewLocalBranchNamer creates a namer from config.
+func NewLocalBranchNamer(localBranchCfg config.LocalBranchConfig, slugCfg config.SlugifyConfig) *LocalBranchNamer {
+	return &LocalBranchNamer{
+		prefix:            localBranchCfg.NewPrefix,
+		stripBranchPrefix: localBranchCfg.StripBranchPrefix,
 		slugifyOpts: SlugifyOptions{
 			CollapseDashes:     slugCfg.CollapseDashes,
 			HashLength:         slugCfg.HashLength,
@@ -31,7 +31,7 @@ func NewWorktreeNamer(worktreeCfg config.WorktreeConfig, slugCfg config.SlugifyC
 }
 
 // Generate creates a worktree name from a branch name.
-func (n *WorktreeNamer) Generate(branchName string) string {
+func (n *LocalBranchNamer) Generate(branchName string) string {
 	if branchName == "" {
 		return ""
 	}
@@ -55,7 +55,7 @@ func (n *WorktreeNamer) Generate(branchName string) string {
 // ExtractFromAbsolutePath returns the display name from an absolute worktree path.
 // It extracts the basename and strips the configured prefix if present.
 // If the name doesn't have the expected prefix, returns the original basename.
-func (n *WorktreeNamer) ExtractFromAbsolutePath(absPath string) string {
+func (n *LocalBranchNamer) ExtractFromAbsolutePath(absPath string) string {
 	basename := filepath.Base(absPath)
 	if strings.HasPrefix(basename, n.prefix) {
 		return strings.TrimPrefix(basename, n.prefix)
@@ -64,6 +64,6 @@ func (n *WorktreeNamer) ExtractFromAbsolutePath(absPath string) string {
 }
 
 // HasPrefix checks if the given directory name has the configured prefix.
-func (n *WorktreeNamer) HasPrefix(name string) bool {
+func (n *LocalBranchNamer) HasPrefix(name string) bool {
 	return strings.HasPrefix(name, n.prefix)
 }

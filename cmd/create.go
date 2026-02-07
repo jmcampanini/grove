@@ -99,7 +99,7 @@ Examples:
 		return fmt.Errorf("branch %q already exists; to use it: git worktree add <path> %s", branchName, branchName)
 	}
 
-	worktreeNamer := naming.NewWorktreeNamer(cfg.Worktree, cfg.Slugify)
+	worktreeNamer := naming.NewLocalBranchNamer(cfg.LocalBranch, cfg.Slugify)
 	worktreeName := worktreeNamer.Generate(branchName)
 
 	workspacePath, err := gitClient.GetWorkspacePath()

@@ -7,11 +7,11 @@ import (
 
 // Config represents the complete grove configuration.
 type Config struct {
-	Branch   BranchConfig   `toml:"branch"`
-	Git      GitConfig      `toml:"git"`
-	PR       PRConfig       `toml:"pr"`
-	Slugify  SlugifyConfig  `toml:"slugify"`
-	Worktree WorktreeConfig `toml:"worktree"`
+	Branch      BranchConfig      `toml:"branch"`
+	Git         GitConfig         `toml:"git"`
+	LocalBranch LocalBranchConfig `toml:"local_branch"`
+	PullRequest PullRequestConfig `toml:"pull_request"`
+	Slugify     SlugifyConfig     `toml:"slugify"`
 }
 
 // Validate checks that all config values are valid.
@@ -20,8 +20,8 @@ func (c Config) Validate() error {
 	if c.Git.Timeout < 0 {
 		return errors.New("git.timeout cannot be negative")
 	}
-	if c.PR.WorktreePrefix == "" {
-		return errors.New("pr.worktree_prefix cannot be empty")
+	if c.PullRequest.WorktreePrefix == "" {
+		return errors.New("pull_request.worktree_prefix cannot be empty")
 	}
 	if c.Slugify.HashLength < 0 {
 		return errors.New("slugify.hash_length cannot be negative")
@@ -45,8 +45,8 @@ type GitConfig struct {
 	Timeout time.Duration `toml:"timeout"` // Timeout for git commands (e.g., "5s")
 }
 
-// PRConfig configures pull request worktree naming.
-type PRConfig struct {
+// PullRequestConfig configures pull request worktree naming.
+type PullRequestConfig struct {
 	BranchTemplate string `toml:"branch_template"` // Template for local branch name (e.g., "{{.BranchName}}")
 
 	WorktreePrefix string `toml:"worktree_prefix"` // Prefix for PR worktree directories (e.g., "pr-")
@@ -62,8 +62,8 @@ type SlugifyConfig struct {
 	TrimDashes         bool `toml:"trim_dashes"`
 }
 
-// WorktreeConfig configures worktree naming.
-type WorktreeConfig struct {
+// LocalBranchConfig configures local branch worktree naming.
+type LocalBranchConfig struct {
 	NewPrefix string `toml:"new_prefix"` // e.g., "wt-"
 	// StripBranchPrefix is a list of prefixes to strip from branch names.
 	// Only the first matching prefix is stripped (checked in list order).

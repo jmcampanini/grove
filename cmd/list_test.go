@@ -11,10 +11,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// testNamer creates a WorktreeNamer with the given prefix for testing.
-func testNamer(prefix string) *naming.WorktreeNamer {
-	return naming.NewWorktreeNamer(
-		config.WorktreeConfig{NewPrefix: prefix},
+// testNamer creates a LocalBranchNamer with the given prefix for testing.
+func testNamer(prefix string) *naming.LocalBranchNamer {
+	return naming.NewLocalBranchNamer(
+		config.LocalBranchConfig{NewPrefix: prefix},
 		config.SlugifyConfig{},
 	)
 }

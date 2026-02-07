@@ -9,22 +9,22 @@ import (
 	"github.com/jmcampanini/grove-cli/internal/config"
 )
 
-// PRTemplateData contains data available to the branch template.
-type PRTemplateData struct {
+// PullRequestTemplateData contains data available to the branch template.
+type PullRequestTemplateData struct {
 	BranchName string // PR's head branch (e.g., "feature/add-auth")
 	Number     int    // PR number (e.g., 123)
 }
 
-// PRWorktreeNamer handles PR worktree directory name operations.
-type PRWorktreeNamer struct {
+// PullRequestNamer handles PR worktree directory name operations.
+type PullRequestNamer struct {
 	branchTemplate *template.Template
 	slugifyOpts    SlugifyOptions
 	worktreePrefix string
 }
 
-// NewPRWorktreeNamer creates a namer from PR and slugify config.
+// NewPullRequestNamer creates a namer from pull request and slugify config.
 // Returns an error if the template is invalid or produces invalid branch names.
-func NewPRWorktreeNamer(prCfg config.PRConfig, slugCfg config.SlugifyConfig) (*PRWorktreeNamer, error) {
+func NewPullRequestNamer(prCfg config.PullRequestConfig, slugCfg config.SlugifyConfig) (*PullRequestNamer, error) {
 	// 1. Parse template
 	tmpl, err := template.New("branch").Parse(prCfg.BranchTemplate)
 	if err != nil {
@@ -33,7 +33,7 @@ func NewPRWorktreeNamer(prCfg config.PRConfig, slugCfg config.SlugifyConfig) (*P
 
 	// 2. Execute with test data to verify fields exist
 	var buf bytes.Buffer
-	testData := PRTemplateData{BranchName: "test/branch", Number: 1}
+	testData := PullRequestTemplateData{BranchName: "test/branch", Number: 1}
 	if err := tmpl.Execute(&buf, testData); err != nil {
 		return nil, fmt.Errorf("branch_template uses invalid field: %w", err)
 	}
@@ -43,7 +43,7 @@ func NewPRWorktreeNamer(prCfg config.PRConfig, slugCfg config.SlugifyConfig) (*P
 		return nil, fmt.Errorf("branch_template produces invalid branch name: %s", reason)
 	}
 
-	return &PRWorktreeNamer{
+	return &PullRequestNamer{
 		branchTemplate: tmpl,
 		worktreePrefix: prCfg.WorktreePrefix,
 		slugifyOpts: SlugifyOptions{
@@ -58,7 +58,7 @@ func NewPRWorktreeNamer(prCfg config.PRConfig, slugCfg config.SlugifyConfig) (*P
 }
 
 // GenerateBranchName executes the template with PR data to produce a local branch name.
-func (n *PRWorktreeNamer) GenerateBranchName(pr PRTemplateData) (string, error) {
+func (n *PullRequestNamer) GenerateBranchName(pr PullRequestTemplateData) (string, error) {
 	var buf bytes.Buffer
 	if err := n.branchTemplate.Execute(&buf, pr); err != nil {
 		return "", fmt.Errorf("failed to generate branch name: %w", err)
@@ -68,7 +68,7 @@ func (n *PRWorktreeNamer) GenerateBranchName(pr PRTemplateData) (string, error) 
 
 // GenerateWorktreeName applies slugify and smart prefix detection to create a worktree directory name.
 // If the slugified name already starts with worktreePrefix, the prefix is not added again.
-func (n *PRWorktreeNamer) GenerateWorktreeName(branchName string) string {
+func (n *PullRequestNamer) GenerateWorktreeName(branchName string) string {
 	slug := Slugify(branchName, n.slugifyOpts)
 	if slug == "" {
 		return ""

@@ -339,7 +339,7 @@ func TestCreatePRWorktree(t *testing.T) {
 			},
 			cfg: func() config.Config {
 				cfg := config.DefaultConfig()
-				cfg.PR.BranchTemplate = "pr/{{.Number}}"
+				cfg.PullRequest.BranchTemplate = "pr/{{.Number}}"
 				return cfg
 			}(),
 			wantErr:    false,

@@ -122,19 +122,19 @@ func TestOutputPRListFzf(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		matches      []pr.WorktreeMatch
+		matches      []pr.Match
 		wantContains []string
 		wantLines    int
 	}{
 		{
 			name:         "empty list",
-			matches:      []pr.WorktreeMatch{},
+			matches:      []pr.Match{},
 			wantContains: []string{},
 			wantLines:    0,
 		},
 		{
 			name: "single PR without worktree",
-			matches: []pr.WorktreeMatch{
+			matches: []pr.Match{
 				{
 					PR: github.PullRequest{
 						AuthorLogin: "jsmith",
@@ -159,7 +159,7 @@ func TestOutputPRListFzf(t *testing.T) {
 		},
 		{
 			name: "single PR with worktree",
-			matches: []pr.WorktreeMatch{
+			matches: []pr.Match{
 				{
 					PR: github.PullRequest{
 						AuthorLogin: "jsmith",
@@ -180,7 +180,7 @@ func TestOutputPRListFzf(t *testing.T) {
 		},
 		{
 			name: "multiple PRs",
-			matches: []pr.WorktreeMatch{
+			matches: []pr.Match{
 				{
 					PR: github.PullRequest{
 						AuthorLogin: "user1",
@@ -214,7 +214,7 @@ func TestOutputPRListFzf(t *testing.T) {
 		},
 		{
 			name: "PR with special characters in title",
-			matches: []pr.WorktreeMatch{
+			matches: []pr.Match{
 				{
 					PR: github.PullRequest{
 						AuthorLogin: "dev",
@@ -273,19 +273,19 @@ func TestOutputPRListTable(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		matches      []pr.WorktreeMatch
+		matches      []pr.Match
 		wantContains []string
 	}{
 		{
 			name:    "empty list shows message",
-			matches: []pr.WorktreeMatch{},
+			matches: []pr.Match{},
 			wantContains: []string{
 				"No open pull requests found.",
 			},
 		},
 		{
 			name: "single PR renders table",
-			matches: []pr.WorktreeMatch{
+			matches: []pr.Match{
 				{
 					PR: github.PullRequest{
 						AuthorLogin: "jsmith",
@@ -316,7 +316,7 @@ func TestOutputPRListTable(t *testing.T) {
 		},
 		{
 			name: "draft state shows lowercase",
-			matches: []pr.WorktreeMatch{
+			matches: []pr.Match{
 				{
 					PR: github.PullRequest{
 						AuthorLogin: "dev",
@@ -335,7 +335,7 @@ func TestOutputPRListTable(t *testing.T) {
 		},
 		{
 			name: "long title truncated",
-			matches: []pr.WorktreeMatch{
+			matches: []pr.Match{
 				{
 					PR: github.PullRequest{
 						AuthorLogin: "dev",
@@ -385,7 +385,7 @@ func TestOutputPRListFzfStateFormats(t *testing.T) {
 
 	for _, st := range states {
 		t.Run(string(st.state), func(t *testing.T) {
-			matches := []pr.WorktreeMatch{
+			matches := []pr.Match{
 				{
 					PR: github.PullRequest{
 						AuthorLogin: "test",
