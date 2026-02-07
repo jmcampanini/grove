@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"bytes"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -9,6 +11,7 @@ import (
 	"github.com/jmcampanini/grove-cli/internal/git"
 	"github.com/jmcampanini/grove-cli/internal/naming"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // testNamer creates a LocalBranchNamer with the given prefix for testing.
@@ -325,6 +328,181 @@ func TestFormatWorktreeName(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := formatWorktreeName(tt.displayName, tt.dirName, tt.prPrefix)
 			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestExecuteList(t *testing.T) {
+	now := time.Now()
+	commit := func(sha string) git.Commit {
+		return git.NewCommit(sha, "msg", now, "user")
+	}
+	branchWT := func(path, branchName, sha string) git.Worktree {
+		return git.Worktree{
+			AbsolutePath: path,
+			Ref:          git.NewLocalBranch(branchName, "", path, true, 0, 0, commit(sha)),
+		}
+	}
+
+	tests := []struct {
+		fzf              bool
+		listWorktreesFn  func() ([]git.Worktree, error)
+		mainWorktreePath string
+		name             string
+		wantErr          string
+		wantOutput       string
+	}{
+		{
+			name:             "plain mode outputs one path per line",
+			mainWorktreePath: "/ws/main",
+			fzf:              false,
+			listWorktreesFn: func() ([]git.Worktree, error) {
+				return []git.Worktree{
+					branchWT("/ws/main", "main", "aaa1111"),
+					branchWT("/ws/wt-alpha", "feature/alpha", "bbb2222"),
+					branchWT("/ws/wt-beta", "feature/beta", "ccc3333"),
+				}, nil
+			},
+			wantOutput: "/ws/main\n/ws/wt-alpha\n/ws/wt-beta\n",
+		},
+		{
+			name:             "main worktree listed first",
+			mainWorktreePath: "/ws/main",
+			fzf:              false,
+			listWorktreesFn: func() ([]git.Worktree, error) {
+				return []git.Worktree{
+					branchWT("/ws/wt-zebra", "feature/zebra", "ddd4444"),
+					branchWT("/ws/wt-alpha", "feature/alpha", "eee5555"),
+					branchWT("/ws/main", "main", "fff6666"),
+				}, nil
+			},
+			wantOutput: "/ws/main\n/ws/wt-alpha\n/ws/wt-zebra\n",
+		},
+		{
+			name:             "other worktrees sorted alphabetically",
+			mainWorktreePath: "/ws/main",
+			fzf:              false,
+			listWorktreesFn: func() ([]git.Worktree, error) {
+				return []git.Worktree{
+					branchWT("/ws/main", "main", "aaa1111"),
+					branchWT("/ws/wt-charlie", "feature/charlie", "bbb2222"),
+					branchWT("/ws/wt-alpha", "feature/alpha", "ccc3333"),
+					branchWT("/ws/wt-bravo", "feature/bravo", "ddd4444"),
+				}, nil
+			},
+			wantOutput: "/ws/main\n/ws/wt-alpha\n/ws/wt-bravo\n/ws/wt-charlie\n",
+		},
+		{
+			name:             "fzf mode outputs tab-separated format",
+			mainWorktreePath: "/ws/main",
+			fzf:              true,
+			listWorktreesFn: func() ([]git.Worktree, error) {
+				return []git.Worktree{
+					branchWT("/ws/main", "main", "aaa1111aaa1111"),
+					branchWT("/ws/wt-feat", "feature/feat", "bbb2222bbb2222"),
+				}, nil
+			},
+			wantOutput: "/ws/main\tlocal branch [main] main\n" +
+				"/ws/wt-feat\tlocal branch feat feature/feat\n",
+		},
+		{
+			name:             "fzf mode with mixed ref types",
+			mainWorktreePath: "/ws/main",
+			fzf:              true,
+			listWorktreesFn: func() ([]git.Worktree, error) {
+				return []git.Worktree{
+					branchWT("/ws/main", "main", "aaa1111aaa1111"),
+					{
+						AbsolutePath: "/ws/wt-release",
+						Ref: git.NewTag(
+							"v1.0.0",
+							commit("bbb2222bbb2222"),
+							"Release", "Tagger", "t@e.com", now,
+						),
+					},
+					{
+						AbsolutePath: "/ws/wt-hotfix",
+						Ref:          commit("ccc3333ccc3333"),
+					},
+				}, nil
+			},
+			wantOutput: "/ws/main\tlocal branch [main] main\n" +
+				"/ws/wt-hotfix\tdetached hotfix ccc3333\n" +
+				"/ws/wt-release\ttag release v1.0.0\n",
+		},
+		{
+			name:             "empty worktree list produces no output",
+			mainWorktreePath: "/ws/main",
+			fzf:              false,
+			listWorktreesFn: func() ([]git.Worktree, error) {
+				return []git.Worktree{}, nil
+			},
+			wantOutput: "",
+		},
+		{
+			name:             "only main worktree",
+			mainWorktreePath: "/ws/main",
+			fzf:              false,
+			listWorktreesFn: func() ([]git.Worktree, error) {
+				return []git.Worktree{
+					branchWT("/ws/main", "main", "aaa1111"),
+				}, nil
+			},
+			wantOutput: "/ws/main\n",
+		},
+		{
+			name:             "git client error propagates",
+			mainWorktreePath: "/ws/main",
+			fzf:              false,
+			listWorktreesFn: func() ([]git.Worktree, error) {
+				return nil, errors.New("connection refused")
+			},
+			wantErr: "failed to list worktrees: connection refused",
+		},
+		{
+			name:             "PR worktree gets PR marker in fzf mode",
+			mainWorktreePath: "/ws/main",
+			fzf:              true,
+			listWorktreesFn: func() ([]git.Worktree, error) {
+				return []git.Worktree{
+					branchWT("/ws/pr-auth-fix", "feature/auth-fix", "aaa1111aaa1111"),
+				}, nil
+			},
+			wantOutput: "/ws/pr-auth-fix\tlocal branch [PR] [pr-auth-fix] feature/auth-fix\n",
+		},
+		{
+			name:             "main worktree path not found outputs all worktrees sorted",
+			mainWorktreePath: "/ws/nonexistent",
+			fzf:              false,
+			listWorktreesFn: func() ([]git.Worktree, error) {
+				return []git.Worktree{
+					branchWT("/ws/wt-beta", "feature/beta", "bbb2222"),
+					branchWT("/ws/wt-alpha", "feature/alpha", "aaa1111"),
+				}, nil
+			},
+			wantOutput: "/ws/wt-alpha\n/ws/wt-beta\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+
+			ctx := &listContext{
+				cfg:              defaultTestConfig(),
+				gitClient:        &mockGit{listWorktreesFn: tt.listWorktreesFn},
+				mainWorktreePath: tt.mainWorktreePath,
+			}
+
+			err := executeList(&buf, ctx, tt.fzf)
+
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Equal(t, tt.wantErr, err.Error())
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.wantOutput, buf.String())
+			}
 		})
 	}
 }

@@ -2,10 +2,12 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"path/filepath"
 	"sort"
 	"strings"
 
+	"github.com/jmcampanini/grove-cli/internal/config"
 	"github.com/jmcampanini/grove-cli/internal/git"
 	"github.com/jmcampanini/grove-cli/internal/naming"
 	"github.com/spf13/cobra"
@@ -37,14 +39,29 @@ func init() {
 	rootCmd.AddCommand(listCmd)
 }
 
+type listContext struct {
+	cfg              config.Config
+	gitClient        git.Git
+	mainWorktreePath string
+}
+
 func runList(cmd *cobra.Command, _ []string) error {
 	rt, err := loadCommandRuntime()
 	if err != nil {
 		return err
 	}
-	cfg := rt.cfg
 
-	worktrees, err := rt.gitClient.ListWorktrees()
+	ctx := &listContext{
+		cfg:              rt.cfg,
+		gitClient:        rt.gitClient,
+		mainWorktreePath: rt.mainWorktreePath,
+	}
+
+	return executeList(cmd.OutOrStdout(), ctx, fzfFlag)
+}
+
+func executeList(w io.Writer, ctx *listContext, fzf bool) error {
+	worktrees, err := ctx.gitClient.ListWorktrees()
 	if err != nil {
 		return fmt.Errorf("failed to list worktrees: %w", err)
 	}
@@ -52,28 +69,27 @@ func runList(cmd *cobra.Command, _ []string) error {
 	var mainWT *git.Worktree
 	var others []git.Worktree
 	for i := range worktrees {
-		if worktrees[i].AbsolutePath == rt.mainWorktreePath {
+		if worktrees[i].AbsolutePath == ctx.mainWorktreePath {
 			mainWT = &worktrees[i]
 		} else {
 			others = append(others, worktrees[i])
 		}
 	}
 
-	namer := naming.NewLocalBranchNamer(cfg.LocalBranch, cfg.Slugify)
-
 	sort.Slice(others, func(i, j int) bool {
 		return others[i].AbsolutePath < others[j].AbsolutePath
 	})
 
-	prWorktreePrefix := cfg.PullRequest.WorktreePrefix
+	namer := naming.NewLocalBranchNamer(ctx.cfg.LocalBranch, ctx.cfg.Slugify)
+	prWorktreePrefix := ctx.cfg.PullRequest.WorktreePrefix
 
 	if mainWT != nil {
-		if err := outputWorktree(cmd, *mainWT, namer, prWorktreePrefix, fzfFlag); err != nil {
+		if err := writeWorktree(w, *mainWT, namer, prWorktreePrefix, fzf); err != nil {
 			return err
 		}
 	}
 	for _, wt := range others {
-		if err := outputWorktree(cmd, wt, namer, prWorktreePrefix, fzfFlag); err != nil {
+		if err := writeWorktree(w, wt, namer, prWorktreePrefix, fzf); err != nil {
 			return err
 		}
 	}
@@ -81,13 +97,13 @@ func runList(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-func outputWorktree(cmd *cobra.Command, wt git.Worktree, namer *naming.LocalBranchNamer, prWorktreePrefix string, fzf bool) error {
+func writeWorktree(w io.Writer, wt git.Worktree, namer *naming.LocalBranchNamer, prWorktreePrefix string, fzf bool) error {
 	if fzf {
 		path, display := formatWorktree(wt, namer, prWorktreePrefix)
-		_, err := fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\n", path, display)
+		_, err := fmt.Fprintf(w, "%s\t%s\n", path, display)
 		return err
 	}
-	_, err := fmt.Fprintln(cmd.OutOrStdout(), wt.AbsolutePath)
+	_, err := fmt.Fprintln(w, wt.AbsolutePath)
 	return err
 }
 
