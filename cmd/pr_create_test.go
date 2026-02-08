@@ -39,6 +39,14 @@ func (m *mockGitHub) GetPullRequestFiles(prNum int) ([]github.PullRequestFile, e
 	return nil, nil
 }
 
+func (m *mockGitHub) GetPullRequestReviewThreads(_ int) ([]github.ReviewThread, error) {
+	return nil, nil
+}
+
+func (m *mockGitHub) GetPullRequestTimeline(_ int) ([]github.TimelineEvent, error) {
+	return nil, nil
+}
+
 func (m *mockGitHub) ListPullRequests(query github.PRQuery, limit int) ([]github.PullRequest, error) {
 	if m.listPullRequestsFn != nil {
 		return m.listPullRequestsFn(query, limit)

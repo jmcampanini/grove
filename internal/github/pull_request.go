@@ -121,6 +121,21 @@ type PullRequestFile struct {
 	Path      string `json:"path"`
 }
 
+// ReviewThread represents a review thread on a specific file in a pull request.
+type ReviewThread struct {
+	CommentCount int
+	IsResolved   bool
+	Path         string
+}
+
+// TimelineEvent represents a normalized event from a pull request's timeline.
+type TimelineEvent struct {
+	Actor     string
+	CreatedAt time.Time
+	Details   string // commit headline, label name, reviewer login, etc.
+	Type      string // commented, force_pushed, committed, reviewed, labeled, merged, closed, reopened, ready_for_review, convert_to_draft, review_requested
+}
+
 const prJsonFields = "additions,author,baseRefName,body,changedFiles,comments,createdAt,deletions,headRefName,isCrossRepository,isDraft,labels,number,reviews,state,statusCheckRollup,title,updatedAt,url"
 
 func (pr *PullRequest) UnmarshalJSON(data []byte) error {

@@ -12,6 +12,12 @@ type GitHub interface {
 	// Note: GitHub API returns max 30 files per page; pagination is not implemented.
 	GetPullRequestFiles(prNum int) ([]PullRequestFile, error)
 
+	// GetPullRequestReviewThreads returns review threads grouped by file path.
+	GetPullRequestReviewThreads(prNum int) ([]ReviewThread, error)
+
+	// GetPullRequestTimeline returns normalized timeline events for a pull request.
+	GetPullRequestTimeline(prNum int) ([]TimelineEvent, error)
+
 	// ListPullRequests returns a list of pull requests matching the given query.
 	// Use DefaultPRLimit for the limit parameter to get the standard number of results.
 	ListPullRequests(query PRQuery, limit int) ([]PullRequest, error)
