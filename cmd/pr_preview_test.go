@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/jmcampanini/grove-cli/internal/github"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
@@ -363,6 +364,32 @@ func testPR() github.PullRequest {
 	}
 }
 
+func testPRWithExpanded() github.PullRequest {
+	return github.PullRequest{
+		AuthorLogin:  "dev",
+		BaseRefName:  "main",
+		Body:         "Fixes the login bug.",
+		BranchName:   "fix/login",
+		CreatedAt:    time.Now().Add(-2 * time.Hour),
+		FilesChanged: 3,
+		Labels:       []github.Label{{Color: "0e8a16", Name: "bug"}, {Color: "1d76db", Name: "priority"}},
+		LinesAdded:   25,
+		LinesDeleted: 10,
+		Number:       42,
+		Reviews: []github.Review{
+			{AuthorLogin: "reviewer1", State: "APPROVED", SubmittedAt: time.Now().Add(-1 * time.Hour)},
+			{AuthorLogin: "reviewer2", State: "CHANGES_REQUESTED", SubmittedAt: time.Now().Add(-30 * time.Minute)},
+		},
+		State: github.PRStateOpen,
+		StatusChecks: []github.StatusCheck{
+			{Conclusion: "success", Name: "ci/test", Status: "COMPLETED"},
+			{Conclusion: "failure", Name: "ci/lint", Status: "COMPLETED"},
+			{Conclusion: "", Name: "ci/deploy", Status: "PENDING"},
+		},
+		Title: "Fix login flow",
+	}
+}
+
 func testFiles() []github.PullRequestFile {
 	return []github.PullRequestFile{
 		{Path: "auth.go", Additions: 15, Deletions: 5},
@@ -499,6 +526,287 @@ func TestRenderGroupAFileTruncation(t *testing.T) {
 			assert.NotContains(t, output, "file30.go")
 		})
 	}
+}
+
+func TestRenderGroupBStyles(t *testing.T) {
+	renderers := []struct {
+		name   string
+		render func(io.Writer, github.PullRequest, []github.PullRequestFile, int) error
+	}{
+		{"context", renderContext},
+		{"board", renderBoard},
+		{"timeline", renderTimeline},
+	}
+
+	pr := testPRWithExpanded()
+	files := testFiles()
+
+	for _, r := range renderers {
+		t.Run(r.name, func(t *testing.T) {
+			tests := []struct {
+				files        []github.PullRequestFile
+				name         string
+				pr           github.PullRequest
+				wantContains []string
+			}{
+				{
+					name:  "full PR with all data",
+					pr:    pr,
+					files: files,
+					wantContains: []string{
+						"#42",
+						"Fix login flow",
+						"dev",
+						"fix/login",
+						"main",
+						"open",
+						"auth.go",
+						"+15",
+						"-5",
+						"bug",
+						"priority",
+						"ci/test",
+						"ci/lint",
+						"reviewer1",
+						"reviewer2",
+					},
+				},
+				{
+					name: "no labels reviews or checks",
+					pr: func() github.PullRequest {
+						p := pr
+						p.Labels = nil
+						p.Reviews = nil
+						p.StatusChecks = nil
+						return p
+					}(),
+					files:        files,
+					wantContains: []string{"#42", "Fix login flow", "auth.go"},
+				},
+				{
+					name: "empty body",
+					pr: func() github.PullRequest {
+						p := pr
+						p.Body = ""
+						return p
+					}(),
+					files:        files,
+					wantContains: []string{"#42", "Fix login flow"},
+				},
+				{
+					name: "no base ref",
+					pr: func() github.PullRequest {
+						p := pr
+						p.BaseRefName = ""
+						return p
+					}(),
+					files:        files,
+					wantContains: []string{"fix/login"},
+				},
+				{
+					name: "merged state",
+					pr: func() github.PullRequest {
+						p := pr
+						p.State = github.PRStateMerged
+						return p
+					}(),
+					files:        files,
+					wantContains: []string{"merged"},
+				},
+			}
+
+			for _, tt := range tests {
+				t.Run(tt.name, func(t *testing.T) {
+					var buf bytes.Buffer
+					err := r.render(&buf, tt.pr, tt.files, 60)
+					require.NoError(t, err)
+
+					output := buf.String()
+					assert.NotEmpty(t, output)
+					for _, want := range tt.wantContains {
+						assert.Contains(t, output, want)
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestRenderGroupBFileTruncation(t *testing.T) {
+	renderers := []struct {
+		name   string
+		render func(io.Writer, github.PullRequest, []github.PullRequestFile, int) error
+	}{
+		{"context", renderContext},
+		{"board", renderBoard},
+		{"timeline", renderTimeline},
+	}
+
+	files := make([]github.PullRequestFile, 35)
+	for i := range files {
+		files[i] = github.PullRequestFile{
+			Additions: 1,
+			Deletions: 0,
+			Path:      fmt.Sprintf("file%d.go", i),
+		}
+	}
+
+	pr := testPRWithExpanded()
+	pr.FilesChanged = 35
+
+	for _, r := range renderers {
+		t.Run(r.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			err := r.render(&buf, pr, files, 60)
+			require.NoError(t, err)
+
+			output := buf.String()
+			assert.Contains(t, output, "file0.go")
+			assert.Contains(t, output, "5 more")
+			assert.NotContains(t, output, "file30.go")
+		})
+	}
+}
+
+func TestCheckIcon(t *testing.T) {
+	tests := []struct {
+		conclusion string
+		name       string
+		wantChar   string
+	}{
+		{name: "success", conclusion: "success", wantChar: "✓"},
+		{name: "failure", conclusion: "failure", wantChar: "✗"},
+		{name: "cancelled", conclusion: "cancelled", wantChar: "–"},
+		{name: "pending empty", conclusion: "", wantChar: "◯"},
+		{name: "timed_out", conclusion: "timed_out", wantChar: "✗"},
+		{name: "skipped", conclusion: "skipped", wantChar: "–"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := checkIcon(tt.conclusion)
+			assert.Contains(t, result, tt.wantChar)
+		})
+	}
+}
+
+func TestReviewIcon(t *testing.T) {
+	tests := []struct {
+		name     string
+		state    string
+		wantChar string
+	}{
+		{name: "approved", state: "APPROVED", wantChar: "✓"},
+		{name: "changes requested", state: "CHANGES_REQUESTED", wantChar: "✗"},
+		{name: "commented", state: "COMMENTED", wantChar: "●"},
+		{name: "dismissed", state: "DISMISSED", wantChar: "●"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := reviewIcon(tt.state)
+			assert.Contains(t, result, tt.wantChar)
+		})
+	}
+}
+
+func TestLabelColor(t *testing.T) {
+	tests := []struct {
+		hex  string
+		name string
+		want lipgloss.Color
+	}{
+		{name: "valid hex", hex: "0e8a16", want: lipgloss.Color("#0e8a16")},
+		{name: "with hash", hex: "#1d76db", want: lipgloss.Color("#1d76db")},
+		{name: "empty", hex: "", want: colorGray},
+		{name: "invalid", hex: "xyz", want: colorGray},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, labelColor(tt.hex))
+		})
+	}
+}
+
+func TestRenderLabels(t *testing.T) {
+	tests := []struct {
+		labels       []github.Label
+		name         string
+		wantContains []string
+		wantEmpty    bool
+	}{
+		{
+			name:      "empty labels",
+			labels:    nil,
+			wantEmpty: true,
+		},
+		{
+			name:         "single label",
+			labels:       []github.Label{{Color: "0e8a16", Name: "bug"}},
+			wantContains: []string{"bug"},
+		},
+		{
+			name:         "multiple labels",
+			labels:       []github.Label{{Color: "0e8a16", Name: "bug"}, {Color: "1d76db", Name: "feature"}},
+			wantContains: []string{"bug", "feature", "·"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := renderLabels(tt.labels)
+			if tt.wantEmpty {
+				assert.Empty(t, result)
+			} else {
+				for _, want := range tt.wantContains {
+					assert.Contains(t, result, want)
+				}
+			}
+		})
+	}
+}
+
+func TestRelativeTime(t *testing.T) {
+	tests := []struct {
+		name string
+		time time.Time
+		want string
+	}{
+		{name: "just now", time: time.Now().Add(-1 * time.Second), want: "just now"},
+		{name: "minutes ago", time: time.Now().Add(-5*time.Minute - 5*time.Second), want: "5 mins ago"},
+		{name: "1 min ago", time: time.Now().Add(-1*time.Minute - 5*time.Second), want: "1 min ago"},
+		{name: "hours ago", time: time.Now().Add(-3*time.Hour - 5*time.Second), want: "3 hours ago"},
+		{name: "1 hour ago", time: time.Now().Add(-1*time.Hour - 5*time.Second), want: "1 hour ago"},
+		{name: "days ago", time: time.Now().Add(-48*time.Hour - 5*time.Second), want: "2 days ago"},
+		{name: "1 day ago", time: time.Now().Add(-25*time.Hour - 5*time.Second), want: "1 day ago"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, relativeTime(tt.time))
+		})
+	}
+}
+
+func TestTimelineEventSorting(t *testing.T) {
+	pr := testPRWithExpanded()
+	files := testFiles()
+
+	var buf bytes.Buffer
+	err := renderTimeline(&buf, pr, files, 80)
+	require.NoError(t, err)
+
+	output := buf.String()
+	openedIdx := strings.Index(output, "opened this PR")
+	approvedIdx := strings.Index(output, "approved")
+	changesIdx := strings.Index(output, "requested changes")
+
+	assert.Greater(t, openedIdx, -1, "should contain opened event")
+	assert.Greater(t, approvedIdx, -1, "should contain approved event")
+	assert.Greater(t, changesIdx, -1, "should contain changes requested event")
+	assert.Less(t, openedIdx, approvedIdx, "opened should appear before approved")
+	assert.Less(t, approvedIdx, changesIdx, "approved should appear before changes requested")
 }
 
 func TestOutputPRPreviewAllStates(t *testing.T) {
