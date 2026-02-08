@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"io"
+	"os"
 	"strconv"
 	"strings"
 
@@ -10,7 +11,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var prPreviewFzfFlag bool
+var (
+	prPreviewFzfFlag   bool
+	prPreviewStyleFlag string
+)
+
+var validPreviewStyles = []string{"card", "dashboard", "minimal", "context", "board", "timeline"}
 
 var prPreviewCmd = &cobra.Command{
 	Use:   "preview [number]",
@@ -20,6 +26,14 @@ var prPreviewCmd = &cobra.Command{
 Displays PR metadata (title, author, branch, state), a list of changed files
 with additions/deletions counts, and the PR body.
 
+Styles:
+  card       Bordered card with sections (Group A)
+  dashboard  Compact key-value dashboard (Group A)
+  minimal    Minimal GitHub-inspired layout (Group A)
+  context    Full context card with CI/reviews (Group B, default)
+  board      Status board with tables (Group B)
+  timeline   Activity timeline (Group B)
+
 With --fzf, errors are printed to stdout instead of returning an error code,
 making it suitable for use in fzf preview panes.`,
 	Args: cobra.ExactArgs(1),
@@ -28,6 +42,7 @@ making it suitable for use in fzf preview panes.`,
 
 func init() {
 	prPreviewCmd.Flags().BoolVar(&prPreviewFzfFlag, "fzf", false, "Print errors to stdout instead of returning error (for fzf preview)")
+	prPreviewCmd.Flags().StringVar(&prPreviewStyleFlag, "style", "context", "Preview style: card, dashboard, minimal, context, board, timeline")
 	prCmd.AddCommand(prPreviewCmd)
 }
 
@@ -39,7 +54,30 @@ func handlePreviewError(cmd *cobra.Command, err error) error {
 	return err
 }
 
+func isValidPreviewStyle(style string) bool {
+	for _, s := range validPreviewStyles {
+		if s == style {
+			return true
+		}
+	}
+	return false
+}
+
+func detectPreviewWidth() int {
+	if cols := os.Getenv("FZF_PREVIEW_COLUMNS"); cols != "" {
+		if n, err := strconv.Atoi(cols); err == nil && n > 0 {
+			return n
+		}
+	}
+	return 60
+}
+
 func runPRPreview(cmd *cobra.Command, args []string) error {
+	style := prPreviewStyleFlag
+	if !isValidPreviewStyle(style) {
+		return handlePreviewError(cmd, fmt.Errorf("invalid style %q; valid styles: %s", style, strings.Join(validPreviewStyles, ", ")))
+	}
+
 	prNum, err := strconv.Atoi(args[0])
 	if err != nil {
 		return handlePreviewError(cmd, fmt.Errorf("invalid PR number: %s", args[0]))
@@ -65,7 +103,25 @@ func runPRPreview(cmd *cobra.Command, args []string) error {
 		return handlePreviewError(cmd, err)
 	}
 
-	return outputPRPreview(cmd.OutOrStdout(), pr, files)
+	w := cmd.OutOrStdout()
+	width := detectPreviewWidth()
+
+	switch style {
+	case "card":
+		return renderCard(w, pr, files, width)
+	case "dashboard":
+		return renderDashboard(w, pr, files, width)
+	case "minimal":
+		return renderMinimal(w, pr, files, width)
+	case "context":
+		return renderContext(w, pr, files, width)
+	case "board":
+		return renderBoard(w, pr, files, width)
+	case "timeline":
+		return renderTimeline(w, pr, files, width)
+	default:
+		return renderContext(w, pr, files, width)
+	}
 }
 
 func outputPRPreview(w io.Writer, pr github.PullRequest, files []github.PullRequestFile) error {

@@ -300,6 +300,53 @@ func TestHandlePreviewError(t *testing.T) {
 	}
 }
 
+func TestIsValidPreviewStyle(t *testing.T) {
+	tests := []struct {
+		name  string
+		style string
+		want  bool
+	}{
+		{name: "card", style: "card", want: true},
+		{name: "dashboard", style: "dashboard", want: true},
+		{name: "minimal", style: "minimal", want: true},
+		{name: "context", style: "context", want: true},
+		{name: "board", style: "board", want: true},
+		{name: "timeline", style: "timeline", want: true},
+		{name: "empty", style: "", want: false},
+		{name: "invalid", style: "fancy", want: false},
+		{name: "uppercase", style: "CARD", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, isValidPreviewStyle(tt.style))
+		})
+	}
+}
+
+func TestDetectPreviewWidth(t *testing.T) {
+	tests := []struct {
+		envVal string
+		name   string
+		want   int
+	}{
+		{name: "env not set", envVal: "", want: 60},
+		{name: "valid env", envVal: "80", want: 80},
+		{name: "invalid env", envVal: "abc", want: 60},
+		{name: "zero", envVal: "0", want: 60},
+		{name: "negative", envVal: "-1", want: 60},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.envVal != "" {
+				t.Setenv("FZF_PREVIEW_COLUMNS", tt.envVal)
+			}
+			assert.Equal(t, tt.want, detectPreviewWidth())
+		})
+	}
+}
+
 func TestOutputPRPreviewAllStates(t *testing.T) {
 	now := time.Now()
 
