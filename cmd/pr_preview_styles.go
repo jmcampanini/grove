@@ -1,17 +1,18 @@
 package cmd
 
 import (
+	"encoding/hex"
 	"fmt"
 	"io"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/jmcampanini/grove-cli/internal/github"
+	"github.com/muesli/termenv"
 )
 
 var (
@@ -89,8 +90,6 @@ func wrapBody(body string, width int) string {
 	return strings.Join(lines, "\n")
 }
 
-// --- A1: Bordered Card ---
-
 func renderCard(w io.Writer, pr github.PullRequest, files []github.PullRequestFile, width int) error {
 	border := lipgloss.RoundedBorder()
 	boxStyle := lipgloss.NewStyle().
@@ -111,14 +110,7 @@ func renderCard(w io.Writer, pr github.PullRequest, files []github.PullRequestFi
 		pr.AuthorLogin,
 	)
 
-	stats := lipgloss.NewStyle().Foreground(colorGray).Render(
-		fmt.Sprintf("%d files  %s  %s",
-			pr.FilesChanged,
-			lipgloss.NewStyle().Foreground(colorGreen).Render(fmt.Sprintf("+%d", pr.LinesAdded)),
-			lipgloss.NewStyle().Foreground(colorRed).Render(fmt.Sprintf("-%d", pr.LinesDeleted)),
-		),
-	)
-
+	stats := lipgloss.NewStyle().Foreground(colorGray).Render(formatStats(pr))
 	fileSection := stats + "\n" + renderFileList(files, pr.FilesChanged)
 
 	var sections []string
@@ -131,8 +123,6 @@ func renderCard(w io.Writer, pr github.PullRequest, files []github.PullRequestFi
 	_, err := fmt.Fprintln(w, lipgloss.JoinVertical(lipgloss.Left, sections...))
 	return err
 }
-
-// --- A2: Compact Dashboard ---
 
 func renderDashboard(w io.Writer, pr github.PullRequest, files []github.PullRequestFile, width int) error {
 	labelStyle := lipgloss.NewStyle().Foreground(colorPurple).Bold(true).Width(10)
@@ -152,11 +142,7 @@ func renderDashboard(w io.Writer, pr github.PullRequest, files []github.PullRequ
 		{"Author", pr.AuthorLogin},
 		{"Branch", pr.BranchName},
 		{"State", stateStr},
-		{"Changed", fmt.Sprintf("%d files  %s  %s",
-			pr.FilesChanged,
-			lipgloss.NewStyle().Foreground(colorGreen).Render(fmt.Sprintf("+%d", pr.LinesAdded)),
-			lipgloss.NewStyle().Foreground(colorRed).Render(fmt.Sprintf("-%d", pr.LinesDeleted)),
-		)},
+		{"Changed", formatStats(pr)},
 	}
 
 	for _, r := range rows {
@@ -179,8 +165,6 @@ func renderDashboard(w io.Writer, pr github.PullRequest, files []github.PullRequ
 	_, err := fmt.Fprint(w, sb.String())
 	return err
 }
-
-// --- A3: Minimal GitHub ---
 
 func renderMinimal(w io.Writer, pr github.PullRequest, files []github.PullRequestFile, width int) error {
 	stateStr := lipgloss.NewStyle().
@@ -224,53 +208,43 @@ func renderMinimal(w io.Writer, pr github.PullRequest, files []github.PullReques
 	return err
 }
 
-// --- Shared helpers for Group B ---
+func styleIcon(icon string, color lipgloss.Color) string {
+	return lipgloss.NewStyle().Foreground(color).Render(icon)
+}
 
 func checkIcon(conclusion string) string {
 	switch conclusion {
 	case "success":
-		return lipgloss.NewStyle().Foreground(colorGreen).Render("✓")
+		return styleIcon("✓", colorGreen)
 	case "failure", "timed_out", "action_required":
-		return lipgloss.NewStyle().Foreground(colorRed).Render("✗")
+		return styleIcon("✗", colorRed)
 	case "cancelled", "skipped":
-		return lipgloss.NewStyle().Foreground(colorGray).Render("–")
+		return styleIcon("–", colorGray)
 	default:
-		return lipgloss.NewStyle().Foreground(colorYellow).Render("◯")
+		return styleIcon("◯", colorYellow)
 	}
 }
 
 func reviewIcon(state string) string {
 	switch state {
 	case "APPROVED":
-		return lipgloss.NewStyle().Foreground(colorGreen).Render("✓")
+		return styleIcon("✓", colorGreen)
 	case "CHANGES_REQUESTED":
-		return lipgloss.NewStyle().Foreground(colorRed).Render("✗")
+		return styleIcon("✗", colorRed)
 	default:
-		return lipgloss.NewStyle().Foreground(colorGray).Render("●")
+		return styleIcon("●", colorGray)
 	}
 }
 
 func labelColor(hexColor string) lipgloss.Color {
-	if hexColor == "" {
+	h := strings.TrimPrefix(hexColor, "#")
+	if len(h) != 6 {
 		return colorGray
 	}
-	hex := strings.TrimPrefix(hexColor, "#")
-	if len(hex) != 6 {
+	if _, err := hex.DecodeString(h); err != nil {
 		return colorGray
 	}
-	r, err := strconv.ParseInt(hex[0:2], 16, 64)
-	if err != nil {
-		return colorGray
-	}
-	g, err := strconv.ParseInt(hex[2:4], 16, 64)
-	if err != nil {
-		return colorGray
-	}
-	b, err := strconv.ParseInt(hex[4:6], 16, 64)
-	if err != nil {
-		return colorGray
-	}
-	return lipgloss.Color(fmt.Sprintf("#%02x%02x%02x", r, g, b))
+	return lipgloss.Color("#" + h)
 }
 
 func checkStatusText(sc github.StatusCheck) string {
@@ -335,8 +309,6 @@ func relativeTime(t time.Time) string {
 	}
 }
 
-// --- B1: Full Context Card ---
-
 func renderContext(w io.Writer, pr github.PullRequest, files []github.PullRequestFile, width int) error {
 	border := lipgloss.RoundedBorder()
 	boxStyle := lipgloss.NewStyle().
@@ -389,8 +361,6 @@ func renderContext(w io.Writer, pr github.PullRequest, files []github.PullReques
 	_, err := fmt.Fprintln(w, lipgloss.JoinVertical(lipgloss.Left, sections...))
 	return err
 }
-
-// --- B2: Status Board ---
 
 func renderBoard(w io.Writer, pr github.PullRequest, files []github.PullRequestFile, width int) error {
 	labelStyle := lipgloss.NewStyle().Foreground(colorPurple).Bold(true).Width(10)
@@ -455,8 +425,6 @@ func renderBoard(w io.Writer, pr github.PullRequest, files []github.PullRequestF
 	_, err := fmt.Fprint(w, sb.String())
 	return err
 }
-
-// --- B3: Activity Timeline ---
 
 type timelineEvent struct {
 	icon    string
@@ -598,8 +566,6 @@ func renderTimeline(w io.Writer, pr github.PullRequest, files []github.PullReque
 	return err
 }
 
-// --- Review Style ---
-
 const maxHighActivityFiles = 3
 
 func isTestFile(path string) bool {
@@ -619,10 +585,6 @@ func isTestFile(path string) bool {
 		}
 	}
 	return false
-}
-
-func styleIcon(icon string, color lipgloss.Color) string {
-	return lipgloss.NewStyle().Foreground(color).Render(icon)
 }
 
 func timelineEventIcon(eventType, details string) string {
@@ -728,7 +690,12 @@ func renderReviewHeader(pr github.PullRequest, width int) string {
 	labelStyle := lipgloss.NewStyle().Foreground(colorPurple).Bold(true).Width(10)
 	valueStyle := lipgloss.NewStyle().Foreground(colorGray)
 
-	stateStr := lipgloss.NewStyle().Foreground(stateColor(pr.State)).Bold(true).Render(strings.ToLower(string(pr.State)))
+	stateStr := lipgloss.NewStyle().
+		Background(stateColor(pr.State)).
+		Foreground(lipgloss.Color("0")).
+		Bold(true).
+		Padding(0, 1).
+		Render(strings.ToUpper(string(pr.State)))
 	titleLine := lipgloss.NewStyle().Bold(true).Render(fmt.Sprintf("#%d %s", pr.Number, pr.Title)) + "  " + stateStr
 
 	var sb strings.Builder
@@ -793,21 +760,41 @@ func scoreFiles(files []github.PullRequestFile, fileComments map[string]int) []s
 	return scored
 }
 
-func renderReviewHighActivity(scored []scoredFile, contentWidth int) string {
-	count := min(len(scored), maxHighActivityFiles)
-	if count == 0 {
-		return ""
+func selectHighActivityFiles(scored []scoredFile) []scoredFile {
+	var commented, rest []scoredFile
+	for _, sf := range scored {
+		if sf.comments > 0 {
+			commented = append(commented, sf)
+		} else {
+			rest = append(rest, sf)
+		}
 	}
 
-	header := lipgloss.NewStyle().Foreground(colorCyan).Bold(true).Render("High Activity")
+	shown := commented
+	remaining := maxHighActivityFiles - len(shown)
+	if remaining > 0 && len(rest) > 0 {
+		fill := min(remaining, len(rest))
+		shown = append(shown, rest[:fill]...)
+	}
+	return shown
+}
+
+func renderReviewHighActivity(scored []scoredFile, contentWidth int) (string, []scoredFile) {
+	shown := selectHighActivityFiles(scored)
+	if len(shown) == 0 {
+		return "", nil
+	}
+
+	header := lipgloss.NewStyle().Foreground(colorCyan).Bold(true).
+		Render(fmt.Sprintf("High Activity Files (%d)", len(shown)))
 	var sb strings.Builder
 	sb.WriteString(header)
 	sb.WriteString("\n")
-	for _, sf := range scored[:count] {
+	for _, sf := range shown {
 		sb.WriteString(formatReviewFileEntry(sf.file, sf.comments, contentWidth))
 		sb.WriteString("\n")
 	}
-	return strings.TrimRight(sb.String(), "\n")
+	return strings.TrimRight(sb.String(), "\n"), shown
 }
 
 func renderReviewFileList(files []github.PullRequestFile, fileComments map[string]int, totalChanged int, haPaths map[string]bool, contentWidth int) string {
@@ -838,14 +825,21 @@ func renderReviewFileList(files []github.PullRequestFile, fileComments map[strin
 	return strings.TrimRight(sb.String(), "\n")
 }
 
-func renderReviewBody(body string, width int) string {
+func renderReviewBody(body string, width int, colorMode string) string {
 	if body == "" {
 		return ""
 	}
-	renderer, err := glamour.NewTermRenderer(
+	opts := []glamour.TermRendererOption{
 		glamour.WithAutoStyle(),
 		glamour.WithWordWrap(max(width-4, 20)),
-	)
+	}
+	switch colorMode {
+	case "always":
+		opts = append(opts, glamour.WithColorProfile(termenv.ANSI256))
+	case "never":
+		opts = append(opts, glamour.WithColorProfile(termenv.Ascii))
+	}
+	renderer, err := glamour.NewTermRenderer(opts...)
 	if err != nil {
 		return wrapBody(body, width)
 	}
@@ -925,7 +919,7 @@ func renderReviewTimeline(pr github.PullRequest, timeline []github.TimelineEvent
 	return strings.TrimRight(sb.String(), "\n")
 }
 
-func renderReview(w io.Writer, pr github.PullRequest, files []github.PullRequestFile, fileComments map[string]int, timeline []github.TimelineEvent, width int) error {
+func renderReview(w io.Writer, pr github.PullRequest, files []github.PullRequestFile, fileComments map[string]int, timeline []github.TimelineEvent, width int, colorMode string) error {
 	border := lipgloss.RoundedBorder()
 	boxStyle := lipgloss.NewStyle().
 		Border(border).
@@ -944,21 +938,19 @@ func renderReview(w io.Writer, pr github.PullRequest, files []github.PullRequest
 	scored := scoreFiles(files, fileComments)
 	contentWidth := width - 4
 
-	if highActivity := renderReviewHighActivity(scored, contentWidth); highActivity != "" {
+	highActivity, shownFiles := renderReviewHighActivity(scored, contentWidth)
+	if highActivity != "" {
 		sections = append(sections, boxStyle.Render(highActivity))
 	}
 
-	haPaths := make(map[string]bool)
-	for i, sf := range scored {
-		if i >= maxHighActivityFiles {
-			break
-		}
+	haPaths := make(map[string]bool, len(shownFiles))
+	for _, sf := range shownFiles {
 		haPaths[sf.file.Path] = true
 	}
 
 	sections = append(sections, boxStyle.Render(renderReviewFileList(files, fileComments, pr.FilesChanged, haPaths, contentWidth)))
 
-	if body := renderReviewBody(pr.Body, width); body != "" {
+	if body := renderReviewBody(pr.Body, width, colorMode); body != "" {
 		sections = append(sections, boxStyle.Render(body))
 	}
 

@@ -4,15 +4,19 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/jmcampanini/grove-cli/internal/github"
+	"github.com/muesli/termenv"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
 
 var (
+	prPreviewColorFlag string
 	prPreviewFzfFlag   bool
 	prPreviewStyleFlag string
 )
@@ -42,7 +46,10 @@ making it suitable for use in fzf preview panes.`,
 	RunE: runPRPreview,
 }
 
+var validColorModes = []string{"auto", "always", "never"}
+
 func init() {
+	prPreviewCmd.Flags().StringVar(&prPreviewColorFlag, "color", "auto", "Color output: auto, always, never")
 	prPreviewCmd.Flags().BoolVar(&prPreviewFzfFlag, "fzf", false, "Print errors to stdout instead of returning error (for fzf preview)")
 	prPreviewCmd.Flags().StringVar(&prPreviewStyleFlag, "style", "review", "Preview style: card, dashboard, minimal, context, board, timeline, review")
 	prCmd.AddCommand(prPreviewCmd)
@@ -54,15 +61,6 @@ func handlePreviewError(cmd *cobra.Command, err error) error {
 		return nil
 	}
 	return err
-}
-
-func isValidPreviewStyle(style string) bool {
-	for _, s := range validPreviewStyles {
-		if s == style {
-			return true
-		}
-	}
-	return false
 }
 
 func detectPreviewWidth() int {
@@ -77,10 +75,27 @@ func detectPreviewWidth() int {
 	return 80
 }
 
+func applyColorMode(mode string) error {
+	if !slices.Contains(validColorModes, mode) {
+		return fmt.Errorf("invalid color mode %q; valid modes: %s", mode, strings.Join(validColorModes, ", "))
+	}
+	switch mode {
+	case "always":
+		lipgloss.SetColorProfile(termenv.ANSI256)
+	case "never":
+		lipgloss.SetColorProfile(termenv.Ascii)
+	}
+	return nil
+}
+
 func runPRPreview(cmd *cobra.Command, args []string) error {
 	style := prPreviewStyleFlag
-	if !isValidPreviewStyle(style) {
+	if !slices.Contains(validPreviewStyles, style) {
 		return handlePreviewError(cmd, fmt.Errorf("invalid style %q; valid styles: %s", style, strings.Join(validPreviewStyles, ", ")))
+	}
+
+	if err := applyColorMode(prPreviewColorFlag); err != nil {
+		return handlePreviewError(cmd, err)
 	}
 
 	prNum, err := strconv.Atoi(args[0])
@@ -125,13 +140,13 @@ func runPRPreview(cmd *cobra.Command, args []string) error {
 	case "timeline":
 		return renderTimeline(w, pr, files, width)
 	case "review":
-		return runReviewStyle(w, gh, pr, files, prNum, width, cmd)
+		return runReviewStyle(cmd, w, gh, pr, files, prNum, width)
 	default:
 		return renderContext(w, pr, files, width)
 	}
 }
 
-func runReviewStyle(w io.Writer, gh github.GitHub, pr github.PullRequest, files []github.PullRequestFile, prNum int, width int, cmd *cobra.Command) error {
+func runReviewStyle(cmd *cobra.Command, w io.Writer, gh github.GitHub, pr github.PullRequest, files []github.PullRequestFile, prNum, width int) error {
 	threads, err := gh.GetPullRequestReviewThreads(prNum)
 	if err != nil {
 		return handlePreviewError(cmd, err)
@@ -146,7 +161,7 @@ func runReviewStyle(w io.Writer, gh github.GitHub, pr github.PullRequest, files 
 		fileComments[t.Path] += t.CommentCount
 	}
 
-	return renderReview(w, pr, files, fileComments, timeline, width)
+	return renderReview(w, pr, files, fileComments, timeline, width, prPreviewColorFlag)
 }
 
 func outputPRPreview(w io.Writer, pr github.PullRequest, files []github.PullRequestFile) error {

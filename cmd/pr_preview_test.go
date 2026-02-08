@@ -303,31 +303,6 @@ func TestHandlePreviewError(t *testing.T) {
 	}
 }
 
-func TestIsValidPreviewStyle(t *testing.T) {
-	tests := []struct {
-		name  string
-		style string
-		want  bool
-	}{
-		{name: "card", style: "card", want: true},
-		{name: "dashboard", style: "dashboard", want: true},
-		{name: "minimal", style: "minimal", want: true},
-		{name: "context", style: "context", want: true},
-		{name: "board", style: "board", want: true},
-		{name: "timeline", style: "timeline", want: true},
-		{name: "review", style: "review", want: true},
-		{name: "empty", style: "", want: false},
-		{name: "invalid", style: "fancy", want: false},
-		{name: "uppercase", style: "CARD", want: false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, isValidPreviewStyle(tt.style))
-		})
-	}
-}
-
 func TestDetectPreviewWidth(t *testing.T) {
 	t.Run("FZF_PREVIEW_COLUMNS takes precedence", func(t *testing.T) {
 		t.Setenv("FZF_PREVIEW_COLUMNS", "120")
@@ -930,7 +905,7 @@ func TestRenderReview(t *testing.T) {
 				"dev",
 				"fix/login",
 				"main",
-				"open",
+				"OPEN",
 				"bug",
 				"priority",
 				"ci/test",
@@ -939,7 +914,7 @@ func TestRenderReview(t *testing.T) {
 				"reviewer2",
 				"server.go",
 				"auth.go",
-				"High Activity",
+				"High Activity Files",
 				"Activity",
 			},
 		},
@@ -981,7 +956,7 @@ func TestRenderReview(t *testing.T) {
 			files:        files,
 			comments:     comments,
 			timeline:     timeline,
-			wantContains: []string{"merged"},
+			wantContains: []string{"MERGED"},
 		},
 		{
 			name:         "empty timeline and comments",
@@ -996,7 +971,7 @@ func TestRenderReview(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
-			err := renderReview(&buf, tt.pr, tt.files, tt.comments, tt.timeline, 60)
+			err := renderReview(&buf, tt.pr, tt.files, tt.comments, tt.timeline, 60, "auto")
 			require.NoError(t, err)
 
 			output := buf.String()
@@ -1013,20 +988,22 @@ func TestRenderReviewHighActivity(t *testing.T) {
 	comments := testFileComments()
 
 	scored := scoreFiles(files, comments)
-	output := renderReviewHighActivity(scored, 56)
+	output, shown := renderReviewHighActivity(scored, 56)
 
-	assert.Contains(t, output, "High Activity")
+	assert.Contains(t, output, "High Activity Files")
 	assert.Contains(t, output, "server.go", "highest churn non-test file should appear")
 	assert.Contains(t, output, "auth.go", "second highest non-test file should appear")
 	assert.NotContains(t, output, "server_test.go", "test files should be excluded")
 	assert.NotContains(t, output, "auth_test.go", "test files should be excluded")
+	assert.NotEmpty(t, shown)
 
 	// Test with 0 non-test files
 	testOnlyFiles := []github.PullRequestFile{
 		{Path: "foo_test.go", Additions: 100, Deletions: 50},
 	}
-	output = renderReviewHighActivity(scoreFiles(testOnlyFiles, map[string]int{}), 56)
+	output, shown = renderReviewHighActivity(scoreFiles(testOnlyFiles, map[string]int{}), 56)
 	assert.Empty(t, output)
+	assert.Nil(t, shown)
 }
 
 func TestRenderReviewFileComments(t *testing.T) {
@@ -1079,7 +1056,7 @@ func TestRenderReviewBody(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			output := renderReviewBody(tt.body, 60)
+			output := renderReviewBody(tt.body, 60, "auto")
 			tt.want(output, t)
 		})
 	}
@@ -1128,4 +1105,45 @@ func TestRenderReviewTimeline(t *testing.T) {
 	assert.Contains(t, output, "pushed 3 commits")
 	assert.NotContains(t, output, "first")
 	assert.NotContains(t, output, "second")
+}
+
+func TestHighActivityIncludesCommentedFiles(t *testing.T) {
+	files := []github.PullRequestFile{
+		{Path: "high_churn1.go", Additions: 200, Deletions: 100},
+		{Path: "high_churn2.go", Additions: 150, Deletions: 50},
+		{Path: "high_churn3.go", Additions: 100, Deletions: 50},
+		{Path: "low_churn_commented.go", Additions: 2, Deletions: 1},
+	}
+	comments := map[string]int{
+		"low_churn_commented.go": 5,
+	}
+
+	scored := scoreFiles(files, comments)
+	output, shown := renderReviewHighActivity(scored, 80)
+
+	assert.Contains(t, output, "low_churn_commented.go", "low-churn file with comments should appear")
+	assert.Contains(t, output, "High Activity Files")
+
+	var shownPaths []string
+	for _, sf := range shown {
+		shownPaths = append(shownPaths, sf.file.Path)
+	}
+	assert.Contains(t, shownPaths, "low_churn_commented.go")
+}
+
+func TestRenderReviewStateBadge(t *testing.T) {
+	pr := testPRWithExpanded()
+
+	output := renderReviewHeader(pr, 60)
+	assert.Contains(t, output, "OPEN")
+}
+
+func TestHighActivityCountInHeader(t *testing.T) {
+	files := testReviewFiles()
+	comments := testFileComments()
+
+	scored := scoreFiles(files, comments)
+	output, shown := renderReviewHighActivity(scored, 56)
+
+	assert.Contains(t, output, fmt.Sprintf("High Activity Files (%d)", len(shown)))
 }

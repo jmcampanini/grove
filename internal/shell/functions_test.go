@@ -103,6 +103,7 @@ func TestFunctionGenerator_GrpStylePassthrough(t *testing.T) {
 			generate: gen.GenerateBash,
 			contains: []string{
 				`style="${1:-review}"`,
+				"--color always",
 				"--style $style",
 				"grove pr preview",
 			},
@@ -112,6 +113,7 @@ func TestFunctionGenerator_GrpStylePassthrough(t *testing.T) {
 			generate: gen.GenerateZsh,
 			contains: []string{
 				`style="${1:-review}"`,
+				"--color always",
 				"--style $style",
 				"grove pr preview",
 			},
@@ -123,6 +125,7 @@ func TestFunctionGenerator_GrpStylePassthrough(t *testing.T) {
 				"set -l style review",
 				"count $argv",
 				"set style $argv[1]",
+				"--color always",
 				"--style $style",
 				"grove pr preview",
 			},

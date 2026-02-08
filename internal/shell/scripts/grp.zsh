@@ -12,7 +12,7 @@ grp() {
     pr_num=$(grove pr list --fzf | fzf \
         --delimiter '\t' \
         --with-nth 3 \
-        --preview "grove pr preview --style $style --fzf {1}" \
+        --preview "grove pr preview --color always --style $style --fzf {1}" \
         --preview-window 'right:50%:wrap' \
         | cut -f1)
     if [[ -n "$pr_num" ]]; then
