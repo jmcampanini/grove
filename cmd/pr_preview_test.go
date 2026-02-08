@@ -16,23 +16,23 @@ import (
 
 func TestHandlePreviewError(t *testing.T) {
 	tests := []struct {
-		name       string
-		fzfMode    bool
 		err        error
+		fzfMode    bool
+		name       string
 		wantErr    bool
 		wantOutput string
 	}{
 		{
-			name:       "fzf mode prints error to stdout and returns nil",
-			fzfMode:    true,
 			err:        assert.AnError,
+			fzfMode:    true,
+			name:       "fzf mode prints error to stdout and returns nil",
 			wantErr:    false,
 			wantOutput: "Error: assert.AnError general error for testing\n",
 		},
 		{
-			name:       "normal mode returns error",
-			fzfMode:    false,
 			err:        assert.AnError,
+			fzfMode:    false,
+			name:       "normal mode returns error",
 			wantErr:    true,
 			wantOutput: "",
 		},
@@ -126,12 +126,12 @@ func TestCheckIcon(t *testing.T) {
 		name       string
 		wantChar   string
 	}{
-		{name: "success", conclusion: "success", wantChar: "✓"},
-		{name: "failure", conclusion: "failure", wantChar: "✗"},
-		{name: "cancelled", conclusion: "cancelled", wantChar: "–"},
-		{name: "pending empty", conclusion: "", wantChar: "◯"},
-		{name: "timed_out", conclusion: "timed_out", wantChar: "✗"},
-		{name: "skipped", conclusion: "skipped", wantChar: "–"},
+		{name: "success", conclusion: "success", wantChar: iconCheck},
+		{name: "failure", conclusion: "failure", wantChar: iconCross},
+		{name: "cancelled", conclusion: "cancelled", wantChar: iconCross},
+		{name: "pending empty", conclusion: "", wantChar: iconPending},
+		{name: "timed_out", conclusion: "timed_out", wantChar: iconCross},
+		{name: "skipped", conclusion: "skipped", wantChar: iconCross},
 	}
 
 	for _, tt := range tests {
@@ -206,10 +206,10 @@ func TestReviewIcon(t *testing.T) {
 		state    string
 		wantChar string
 	}{
-		{name: "approved", state: "APPROVED", wantChar: "✓"},
-		{name: "changes requested", state: "CHANGES_REQUESTED", wantChar: "✗"},
-		{name: "commented", state: "COMMENTED", wantChar: "●"},
-		{name: "dismissed", state: "DISMISSED", wantChar: "●"},
+		{name: "approved", state: "APPROVED", wantChar: iconCheck},
+		{name: "changes requested", state: "CHANGES_REQUESTED", wantChar: iconCross},
+		{name: "commented", state: "COMMENTED", wantChar: iconCircle},
+		{name: "dismissed", state: "DISMISSED", wantChar: iconCircle},
 	}
 
 	for _, tt := range tests {
@@ -491,11 +491,11 @@ func TestRenderFileComments(t *testing.T) {
 	cw := computeFileColumnWidths(files, comments)
 
 	output := formatFileEntry(files[0], comments["with_comments.go"], "", 56, cw)
-	assert.Contains(t, output, commentIcon)
+	assert.Contains(t, output, iconComment)
 	assert.Contains(t, output, "3")
 
 	output = formatFileEntry(files[1], comments["no_comments.go"], "", 56, cw)
-	assert.NotContains(t, output, commentIcon)
+	assert.NotContains(t, output, iconComment)
 }
 
 func TestFormatFileEntryAlignment(t *testing.T) {

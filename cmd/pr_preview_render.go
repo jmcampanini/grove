@@ -27,7 +27,25 @@ var (
 	colorYellow = lipgloss.Color("214")
 )
 
-const maxPreviewFiles = 30
+const (
+	maxHighActivityFiles = 3
+	maxPreviewFiles      = 30
+
+	iconArchive  = "\uea98" // nf-cod-archive
+	iconBell     = "\ueaa2" // nf-cod-bell
+	iconCheck    = "\ueab2" // nf-cod-pass
+	iconCircle   = "\uea71" // nf-cod-circle-filled
+	iconComment  = "\uea6b" // nf-cod-comment
+	iconCross    = "\ueab8" // nf-cod-error
+	iconDraft    = "\uea73" // nf-cod-circle-outline
+	iconGitRef   = "\uebcb" // nf-cod-git-commit
+	iconMerge    = "\ueafe" // nf-cod-git-merge
+	iconOpened   = "\uea74" // nf-cod-issue-opened
+	iconPending  = "\uf017" // nf-fa-clock
+	iconReopened = "\ueb0b" // nf-cod-issue-reopened
+	iconTag      = "\uea66" // nf-cod-tag
+	iconZap      = "\uea86" // nf-cod-zap
+)
 
 func hyperlink(url, text string) string {
 	if lipgloss.ColorProfile() == termenv.Ascii {
@@ -36,7 +54,7 @@ func hyperlink(url, text string) string {
 	return termenv.Hyperlink(url, text)
 }
 
-func stateColor(state github.PRState) lipgloss.Color {
+func stateColor(state github.PRState) lipgloss.TerminalColor {
 	switch state {
 	case github.PRStateOpen:
 		return colorGreen
@@ -58,24 +76,24 @@ func colorIcon(icon string, color lipgloss.TerminalColor) string {
 func checkIcon(conclusion string) string {
 	switch conclusion {
 	case "success":
-		return colorIcon("✓", colorGreen)
+		return colorIcon(iconCheck, colorGreen)
 	case "failure", "timed_out", "action_required":
-		return colorIcon("✗", colorRed)
+		return colorIcon(iconCross, colorRed)
 	case "cancelled", "skipped":
-		return colorIcon("–", colorGray)
+		return colorIcon(iconCross, colorGray)
 	default:
-		return colorIcon("◯", colorYellow)
+		return colorIcon(iconPending, colorYellow)
 	}
 }
 
 func reviewIcon(state string) string {
 	switch state {
 	case "APPROVED":
-		return colorIcon("✓", colorGreen)
+		return colorIcon(iconCheck, colorGreen)
 	case "CHANGES_REQUESTED":
-		return colorIcon("✗", colorRed)
+		return colorIcon(iconCross, colorRed)
 	default:
-		return colorIcon("●", colorGray)
+		return colorIcon(iconCircle, colorGray)
 	}
 }
 
@@ -248,10 +266,10 @@ func renderReviewLines(reviews []github.Review) string {
 	return strings.Join(lines, "\n")
 }
 
-const maxHighActivityFiles = 3
-
-var testFileSuffixes = []string{"_test.go", "Test.java", "Tests.java", "IT.java"}
-var testDirSegments = []string{"/test/", "/tests/", "/testdata/"}
+var (
+	testDirSegments  = []string{"/test/", "/tests/", "/testdata/"}
+	testFileSuffixes = []string{"_test.go", "Test.java", "Tests.java", "IT.java"}
+)
 
 func isTestFile(path string) bool {
 	base := filepath.Base(path)
@@ -267,34 +285,34 @@ func timelineEventIcon(eventType, details string) string {
 	case "reviewed":
 		switch details {
 		case "approved":
-			return colorIcon("✓", colorGreen)
+			return colorIcon(iconCheck, colorGreen)
 		case "changes requested":
-			return colorIcon("✗", colorRed)
+			return colorIcon(iconCross, colorRed)
 		default:
-			return colorIcon("●", colorGray)
+			return colorIcon(iconComment, colorGray)
 		}
 	case "commented":
-		return colorIcon("💬", colorCyan)
+		return colorIcon(iconComment, colorCyan)
 	case "committed":
-		return colorIcon("⊙", colorPurple)
+		return colorIcon(iconGitRef, colorPurple)
 	case "force_pushed":
-		return colorIcon("⚡", colorYellow)
+		return colorIcon(iconZap, colorYellow)
 	case "labeled":
-		return colorIcon("🏷", colorCyan)
+		return colorIcon(iconTag, colorCyan)
 	case "merged":
-		return colorIcon("●", colorPurple)
+		return colorIcon(iconMerge, colorPurple)
 	case "closed":
-		return colorIcon("●", colorRed)
+		return colorIcon(iconArchive, colorRed)
 	case "reopened":
-		return colorIcon("●", colorGreen)
+		return colorIcon(iconReopened, colorGreen)
 	case "ready_for_review":
-		return colorIcon("▶", colorGreen)
+		return colorIcon(iconBell, colorGreen)
 	case "convert_to_draft":
-		return colorIcon("◑", colorYellow)
+		return colorIcon(iconDraft, colorYellow)
 	case "review_requested":
-		return colorIcon("👁", colorCyan)
+		return colorIcon(iconBell, colorCyan)
 	default:
-		return colorIcon("·", colorGray)
+		return colorIcon(iconCircle, colorGray)
 	}
 }
 
@@ -354,8 +372,6 @@ func computeFileColumnWidths(files []github.PullRequestFile, fileComments map[st
 	return w
 }
 
-const commentIcon = "\uea6b"
-
 func fileDiffURL(prURL, path string) string {
 	h := sha256.Sum256([]byte(path))
 	return fmt.Sprintf("%s/files#diff-%s", prURL, hex.EncodeToString(h[:]))
@@ -375,9 +391,9 @@ func formatFileEntry(f github.PullRequestFile, comments int, prURL string, conte
 	var right string
 	if cw.commentWidth > 0 {
 		if comments > 0 {
-			right = fmt.Sprintf("%s %*d%s  %s  %s", commentIcon, cw.commentWidth, comments, linkCol, added, deleted)
+			right = fmt.Sprintf("%s %*d%s  %s  %s", iconComment, cw.commentWidth, comments, linkCol, added, deleted)
 		} else {
-			commentColWidth := lipgloss.Width(fmt.Sprintf("%s %*d", commentIcon, cw.commentWidth, 0))
+			commentColWidth := lipgloss.Width(fmt.Sprintf("%s %*d", iconComment, cw.commentWidth, 0))
 			right = fmt.Sprintf("%s%s  %s  %s", strings.Repeat(" ", commentColWidth), linkCol, added, deleted)
 		}
 	} else {
@@ -416,29 +432,22 @@ func renderHeader(pr github.PullRequest) string {
 		Render(strings.ToUpper(string(pr.State)))
 	titleLine := lipgloss.NewStyle().Bold(true).Render(fmt.Sprintf("#%d %s", pr.Number, pr.Title)) + "  " + stateStr
 
+	row := func(label, value string) string {
+		return labelStyle.Render(label) + valueStyle.Render(value)
+	}
+
 	var sb strings.Builder
-	sb.WriteString(titleLine)
-	sb.WriteString("\n")
-	sb.WriteString(labelStyle.Render("Author"))
-	sb.WriteString(valueStyle.Render("@" + pr.AuthorLogin))
-	sb.WriteString("\n")
-	sb.WriteString(labelStyle.Render("Branch"))
-	sb.WriteString(valueStyle.Render(branchInfo(pr.BranchName, pr.BaseRefName)))
-	sb.WriteString("\n")
-	sb.WriteString(labelStyle.Render("Changed"))
-	sb.WriteString(valueStyle.Render(formatStats(pr)))
-	sb.WriteString("\n")
+	fmt.Fprintln(&sb, titleLine)
+	fmt.Fprintln(&sb, row("Author", "@"+pr.AuthorLogin))
+	fmt.Fprintln(&sb, row("Branch", branchInfo(pr.BranchName, pr.BaseRefName)))
+	fmt.Fprintln(&sb, row("Changed", formatStats(pr)))
 
 	if labels := renderLabels(pr.Labels); labels != "" {
-		sb.WriteString(labelStyle.Render("Labels"))
-		sb.WriteString(valueStyle.Render(labels))
-		sb.WriteString("\n")
+		fmt.Fprintln(&sb, row("Labels", labels))
 	}
 
 	if pr.URL != "" {
-		sb.WriteString(labelStyle.Render("URL"))
-		sb.WriteString(valueStyle.Render(hyperlink(pr.URL, pr.URL)))
-		sb.WriteString("\n")
+		fmt.Fprintln(&sb, row("URL", hyperlink(pr.URL, pr.URL)))
 	}
 
 	return strings.TrimRight(sb.String(), "\n")
@@ -483,22 +492,21 @@ func scoreFiles(files []github.PullRequestFile, fileComments map[string]int) []s
 }
 
 func selectHighActivityFiles(scored []scoredFile) []scoredFile {
-	var commented, rest []scoredFile
+	var commented, uncommented []scoredFile
 	for _, sf := range scored {
 		if sf.comments > 0 {
 			commented = append(commented, sf)
 		} else {
-			rest = append(rest, sf)
+			uncommented = append(uncommented, sf)
 		}
 	}
 
-	shown := commented
-	remaining := maxHighActivityFiles - len(shown)
-	if remaining > 0 && len(rest) > 0 {
-		fill := min(remaining, len(rest))
-		shown = append(shown, rest[:fill]...)
+	result := commented
+	remaining := maxHighActivityFiles - len(result)
+	if remaining > 0 {
+		result = append(result, uncommented[:min(remaining, len(uncommented))]...)
 	}
-	return shown
+	return result
 }
 
 func renderHighActivity(scored []scoredFile, prURL string, contentWidth int) (string, []scoredFile) {
@@ -574,14 +582,12 @@ func renderBody(body string, width int, colorMode string) string {
 		opts = append(opts, glamour.WithColorProfile(termenv.Ascii))
 	}
 	renderer, err := glamour.NewTermRenderer(opts...)
-	if err != nil {
-		return wrapBody(body, width)
+	if err == nil {
+		if rendered, renderErr := renderer.Render(body); renderErr == nil {
+			return strings.TrimSpace(rendered)
+		}
 	}
-	rendered, err := renderer.Render(body)
-	if err != nil {
-		return wrapBody(body, width)
-	}
-	return strings.TrimSpace(rendered)
+	return wrapBody(body, width)
 }
 
 type collapsedEvent struct {
@@ -641,10 +647,10 @@ func renderTimeline(pr github.PullRequest, timeline []github.TimelineEvent) stri
 		var icon, msg string
 		switch {
 		case e.Type == "opened":
-			icon = colorIcon("●", colorGreen)
+			icon = colorIcon(iconOpened, colorGreen)
 			msg = fmt.Sprintf("@%s opened this PR", e.Actor)
 		case e.Type == "committed" && ce.count > 1:
-			icon = colorIcon("⊙", colorPurple)
+			icon = colorIcon(iconGitRef, colorPurple)
 			msg = fmt.Sprintf("@%s pushed %d commits", e.Actor, ce.count)
 		default:
 			icon = timelineEventIcon(e.Type, e.Details)
