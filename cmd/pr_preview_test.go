@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"bytes"
+	"fmt"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -343,6 +345,158 @@ func TestDetectPreviewWidth(t *testing.T) {
 				t.Setenv("FZF_PREVIEW_COLUMNS", tt.envVal)
 			}
 			assert.Equal(t, tt.want, detectPreviewWidth())
+		})
+	}
+}
+
+func testPR() github.PullRequest {
+	return github.PullRequest{
+		AuthorLogin:  "dev",
+		Body:         "Fixes the login bug.",
+		BranchName:   "fix/login",
+		FilesChanged: 3,
+		LinesAdded:   25,
+		LinesDeleted: 10,
+		Number:       42,
+		State:        github.PRStateOpen,
+		Title:        "Fix login flow",
+	}
+}
+
+func testFiles() []github.PullRequestFile {
+	return []github.PullRequestFile{
+		{Path: "auth.go", Additions: 15, Deletions: 5},
+		{Path: "auth_test.go", Additions: 10, Deletions: 5},
+	}
+}
+
+func TestRenderGroupAStyles(t *testing.T) {
+	renderers := []struct {
+		name   string
+		render func(io.Writer, github.PullRequest, []github.PullRequestFile, int) error
+	}{
+		{"card", renderCard},
+		{"dashboard", renderDashboard},
+		{"minimal", renderMinimal},
+	}
+
+	pr := testPR()
+	files := testFiles()
+
+	for _, r := range renderers {
+		t.Run(r.name, func(t *testing.T) {
+			tests := []struct {
+				files        []github.PullRequestFile
+				name         string
+				pr           github.PullRequest
+				wantContains []string
+			}{
+				{
+					name:  "normal PR",
+					pr:    pr,
+					files: files,
+					wantContains: []string{
+						"#42",
+						"Fix login flow",
+						"dev",
+						"fix/login",
+						"open",
+						"auth.go",
+						"+15",
+						"-5",
+					},
+				},
+				{
+					name: "empty body",
+					pr: func() github.PullRequest {
+						p := pr
+						p.Body = ""
+						return p
+					}(),
+					files:        files,
+					wantContains: []string{"#42", "Fix login flow"},
+				},
+				{
+					name: "zero files",
+					pr: func() github.PullRequest {
+						p := pr
+						p.FilesChanged = 0
+						return p
+					}(),
+					files:        []github.PullRequestFile{},
+					wantContains: []string{"#42"},
+				},
+				{
+					name: "draft state",
+					pr: func() github.PullRequest {
+						p := pr
+						p.State = github.PRStateDraft
+						return p
+					}(),
+					files:        files,
+					wantContains: []string{"draft"},
+				},
+				{
+					name: "merged state",
+					pr: func() github.PullRequest {
+						p := pr
+						p.State = github.PRStateMerged
+						return p
+					}(),
+					files:        files,
+					wantContains: []string{"merged"},
+				},
+			}
+
+			for _, tt := range tests {
+				t.Run(tt.name, func(t *testing.T) {
+					var buf bytes.Buffer
+					err := r.render(&buf, tt.pr, tt.files, 60)
+					require.NoError(t, err)
+
+					output := buf.String()
+					assert.NotEmpty(t, output)
+					for _, want := range tt.wantContains {
+						assert.Contains(t, output, want)
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestRenderGroupAFileTruncation(t *testing.T) {
+	renderers := []struct {
+		name   string
+		render func(io.Writer, github.PullRequest, []github.PullRequestFile, int) error
+	}{
+		{"card", renderCard},
+		{"dashboard", renderDashboard},
+		{"minimal", renderMinimal},
+	}
+
+	files := make([]github.PullRequestFile, 35)
+	for i := range files {
+		files[i] = github.PullRequestFile{
+			Additions: 1,
+			Deletions: 0,
+			Path:      fmt.Sprintf("file%d.go", i),
+		}
+	}
+
+	pr := testPR()
+	pr.FilesChanged = 35
+
+	for _, r := range renderers {
+		t.Run(r.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			err := r.render(&buf, pr, files, 60)
+			require.NoError(t, err)
+
+			output := buf.String()
+			assert.Contains(t, output, "file0.go")
+			assert.Contains(t, output, "5 more")
+			assert.NotContains(t, output, "file30.go")
 		})
 	}
 }
