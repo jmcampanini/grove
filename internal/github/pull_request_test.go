@@ -409,8 +409,8 @@ func TestPullRequest_UnmarshalJSON(t *testing.T) {
 				},
 				State: PRStateOpen,
 				StatusChecks: []StatusCheck{
-					{Name: "ci/test", Status: "COMPLETED", Conclusion: "success"},
-					{Name: "ci/lint", Status: "IN_PROGRESS", Conclusion: ""},
+					{Conclusion: "success", Name: "ci/test", Status: "COMPLETED"},
+					{Name: "ci/lint", Status: "IN_PROGRESS"},
 				},
 				Title:     "Full featured PR",
 				UpdatedAt: time.Date(2024, 6, 2, 12, 0, 0, 0, time.UTC),
@@ -496,8 +496,8 @@ func TestPullRequest_UnmarshalJSON(t *testing.T) {
 				"number": 800,
 				"state": "OPEN",
 				"statusCheckRollup": [
-					{"__typename": "CheckRun", "name": "ci/test", "status": "COMPLETED", "conclusion": "success"},
-					{"__typename": "StatusContext", "context": "deploy/staging", "state": "SUCCESS"},
+					{"__typename": "CheckRun", "name": "ci/test", "status": "COMPLETED", "conclusion": "success", "detailsUrl": "https://github.com/owner/repo/actions/runs/123"},
+					{"__typename": "StatusContext", "context": "deploy/staging", "state": "SUCCESS", "targetUrl": "https://deploy.example.com/staging"},
 					{"__typename": "StatusContext", "context": "deploy/prod", "state": "PENDING"}
 				],
 				"title": "Mixed checks",
@@ -511,9 +511,9 @@ func TestPullRequest_UnmarshalJSON(t *testing.T) {
 				Number:      800,
 				State:       PRStateOpen,
 				StatusChecks: []StatusCheck{
-					{Name: "ci/test", Status: "COMPLETED", Conclusion: "success"},
-					{Name: "deploy/staging", Status: "COMPLETED", Conclusion: "success"},
-					{Name: "deploy/prod", Status: "PENDING", Conclusion: ""},
+					{Conclusion: "success", DetailURL: "https://github.com/owner/repo/actions/runs/123", Name: "ci/test", Status: "COMPLETED"},
+					{Conclusion: "success", DetailURL: "https://deploy.example.com/staging", Name: "deploy/staging", Status: "COMPLETED"},
+					{Conclusion: "", Name: "deploy/prod", Status: "PENDING"},
 				},
 				Title:     "Mixed checks",
 				UpdatedAt: time.Date(2024, 9, 1, 0, 0, 0, 0, time.UTC),

@@ -88,6 +88,7 @@ type Review struct {
 
 type StatusCheck struct {
 	Conclusion string // success, failure, neutral, cancelled, timed_out, action_required, skipped
+	DetailURL  string
 	Name       string
 	Status     string // COMPLETED, IN_PROGRESS, QUEUED, REQUESTED, WAITING, PENDING
 }
@@ -150,15 +151,21 @@ func (pr *PullRequest) UnmarshalJSON(data []byte) error {
 	//   CheckRun:      {"__typename":"CheckRun", "name":"ci/test", "status":"COMPLETED", "conclusion":"success"}
 	//   StatusContext:  {"__typename":"StatusContext", "context":"ci/deploy", "state":"SUCCESS"}
 	type rawStatusCheckRollupEntry struct {
+		Conclusion string `json:"conclusion"`
+		Context    string `json:"context"`
+		DetailsURL string `json:"detailsUrl"`
+		Name       string `json:"name"`
+		State      string `json:"state"`
+		Status     string `json:"status"`
+		TargetURL  string `json:"targetUrl"`
 		TypeName   string `json:"__typename"`
-		Conclusion string `json:"conclusion"` // CheckRun
-		Context    string `json:"context"`    // StatusContext
-		Name       string `json:"name"`       // CheckRun
-		State      string `json:"state"`      // StatusContext
-		Status     string `json:"status"`     // CheckRun
 	}
 	type rawPR struct {
-		Additions         int                         `json:"additions"`
+		Additions int `json:"additions"`
+		Author    struct {
+			Login string `json:"login"`
+			Name  string `json:"name"`
+		} `json:"author"`
 		BaseRefName       string                      `json:"baseRefName"`
 		Body              string                      `json:"body"`
 		ChangedFiles      int                         `json:"changedFiles"`
@@ -176,10 +183,6 @@ func (pr *PullRequest) UnmarshalJSON(data []byte) error {
 		Title             string                      `json:"title"`
 		UpdatedAt         time.Time                   `json:"updatedAt"`
 		URL               string                      `json:"url"`
-		Author            struct {
-			Login string `json:"login"`
-			Name  string `json:"name"`
-		} `json:"author"`
 	}
 	var raw rawPR
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -221,12 +224,14 @@ func (pr *PullRequest) UnmarshalJSON(data []byte) error {
 			}
 			pr.StatusChecks = append(pr.StatusChecks, StatusCheck{
 				Conclusion: conclusion,
+				DetailURL:  sc.TargetURL,
 				Name:       sc.Context,
 				Status:     status,
 			})
 		} else {
 			pr.StatusChecks = append(pr.StatusChecks, StatusCheck{
 				Conclusion: strings.ToLower(sc.Conclusion),
+				DetailURL:  sc.DetailsURL,
 				Name:       sc.Name,
 				Status:     sc.Status,
 			})

@@ -104,11 +104,12 @@ func testPRWithExpanded() github.PullRequest {
 		},
 		State: github.PRStateOpen,
 		StatusChecks: []github.StatusCheck{
-			{Conclusion: "success", Name: "ci/test", Status: "COMPLETED"},
-			{Conclusion: "failure", Name: "ci/lint", Status: "COMPLETED"},
+			{Conclusion: "success", DetailURL: "https://github.com/owner/repo/actions/runs/1", Name: "ci/test", Status: "COMPLETED"},
+			{Conclusion: "failure", DetailURL: "https://github.com/owner/repo/actions/runs/2", Name: "ci/lint", Status: "COMPLETED"},
 			{Conclusion: "", Name: "ci/deploy", Status: "PENDING"},
 		},
 		Title: "Fix login flow",
+		URL:   "https://github.com/owner/repo/pull/42",
 	}
 }
 
@@ -462,7 +463,7 @@ func TestRenderHighActivity(t *testing.T) {
 	comments := testFileComments()
 
 	scored := scoreFiles(files, comments)
-	output, shown := renderHighActivity(scored, 56)
+	output, shown := renderHighActivity(scored, "", 56)
 
 	assert.Contains(t, output, "High Activity Files")
 	assert.Contains(t, output, "server.go", "highest churn non-test file should appear")
@@ -474,7 +475,7 @@ func TestRenderHighActivity(t *testing.T) {
 	testOnlyFiles := []github.PullRequestFile{
 		{Path: "foo_test.go", Additions: 100, Deletions: 50},
 	}
-	output, shown = renderHighActivity(scoreFiles(testOnlyFiles, map[string]int{}), 56)
+	output, shown = renderHighActivity(scoreFiles(testOnlyFiles, map[string]int{}), "", 56)
 	assert.Empty(t, output)
 	assert.Nil(t, shown)
 }
@@ -489,12 +490,12 @@ func TestRenderFileComments(t *testing.T) {
 	}
 	cw := computeFileColumnWidths(files, comments)
 
-	output := formatFileEntry(files[0], comments["with_comments.go"], 56, cw)
-	assert.Contains(t, output, "💬")
+	output := formatFileEntry(files[0], comments["with_comments.go"], "", 56, cw)
+	assert.Contains(t, output, commentIcon)
 	assert.Contains(t, output, "3")
 
-	output = formatFileEntry(files[1], comments["no_comments.go"], 56, cw)
-	assert.NotContains(t, output, "💬")
+	output = formatFileEntry(files[1], comments["no_comments.go"], "", 56, cw)
+	assert.NotContains(t, output, commentIcon)
 }
 
 func TestFormatFileEntryAlignment(t *testing.T) {
@@ -504,8 +505,8 @@ func TestFormatFileEntryAlignment(t *testing.T) {
 	}
 	cw := computeFileColumnWidths(files, nil)
 
-	out1 := formatFileEntry(files[0], 0, 80, cw)
-	out2 := formatFileEntry(files[1], 0, 80, cw)
+	out1 := formatFileEntry(files[0], 0, "", 80, cw)
+	out2 := formatFileEntry(files[1], 0, "", 80, cw)
 
 	assert.Contains(t, out1, "  +3")
 	assert.Contains(t, out2, "+181")
@@ -609,7 +610,7 @@ func TestHighActivityIncludesCommentedFiles(t *testing.T) {
 	}
 
 	scored := scoreFiles(files, comments)
-	output, shown := renderHighActivity(scored, 80)
+	output, shown := renderHighActivity(scored, "", 80)
 
 	assert.Contains(t, output, "low_churn_commented.go", "low-churn file with comments should appear")
 	assert.Contains(t, output, "High Activity Files")
@@ -628,12 +629,48 @@ func TestRenderStateBadge(t *testing.T) {
 	assert.Contains(t, output, "OPEN")
 }
 
+func TestDetectDarkBackgroundFromEnv(t *testing.T) {
+	tests := []struct {
+		env      string
+		name     string
+		wantDark bool
+		wantOK   bool
+	}{
+		{name: "unset", env: "", wantDark: false, wantOK: false},
+		{name: "no semicolon", env: "15", wantDark: false, wantOK: false},
+		{name: "black bg is dark", env: "15;0", wantDark: true, wantOK: true},
+		{name: "white bg is light", env: "0;15", wantDark: false, wantOK: true},
+		{name: "color 7 is light", env: "0;7", wantDark: false, wantOK: true},
+		{name: "color 8 is dark", env: "0;8", wantDark: true, wantOK: true},
+		{name: "color 6 is dark", env: "0;6", wantDark: true, wantOK: true},
+		{name: "color 9 is light", env: "0;9", wantDark: false, wantOK: true},
+		{name: "three parts uses last", env: "37;0;15", wantDark: false, wantOK: true},
+		{name: "non-numeric bg", env: "0;abc", wantDark: false, wantOK: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("COLORFGBG", tt.env)
+			dark, ok := detectDarkBackgroundFromEnv()
+			assert.Equal(t, tt.wantOK, ok)
+			if ok {
+				assert.Equal(t, tt.wantDark, dark)
+			}
+		})
+	}
+}
+
+func TestFileDiffURL(t *testing.T) {
+	got := fileDiffURL("https://github.com/owner/repo/pull/42", "README.md")
+	assert.Equal(t, "https://github.com/owner/repo/pull/42/files#diff-b335630551682c19a781afebcf4d07bf978fb1f8ac04c6bf87428ed5106870f5", got)
+}
+
 func TestHighActivityCountInHeader(t *testing.T) {
 	files := testReviewFiles()
 	comments := testFileComments()
 
 	scored := scoreFiles(files, comments)
-	output, shown := renderHighActivity(scored, 56)
+	output, shown := renderHighActivity(scored, "", 56)
 
 	assert.Contains(t, output, fmt.Sprintf("High Activity Files (%d)", len(shown)))
 }

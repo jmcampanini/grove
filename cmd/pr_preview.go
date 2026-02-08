@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
@@ -58,6 +59,16 @@ func detectPreviewWidth() int {
 }
 
 func applyColorMode(mode string) error {
+	// When stdout isn't a TTY (fzf preview, piped output), termenv can't query
+	// the terminal for its background color and defaults to dark. Fall back to
+	// COLORFGBG env var so AdaptiveColor picks the right variant.
+	fi, err := os.Stdout.Stat()
+	if err == nil && fi.Mode()&os.ModeCharDevice == 0 {
+		if dark, ok := detectDarkBackgroundFromEnv(); ok {
+			lipgloss.SetHasDarkBackground(dark)
+		}
+	}
+
 	switch mode {
 	case "auto":
 		return nil
@@ -70,6 +81,18 @@ func applyColorMode(mode string) error {
 	default:
 		return fmt.Errorf("invalid color mode %q; valid modes: auto, always, never", mode)
 	}
+}
+
+func detectDarkBackgroundFromEnv() (dark bool, ok bool) {
+	parts := strings.Split(os.Getenv("COLORFGBG"), ";")
+	if len(parts) < 2 {
+		return false, false
+	}
+	bg, err := strconv.Atoi(parts[len(parts)-1])
+	if err != nil {
+		return false, false
+	}
+	return bg < 7 || bg == 8, true
 }
 
 func runPRPreview(cmd *cobra.Command, args []string) error {

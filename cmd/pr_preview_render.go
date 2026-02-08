@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -27,6 +28,13 @@ var (
 )
 
 const maxPreviewFiles = 30
+
+func hyperlink(url, text string) string {
+	if lipgloss.ColorProfile() == termenv.Ascii {
+		return text
+	}
+	return termenv.Hyperlink(url, text)
+}
 
 func stateColor(state github.PRState) lipgloss.Color {
 	switch state {
@@ -181,11 +189,16 @@ func renderChecksLines(checks []github.StatusCheck) string {
 	}
 	var lines []string
 	for _, sc := range checks {
-		lines = append(lines, fmt.Sprintf("  %s %s %s",
+		line := fmt.Sprintf("  %s %s %s",
 			checkIcon(sc.Conclusion),
 			sc.Name,
 			lipgloss.NewStyle().Foreground(colorGray).Render(checkStatusText(sc)),
-		))
+		)
+		if sc.DetailURL != "" {
+			link := hyperlink(sc.DetailURL, "[↗ details]")
+			line += "  " + lipgloss.NewStyle().Foreground(colorCyan).Render(link)
+		}
+		lines = append(lines, line)
 	}
 	return strings.Join(lines, "\n")
 }
@@ -341,21 +354,38 @@ func computeFileColumnWidths(files []github.PullRequestFile, fileComments map[st
 	return w
 }
 
-func formatFileEntry(f github.PullRequestFile, comments int, contentWidth int, cw fileColumnWidths) string {
+const commentIcon = "\uea6b"
+
+func fileDiffURL(prURL, path string) string {
+	h := sha256.Sum256([]byte(path))
+	return fmt.Sprintf("%s/files#diff-%s", prURL, hex.EncodeToString(h[:]))
+}
+
+func formatFileEntry(f github.PullRequestFile, comments int, prURL string, contentWidth int, cw fileColumnWidths) string {
 	added := lipgloss.NewStyle().Foreground(colorGreen).Render(fmt.Sprintf("%+*d", cw.addWidth, f.Additions))
 	delStr := fmt.Sprintf("-%d", f.Deletions)
 	deleted := lipgloss.NewStyle().Foreground(colorRed).Render(fmt.Sprintf("%*s", cw.delWidth, delStr))
 
+	var linkCol string
+	if prURL != "" {
+		link := hyperlink(fileDiffURL(prURL, f.Path), "[↗]")
+		linkCol = "  " + lipgloss.NewStyle().Foreground(colorCyan).Render(link)
+	}
+
 	var right string
 	if cw.commentWidth > 0 {
 		if comments > 0 {
-			right = fmt.Sprintf("💬 %*d  %s  %s", cw.commentWidth, comments, added, deleted)
+			right = fmt.Sprintf("%s %*d%s  %s  %s", commentIcon, cw.commentWidth, comments, linkCol, added, deleted)
 		} else {
-			commentColWidth := lipgloss.Width(fmt.Sprintf("💬 %*d", cw.commentWidth, 0))
-			right = fmt.Sprintf("%s  %s  %s", strings.Repeat(" ", commentColWidth), added, deleted)
+			commentColWidth := lipgloss.Width(fmt.Sprintf("%s %*d", commentIcon, cw.commentWidth, 0))
+			right = fmt.Sprintf("%s%s  %s  %s", strings.Repeat(" ", commentColWidth), linkCol, added, deleted)
 		}
 	} else {
-		right = fmt.Sprintf("%s  %s", added, deleted)
+		if linkCol != "" {
+			right = fmt.Sprintf("%s  %s  %s", linkCol, added, deleted)
+		} else {
+			right = fmt.Sprintf("%s  %s", added, deleted)
+		}
 	}
 
 	name := filepath.Base(f.Path)
@@ -402,6 +432,12 @@ func renderHeader(pr github.PullRequest) string {
 	if labels := renderLabels(pr.Labels); labels != "" {
 		sb.WriteString(labelStyle.Render("Labels"))
 		sb.WriteString(valueStyle.Render(labels))
+		sb.WriteString("\n")
+	}
+
+	if pr.URL != "" {
+		sb.WriteString(labelStyle.Render("URL"))
+		sb.WriteString(valueStyle.Render(hyperlink(pr.URL, pr.URL)))
 		sb.WriteString("\n")
 	}
 
@@ -465,7 +501,7 @@ func selectHighActivityFiles(scored []scoredFile) []scoredFile {
 	return shown
 }
 
-func renderHighActivity(scored []scoredFile, contentWidth int) (string, []scoredFile) {
+func renderHighActivity(scored []scoredFile, prURL string, contentWidth int) (string, []scoredFile) {
 	shown := selectHighActivityFiles(scored)
 	if len(shown) == 0 {
 		return "", nil
@@ -486,13 +522,13 @@ func renderHighActivity(scored []scoredFile, contentWidth int) (string, []scored
 	sb.WriteString(header)
 	sb.WriteString("\n")
 	for _, sf := range shown {
-		sb.WriteString(formatFileEntry(sf.file, sf.comments, contentWidth, cw))
+		sb.WriteString(formatFileEntry(sf.file, sf.comments, prURL, contentWidth, cw))
 		sb.WriteString("\n")
 	}
 	return strings.TrimRight(sb.String(), "\n"), shown
 }
 
-func renderFileList(files []github.PullRequestFile, fileComments map[string]int, totalChanged int, haPaths map[string]bool, contentWidth int) string {
+func renderFileList(files []github.PullRequestFile, fileComments map[string]int, totalChanged int, haPaths map[string]bool, prURL string, contentWidth int) string {
 	var displayFiles []github.PullRequestFile
 	for _, f := range files {
 		if haPaths[f.Path] {
@@ -511,7 +547,7 @@ func renderFileList(files []github.PullRequestFile, fileComments map[string]int,
 	sb.WriteString("\n")
 
 	for _, f := range displayFiles {
-		sb.WriteString(formatFileEntry(f, fileComments[f.Path], contentWidth, cw))
+		sb.WriteString(formatFileEntry(f, fileComments[f.Path], prURL, contentWidth, cw))
 		sb.WriteString("\n")
 	}
 
@@ -641,7 +677,7 @@ func renderPreview(w io.Writer, pr github.PullRequest, files []github.PullReques
 	scored := scoreFiles(files, fileComments)
 	contentWidth := width - 4
 
-	highActivity, shownFiles := renderHighActivity(scored, contentWidth)
+	highActivity, shownFiles := renderHighActivity(scored, pr.URL, contentWidth)
 	if highActivity != "" {
 		sections = append(sections, boxStyle.Render(highActivity))
 	}
@@ -651,7 +687,7 @@ func renderPreview(w io.Writer, pr github.PullRequest, files []github.PullReques
 		haPaths[sf.file.Path] = true
 	}
 
-	sections = append(sections, boxStyle.Render(renderFileList(files, fileComments, pr.FilesChanged, haPaths, contentWidth)))
+	sections = append(sections, boxStyle.Render(renderFileList(files, fileComments, pr.FilesChanged, haPaths, pr.URL, contentWidth)))
 
 	if body := renderBody(pr.Body, width, colorMode); body != "" {
 		sections = append(sections, boxStyle.Render(body))
