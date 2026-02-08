@@ -16,7 +16,7 @@ var (
 	prPreviewStyleFlag string
 )
 
-var validPreviewStyles = []string{"card", "dashboard", "minimal", "context", "board", "timeline"}
+var validPreviewStyles = []string{"card", "dashboard", "minimal", "context", "board", "timeline", "review"}
 
 var prPreviewCmd = &cobra.Command{
 	Use:   "preview [number]",
@@ -30,9 +30,10 @@ Styles:
   card       Bordered card with sections (Group A)
   dashboard  Compact key-value dashboard (Group A)
   minimal    Minimal GitHub-inspired layout (Group A)
-  context    Full context card with CI/reviews (Group B, default)
+  context    Full context card with CI/reviews (Group B)
   board      Status board with tables (Group B)
   timeline   Activity timeline (Group B)
+  review     Full review with markdown body and activity
 
 With --fzf, errors are printed to stdout instead of returning an error code,
 making it suitable for use in fzf preview panes.`,
@@ -42,7 +43,7 @@ making it suitable for use in fzf preview panes.`,
 
 func init() {
 	prPreviewCmd.Flags().BoolVar(&prPreviewFzfFlag, "fzf", false, "Print errors to stdout instead of returning error (for fzf preview)")
-	prPreviewCmd.Flags().StringVar(&prPreviewStyleFlag, "style", "context", "Preview style: card, dashboard, minimal, context, board, timeline")
+	prPreviewCmd.Flags().StringVar(&prPreviewStyleFlag, "style", "context", "Preview style: card, dashboard, minimal, context, board, timeline, review")
 	prCmd.AddCommand(prPreviewCmd)
 }
 
@@ -119,9 +120,29 @@ func runPRPreview(cmd *cobra.Command, args []string) error {
 		return renderBoard(w, pr, files, width)
 	case "timeline":
 		return renderTimeline(w, pr, files, width)
+	case "review":
+		return runReviewStyle(w, gh, pr, files, prNum, width, cmd)
 	default:
 		return renderContext(w, pr, files, width)
 	}
+}
+
+func runReviewStyle(w io.Writer, gh github.GitHub, pr github.PullRequest, files []github.PullRequestFile, prNum int, width int, cmd *cobra.Command) error {
+	threads, err := gh.GetPullRequestReviewThreads(prNum)
+	if err != nil {
+		return handlePreviewError(cmd, err)
+	}
+	timeline, err := gh.GetPullRequestTimeline(prNum)
+	if err != nil {
+		return handlePreviewError(cmd, err)
+	}
+
+	fileComments := make(map[string]int, len(threads))
+	for _, t := range threads {
+		fileComments[t.Path] += t.CommentCount
+	}
+
+	return renderReview(w, pr, files, fileComments, timeline, width)
 }
 
 func outputPRPreview(w io.Writer, pr github.PullRequest, files []github.PullRequestFile) error {

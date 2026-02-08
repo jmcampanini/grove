@@ -3,11 +3,13 @@ package cmd
 import (
 	"fmt"
 	"io"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/jmcampanini/grove-cli/internal/github"
 )
@@ -593,5 +595,343 @@ func renderTimeline(w io.Writer, pr github.PullRequest, files []github.PullReque
 	}
 
 	_, err := fmt.Fprint(w, sb.String())
+	return err
+}
+
+// --- Review Style ---
+
+const maxHighActivityFiles = 3
+
+func isTestFile(path string) bool {
+	base := filepath.Base(path)
+
+	testFileSuffixes := []string{"_test.go", "Test.java", "Tests.java", "IT.java"}
+	for _, suffix := range testFileSuffixes {
+		if strings.HasSuffix(base, suffix) {
+			return true
+		}
+	}
+
+	testDirSegments := []string{"/test/", "/tests/", "/testdata/"}
+	for _, seg := range testDirSegments {
+		if strings.Contains("/"+path, seg) {
+			return true
+		}
+	}
+	return false
+}
+
+func styleIcon(icon string, color lipgloss.Color) string {
+	return lipgloss.NewStyle().Foreground(color).Render(icon)
+}
+
+func timelineEventIcon(eventType, details string) string {
+	switch eventType {
+	case "reviewed":
+		switch details {
+		case "approved":
+			return styleIcon("✓", colorGreen)
+		case "changes requested":
+			return styleIcon("✗", colorRed)
+		default:
+			return styleIcon("●", colorGray)
+		}
+	case "commented":
+		return styleIcon("💬", colorCyan)
+	case "committed":
+		return styleIcon("⊙", colorPurple)
+	case "force_pushed":
+		return styleIcon("⚡", colorYellow)
+	case "labeled":
+		return styleIcon("🏷", colorCyan)
+	case "merged":
+		return styleIcon("●", colorPurple)
+	case "closed":
+		return styleIcon("●", colorRed)
+	case "reopened":
+		return styleIcon("●", colorGreen)
+	case "ready_for_review":
+		return styleIcon("▶", colorGreen)
+	case "convert_to_draft":
+		return styleIcon("◑", colorYellow)
+	case "review_requested":
+		return styleIcon("👁", colorCyan)
+	default:
+		return styleIcon("·", colorGray)
+	}
+}
+
+func timelineEventMessage(e github.TimelineEvent) string {
+	switch e.Type {
+	case "reviewed":
+		return fmt.Sprintf("@%s %s", e.Actor, e.Details)
+	case "commented":
+		return fmt.Sprintf("@%s commented", e.Actor)
+	case "committed":
+		if e.Details != "" {
+			return fmt.Sprintf("@%s committed: %s", e.Actor, e.Details)
+		}
+		return fmt.Sprintf("@%s committed", e.Actor)
+	case "force_pushed":
+		return fmt.Sprintf("@%s force pushed", e.Actor)
+	case "labeled":
+		return fmt.Sprintf("@%s added %s", e.Actor, e.Details)
+	case "merged":
+		return fmt.Sprintf("@%s merged", e.Actor)
+	case "closed":
+		return fmt.Sprintf("@%s closed", e.Actor)
+	case "reopened":
+		return fmt.Sprintf("@%s reopened", e.Actor)
+	case "ready_for_review":
+		return fmt.Sprintf("@%s marked ready for review", e.Actor)
+	case "convert_to_draft":
+		return fmt.Sprintf("@%s converted to draft", e.Actor)
+	case "review_requested":
+		return fmt.Sprintf("@%s requested review from @%s", e.Actor, e.Details)
+	default:
+		return fmt.Sprintf("@%s %s", e.Actor, e.Type)
+	}
+}
+
+func formatReviewFileEntry(f github.PullRequestFile, comments int) string {
+	added := lipgloss.NewStyle().Foreground(colorGreen).Render(fmt.Sprintf("+%d", f.Additions))
+	deleted := lipgloss.NewStyle().Foreground(colorRed).Render(fmt.Sprintf("-%d", f.Deletions))
+
+	var right string
+	if comments > 0 {
+		right = fmt.Sprintf("💬 %d  %s  %s", comments, added, deleted)
+	} else {
+		right = fmt.Sprintf("%s  %s", added, deleted)
+	}
+
+	name := filepath.Base(f.Path)
+	dir := filepath.Dir(f.Path)
+	var left string
+	if dir == "." {
+		left = name
+	} else {
+		left = name + " " + lipgloss.NewStyle().Foreground(colorGray).Render(dir)
+	}
+
+	return fmt.Sprintf("  %s  %s", left, right)
+}
+
+func renderReviewHeader(pr github.PullRequest, width int) string {
+	labelStyle := lipgloss.NewStyle().Foreground(colorPurple).Bold(true).Width(10)
+	valueStyle := lipgloss.NewStyle().Foreground(colorGray)
+
+	stateStr := lipgloss.NewStyle().Foreground(stateColor(pr.State)).Bold(true).Render(strings.ToLower(string(pr.State)))
+	titleLine := lipgloss.NewStyle().Bold(true).Render(fmt.Sprintf("#%d %s", pr.Number, pr.Title)) + "  " + stateStr
+
+	var sb strings.Builder
+	sb.WriteString(titleLine)
+	sb.WriteString("\n")
+	sb.WriteString(labelStyle.Render("Author"))
+	sb.WriteString(valueStyle.Render("@" + pr.AuthorLogin))
+	sb.WriteString("\n")
+	sb.WriteString(labelStyle.Render("Branch"))
+	sb.WriteString(valueStyle.Render(branchInfo(pr.BranchName, pr.BaseRefName)))
+	sb.WriteString("\n")
+	sb.WriteString(labelStyle.Render("Changed"))
+	sb.WriteString(valueStyle.Render(formatStats(pr)))
+	sb.WriteString("\n")
+
+	if labels := renderLabels(pr.Labels); labels != "" {
+		sb.WriteString(labelStyle.Render("Labels"))
+		sb.WriteString(valueStyle.Render(labels))
+		sb.WriteString("\n")
+	}
+
+	return strings.TrimRight(sb.String(), "\n")
+}
+
+func renderReviewChecks(pr github.PullRequest) string {
+	var parts []string
+	if ciLines := renderChecksLines(pr.StatusChecks); ciLines != "" {
+		ciHeader := lipgloss.NewStyle().Foreground(colorCyan).Bold(true).Render("Checks")
+		parts = append(parts, ciHeader+"\n"+ciLines)
+	}
+	if reviewLines := renderReviewLines(pr.Reviews); reviewLines != "" {
+		reviewHeader := lipgloss.NewStyle().Foreground(colorCyan).Bold(true).Render("Reviews")
+		parts = append(parts, reviewHeader+"\n"+reviewLines)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.Join(parts, "\n\n")
+}
+
+type scoredFile struct {
+	comments int
+	file     github.PullRequestFile
+	score    int
+}
+
+func scoreFiles(files []github.PullRequestFile, fileComments map[string]int) []scoredFile {
+	var scored []scoredFile
+	for _, f := range files {
+		if isTestFile(f.Path) {
+			continue
+		}
+		comments := fileComments[f.Path]
+		score := f.Additions + f.Deletions + (comments * 10)
+		if score > 0 {
+			scored = append(scored, scoredFile{comments: comments, file: f, score: score})
+		}
+	}
+	sort.Slice(scored, func(i, j int) bool {
+		return scored[i].score > scored[j].score
+	})
+	return scored
+}
+
+func renderReviewHighActivity(scored []scoredFile) string {
+	count := min(len(scored), maxHighActivityFiles)
+	if count == 0 {
+		return ""
+	}
+
+	header := lipgloss.NewStyle().Foreground(colorCyan).Bold(true).Render("High Activity")
+	var sb strings.Builder
+	sb.WriteString(header)
+	sb.WriteString("\n")
+	for _, sf := range scored[:count] {
+		sb.WriteString(formatReviewFileEntry(sf.file, sf.comments))
+		sb.WriteString("\n")
+	}
+	return strings.TrimRight(sb.String(), "\n")
+}
+
+func renderReviewFileList(files []github.PullRequestFile, fileComments map[string]int, totalChanged int, haPaths map[string]bool) string {
+	header := lipgloss.NewStyle().Foreground(colorCyan).Bold(true).Render(fmt.Sprintf("Files (%d)", totalChanged))
+	var sb strings.Builder
+	sb.WriteString(header)
+	sb.WriteString("\n")
+
+	displayed := 0
+	for _, f := range files {
+		if haPaths[f.Path] {
+			continue
+		}
+		if displayed >= maxPreviewFiles {
+			break
+		}
+		comments := fileComments[f.Path]
+		sb.WriteString(formatReviewFileEntry(f, comments))
+		sb.WriteString("\n")
+		displayed++
+	}
+
+	remaining := totalChanged - displayed - len(haPaths)
+	if remaining > 0 {
+		sb.WriteString(fmt.Sprintf("  … and %d more\n", remaining))
+	}
+
+	return strings.TrimRight(sb.String(), "\n")
+}
+
+func renderReviewBody(body string, width int) string {
+	if body == "" {
+		return ""
+	}
+	renderer, err := glamour.NewTermRenderer(
+		glamour.WithAutoStyle(),
+		glamour.WithWordWrap(max(width-4, 20)),
+	)
+	if err != nil {
+		return wrapBody(body, width)
+	}
+	rendered, err := renderer.Render(body)
+	if err != nil {
+		return wrapBody(body, width)
+	}
+	return strings.TrimSpace(rendered)
+}
+
+func renderReviewTimeline(pr github.PullRequest, timeline []github.TimelineEvent, width int) string {
+	var events []github.TimelineEvent
+
+	if !pr.CreatedAt.IsZero() {
+		events = append(events, github.TimelineEvent{
+			Actor:     pr.AuthorLogin,
+			CreatedAt: pr.CreatedAt,
+			Type:      "opened",
+		})
+	}
+	events = append(events, timeline...)
+
+	sort.Slice(events, func(i, j int) bool {
+		return events[i].CreatedAt.Before(events[j].CreatedAt)
+	})
+
+	if len(events) == 0 {
+		return ""
+	}
+
+	header := lipgloss.NewStyle().Foreground(colorCyan).Bold(true).Render("Activity")
+	timeStyle := lipgloss.NewStyle().Foreground(colorGray).Width(16).Align(lipgloss.Right)
+	lineStyle := lipgloss.NewStyle().Foreground(colorPurple)
+
+	var sb strings.Builder
+	sb.WriteString(header)
+	sb.WriteString("\n")
+	for i, e := range events {
+		var icon, msg string
+		if e.Type == "opened" {
+			icon = lipgloss.NewStyle().Foreground(colorGreen).Render("●")
+			msg = fmt.Sprintf("@%s opened this PR", e.Actor)
+		} else {
+			icon = timelineEventIcon(e.Type, e.Details)
+			msg = timelineEventMessage(e)
+		}
+		sb.WriteString(fmt.Sprintf("  %s  %s %s\n", timeStyle.Render(relativeTime(e.CreatedAt)), icon, msg))
+		if i < len(events)-1 {
+			sb.WriteString(fmt.Sprintf("  %s  %s\n", strings.Repeat(" ", 16), lineStyle.Render("│")))
+		}
+	}
+	return strings.TrimRight(sb.String(), "\n")
+}
+
+func renderReview(w io.Writer, pr github.PullRequest, files []github.PullRequestFile, fileComments map[string]int, timeline []github.TimelineEvent, width int) error {
+	border := lipgloss.RoundedBorder()
+	boxStyle := lipgloss.NewStyle().
+		Border(border).
+		BorderForeground(colorPurple).
+		Width(width-2).
+		Padding(0, 1)
+
+	var sections []string
+
+	sections = append(sections, boxStyle.Render(renderReviewHeader(pr, width)))
+
+	if checksContent := renderReviewChecks(pr); checksContent != "" {
+		sections = append(sections, boxStyle.Render(checksContent))
+	}
+
+	scored := scoreFiles(files, fileComments)
+
+	if highActivity := renderReviewHighActivity(scored); highActivity != "" {
+		sections = append(sections, boxStyle.Render(highActivity))
+	}
+
+	haPaths := make(map[string]bool)
+	for i, sf := range scored {
+		if i >= maxHighActivityFiles {
+			break
+		}
+		haPaths[sf.file.Path] = true
+	}
+
+	sections = append(sections, boxStyle.Render(renderReviewFileList(files, fileComments, pr.FilesChanged, haPaths)))
+
+	if body := renderReviewBody(pr.Body, width); body != "" {
+		sections = append(sections, boxStyle.Render(body))
+	}
+
+	if timelineContent := renderReviewTimeline(pr, timeline, width); timelineContent != "" {
+		sections = append(sections, boxStyle.Render(timelineContent))
+	}
+
+	_, err := fmt.Fprintln(w, lipgloss.JoinVertical(lipgloss.Left, sections...))
 	return err
 }
