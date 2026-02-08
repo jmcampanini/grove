@@ -75,18 +75,40 @@ func (q PRQuery) ToSearchQuery() string {
 	return strings.Join(parts, " ")
 }
 
+type Label struct {
+	Color string `json:"color"`
+	Name  string `json:"name"`
+}
+
+type Review struct {
+	AuthorLogin string
+	State       string // APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED, PENDING
+	SubmittedAt time.Time
+}
+
+type StatusCheck struct {
+	Conclusion string // success, failure, neutral, cancelled, timed_out, action_required, skipped
+	Name       string
+	Status     string // COMPLETED, IN_PROGRESS, QUEUED, REQUESTED, WAITING, PENDING
+}
+
 type PullRequest struct {
 	AuthorLogin       string // May be empty if author's account was deleted
 	AuthorName        string // May be empty if author's account was deleted
+	BaseRefName       string
 	Body              string
 	BranchName        string
+	Comments          int
 	CreatedAt         time.Time
 	FilesChanged      int
 	IsCrossRepository bool // True if PR is from a fork
+	Labels            []Label
 	LinesAdded        int
 	LinesDeleted      int
 	Number            int
+	Reviews           []Review
 	State             PRState
+	StatusChecks      []StatusCheck
 	Title             string
 	UpdatedAt         time.Time
 	URL               string
@@ -99,23 +121,46 @@ type PullRequestFile struct {
 	Path      string `json:"path"`
 }
 
-const prJsonFields = "additions,author,body,changedFiles,createdAt,deletions,headRefName,isCrossRepository,isDraft,number,state,title,updatedAt,url"
+const prJsonFields = "additions,author,baseRefName,body,changedFiles,comments,createdAt,deletions,headRefName,isCrossRepository,isDraft,labels,number,reviews,state,statusCheckRollup,title,updatedAt,url"
 
 func (pr *PullRequest) UnmarshalJSON(data []byte) error {
+	type rawReview struct {
+		Author struct {
+			Login string `json:"login"`
+		} `json:"author"`
+		State       string    `json:"state"`
+		SubmittedAt time.Time `json:"submittedAt"`
+	}
+	// gh CLI returns two shapes in statusCheckRollup:
+	//   CheckRun:      {"__typename":"CheckRun", "name":"ci/test", "status":"COMPLETED", "conclusion":"success"}
+	//   StatusContext:  {"__typename":"StatusContext", "context":"ci/deploy", "state":"SUCCESS"}
+	type rawStatusCheckRollupEntry struct {
+		TypeName   string `json:"__typename"`
+		Conclusion string `json:"conclusion"` // CheckRun
+		Context    string `json:"context"`    // StatusContext
+		Name       string `json:"name"`       // CheckRun
+		State      string `json:"state"`      // StatusContext
+		Status     string `json:"status"`     // CheckRun
+	}
 	type rawPR struct {
-		Additions         int       `json:"additions"`
-		Body              string    `json:"body"`
-		ChangedFiles      int       `json:"changedFiles"`
-		CreatedAt         time.Time `json:"createdAt"`
-		Deletions         int       `json:"deletions"`
-		HeadRefName       string    `json:"headRefName"`
-		IsCrossRepository bool      `json:"isCrossRepository"`
-		IsDraft           bool      `json:"isDraft"`
-		Number            int       `json:"number"`
-		State             string    `json:"state"`
-		Title             string    `json:"title"`
-		UpdatedAt         time.Time `json:"updatedAt"`
-		URL               string    `json:"url"`
+		Additions         int                         `json:"additions"`
+		BaseRefName       string                      `json:"baseRefName"`
+		Body              string                      `json:"body"`
+		ChangedFiles      int                         `json:"changedFiles"`
+		Comments          []json.RawMessage           `json:"comments"`
+		CreatedAt         time.Time                   `json:"createdAt"`
+		Deletions         int                         `json:"deletions"`
+		HeadRefName       string                      `json:"headRefName"`
+		IsCrossRepository bool                        `json:"isCrossRepository"`
+		IsDraft           bool                        `json:"isDraft"`
+		Labels            []Label                     `json:"labels"`
+		Number            int                         `json:"number"`
+		Reviews           []rawReview                 `json:"reviews"`
+		State             string                      `json:"state"`
+		StatusCheckRollup []rawStatusCheckRollupEntry `json:"statusCheckRollup"`
+		Title             string                      `json:"title"`
+		UpdatedAt         time.Time                   `json:"updatedAt"`
+		URL               string                      `json:"url"`
 		Author            struct {
 			Login string `json:"login"`
 			Name  string `json:"name"`
@@ -128,17 +173,50 @@ func (pr *PullRequest) UnmarshalJSON(data []byte) error {
 
 	pr.AuthorLogin = raw.Author.Login
 	pr.AuthorName = raw.Author.Name
+	pr.BaseRefName = raw.BaseRefName
 	pr.Body = raw.Body
 	pr.BranchName = raw.HeadRefName
+	pr.Comments = len(raw.Comments)
 	pr.CreatedAt = raw.CreatedAt
 	pr.FilesChanged = raw.ChangedFiles
 	pr.IsCrossRepository = raw.IsCrossRepository
+	pr.Labels = raw.Labels
 	pr.LinesAdded = raw.Additions
 	pr.LinesDeleted = raw.Deletions
 	pr.Number = raw.Number
 	pr.Title = raw.Title
 	pr.UpdatedAt = raw.UpdatedAt
 	pr.URL = raw.URL
+
+	for _, r := range raw.Reviews {
+		pr.Reviews = append(pr.Reviews, Review{
+			AuthorLogin: r.Author.Login,
+			State:       r.State,
+			SubmittedAt: r.SubmittedAt,
+		})
+	}
+
+	for _, sc := range raw.StatusCheckRollup {
+		if sc.TypeName == "StatusContext" {
+			status := "COMPLETED"
+			conclusion := strings.ToLower(sc.State)
+			if sc.State == "PENDING" || sc.State == "EXPECTED" {
+				status = "PENDING"
+				conclusion = ""
+			}
+			pr.StatusChecks = append(pr.StatusChecks, StatusCheck{
+				Conclusion: conclusion,
+				Name:       sc.Context,
+				Status:     status,
+			})
+		} else {
+			pr.StatusChecks = append(pr.StatusChecks, StatusCheck{
+				Conclusion: sc.Conclusion,
+				Name:       sc.Name,
+				Status:     sc.Status,
+			})
+		}
+	}
 
 	if raw.IsDraft && raw.State == "OPEN" {
 		pr.State = PRStateDraft
