@@ -3,7 +3,6 @@ package cmd
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"strings"
 	"testing"
 	"time"
@@ -14,245 +13,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func TestOutputPRPreview(t *testing.T) {
-	now := time.Now()
-
-	tests := []struct {
-		files           []github.PullRequestFile
-		name            string
-		pr              github.PullRequest
-		wantContains    []string
-		wantNotContains []string
-	}{
-		{
-			name: "basic PR with no files",
-			pr: github.PullRequest{
-				AuthorLogin:  "jsmith",
-				Body:         "This is the PR description.",
-				BranchName:   "feature/add-auth",
-				FilesChanged: 0,
-				Number:       123,
-				State:        github.PRStateOpen,
-				Title:        "Add authentication",
-				UpdatedAt:    now,
-			},
-			files: []github.PullRequestFile{},
-			wantContains: []string{
-				"PR #123",
-				"Title:  Add authentication",
-				"Author: jsmith",
-				"Branch: feature/add-auth",
-				"State:  open",
-				"Files changed (0):",
-				"This is the PR description.",
-			},
-		},
-		{
-			name: "PR with files",
-			pr: github.PullRequest{
-				AuthorLogin:  "developer",
-				Body:         "Fixed the bug.",
-				BranchName:   "fix/bug",
-				FilesChanged: 3,
-				Number:       456,
-				State:        github.PRStateDraft,
-				Title:        "Fix critical bug",
-				UpdatedAt:    now,
-			},
-			files: []github.PullRequestFile{
-				{Path: "main.go", Additions: 10, Deletions: 5},
-				{Path: "utils/helper.go", Additions: 20, Deletions: 0},
-				{Path: "README.md", Additions: 3, Deletions: 1},
-			},
-			wantContains: []string{
-				"PR #456",
-				"Title:  Fix critical bug",
-				"Author: developer",
-				"Branch: fix/bug",
-				"State:  draft",
-				"Files changed (3):",
-				"main.go (+10, -5)",
-				"utils/helper.go (+20, -0)",
-				"README.md (+3, -1)",
-				"Fixed the bug.",
-			},
-		},
-		{
-			name: "PR states formatted lowercase",
-			pr: github.PullRequest{
-				AuthorLogin:  "user",
-				Body:         "",
-				BranchName:   "branch",
-				FilesChanged: 0,
-				Number:       1,
-				State:        github.PRStateMerged,
-				Title:        "Merged PR",
-				UpdatedAt:    now,
-			},
-			files: []github.PullRequestFile{},
-			wantContains: []string{
-				"State:  merged",
-			},
-		},
-		{
-			name: "closed state formatted lowercase",
-			pr: github.PullRequest{
-				AuthorLogin:  "user",
-				Body:         "",
-				BranchName:   "branch",
-				FilesChanged: 0,
-				Number:       2,
-				State:        github.PRStateClosed,
-				Title:        "Closed PR",
-				UpdatedAt:    now,
-			},
-			files: []github.PullRequestFile{},
-			wantContains: []string{
-				"State:  closed",
-			},
-		},
-		{
-			name: "horizontal line separator",
-			pr: github.PullRequest{
-				AuthorLogin:  "user",
-				Body:         "",
-				BranchName:   "branch",
-				FilesChanged: 0,
-				Number:       100,
-				State:        github.PRStateOpen,
-				Title:        "Test",
-				UpdatedAt:    now,
-			},
-			files: []github.PullRequestFile{},
-			wantContains: []string{
-				"\u2500", // horizontal line character
-			},
-		},
-		{
-			name: "PR with empty body",
-			pr: github.PullRequest{
-				AuthorLogin:  "user",
-				Body:         "",
-				BranchName:   "branch",
-				FilesChanged: 0,
-				Number:       200,
-				State:        github.PRStateOpen,
-				Title:        "No description",
-				UpdatedAt:    now,
-			},
-			files: []github.PullRequestFile{},
-			wantContains: []string{
-				"PR #200",
-				"Title:  No description",
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var buf bytes.Buffer
-
-			err := outputPRPreview(&buf, tt.pr, tt.files)
-			require.NoError(t, err)
-
-			output := buf.String()
-
-			for _, want := range tt.wantContains {
-				assert.Contains(t, output, want, "output should contain %q", want)
-			}
-
-			for _, notWant := range tt.wantNotContains {
-				assert.NotContains(t, output, notWant, "output should not contain %q", notWant)
-			}
-		})
-	}
-}
-
-func TestOutputPRPreviewFileLimit(t *testing.T) {
-	now := time.Now()
-
-	// Create more than 30 files to test truncation
-	files := make([]github.PullRequestFile, 35)
-	for i := 0; i < 35; i++ {
-		files[i] = github.PullRequestFile{
-			Additions: i + 1,
-			Deletions: i,
-			Path:      strings.Repeat("a", i+1) + ".go",
-		}
-	}
-
-	pr := github.PullRequest{
-		AuthorLogin:  "user",
-		Body:         "Description",
-		BranchName:   "branch",
-		FilesChanged: 35,
-		Number:       100,
-		State:        github.PRStateOpen,
-		Title:        "Many files",
-		UpdatedAt:    now,
-	}
-
-	var buf bytes.Buffer
-
-	err := outputPRPreview(&buf, pr, files)
-	require.NoError(t, err)
-
-	output := buf.String()
-
-	// Should show first 30 files
-	assert.Contains(t, output, "a.go (+1, -0)") // first file
-	assert.Contains(t, output, "(and 5 more files...)")
-
-	// Should show correct total count
-	assert.Contains(t, output, "Files changed (35):")
-
-	// Count actual file lines displayed (each file line starts with "  " and contains ".go")
-	lines := strings.Split(output, "\n")
-	fileLines := 0
-	for _, line := range lines {
-		if strings.HasPrefix(line, "  ") && strings.Contains(line, ".go") {
-			fileLines++
-		}
-	}
-	assert.Equal(t, 30, fileLines, "should display exactly 30 file lines")
-}
-
-func TestOutputPRPreviewExactly30Files(t *testing.T) {
-	now := time.Now()
-
-	// Create exactly 30 files - should NOT show "more files" message
-	files := make([]github.PullRequestFile, 30)
-	for i := 0; i < 30; i++ {
-		files[i] = github.PullRequestFile{
-			Additions: i + 1,
-			Deletions: i,
-			Path:      strings.Repeat("b", i+1) + ".go",
-		}
-	}
-
-	pr := github.PullRequest{
-		AuthorLogin:  "user",
-		Body:         "Description",
-		BranchName:   "branch",
-		FilesChanged: 30,
-		Number:       100,
-		State:        github.PRStateOpen,
-		Title:        "Exactly 30 files",
-		UpdatedAt:    now,
-	}
-
-	var buf bytes.Buffer
-
-	err := outputPRPreview(&buf, pr, files)
-	require.NoError(t, err)
-
-	output := buf.String()
-
-	// Should NOT show "more files" message
-	assert.NotContains(t, output, "more files")
-	assert.Contains(t, output, "Files changed (30):")
-}
 
 func TestHandlePreviewError(t *testing.T) {
 	tests := []struct {
@@ -280,7 +40,6 @@ func TestHandlePreviewError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Save and restore global flag
 			oldFlag := prPreviewFzfFlag
 			prPreviewFzfFlag = tt.fzfMode
 			defer func() { prPreviewFzfFlag = oldFlag }()
@@ -327,20 +86,6 @@ func TestDetectPreviewWidth(t *testing.T) {
 	})
 }
 
-func testPR() github.PullRequest {
-	return github.PullRequest{
-		AuthorLogin:  "dev",
-		Body:         "Fixes the login bug.",
-		BranchName:   "fix/login",
-		FilesChanged: 3,
-		LinesAdded:   25,
-		LinesDeleted: 10,
-		Number:       42,
-		State:        github.PRStateOpen,
-		Title:        "Fix login flow",
-	}
-}
-
 func testPRWithExpanded() github.PullRequest {
 	return github.PullRequest{
 		AuthorLogin:  "dev",
@@ -371,277 +116,6 @@ func testFiles() []github.PullRequestFile {
 	return []github.PullRequestFile{
 		{Path: "auth.go", Additions: 15, Deletions: 5},
 		{Path: "auth_test.go", Additions: 10, Deletions: 5},
-	}
-}
-
-func TestRenderGroupAStyles(t *testing.T) {
-	renderers := []struct {
-		name   string
-		render func(io.Writer, github.PullRequest, []github.PullRequestFile, int) error
-	}{
-		{"card", renderCard},
-		{"dashboard", renderDashboard},
-		{"minimal", renderMinimal},
-	}
-
-	pr := testPR()
-	files := testFiles()
-
-	for _, r := range renderers {
-		t.Run(r.name, func(t *testing.T) {
-			tests := []struct {
-				files        []github.PullRequestFile
-				name         string
-				pr           github.PullRequest
-				wantContains []string
-			}{
-				{
-					name:  "normal PR",
-					pr:    pr,
-					files: files,
-					wantContains: []string{
-						"#42",
-						"Fix login flow",
-						"dev",
-						"fix/login",
-						"open",
-						"auth.go",
-						"+15",
-						"-5",
-					},
-				},
-				{
-					name: "empty body",
-					pr: func() github.PullRequest {
-						p := pr
-						p.Body = ""
-						return p
-					}(),
-					files:        files,
-					wantContains: []string{"#42", "Fix login flow"},
-				},
-				{
-					name: "zero files",
-					pr: func() github.PullRequest {
-						p := pr
-						p.FilesChanged = 0
-						return p
-					}(),
-					files:        []github.PullRequestFile{},
-					wantContains: []string{"#42"},
-				},
-				{
-					name: "draft state",
-					pr: func() github.PullRequest {
-						p := pr
-						p.State = github.PRStateDraft
-						return p
-					}(),
-					files:        files,
-					wantContains: []string{"draft"},
-				},
-				{
-					name: "merged state",
-					pr: func() github.PullRequest {
-						p := pr
-						p.State = github.PRStateMerged
-						return p
-					}(),
-					files:        files,
-					wantContains: []string{"merged"},
-				},
-			}
-
-			for _, tt := range tests {
-				t.Run(tt.name, func(t *testing.T) {
-					var buf bytes.Buffer
-					err := r.render(&buf, tt.pr, tt.files, 60)
-					require.NoError(t, err)
-
-					output := buf.String()
-					assert.NotEmpty(t, output)
-					for _, want := range tt.wantContains {
-						assert.Contains(t, output, want)
-					}
-				})
-			}
-		})
-	}
-}
-
-func TestRenderGroupAFileTruncation(t *testing.T) {
-	renderers := []struct {
-		name   string
-		render func(io.Writer, github.PullRequest, []github.PullRequestFile, int) error
-	}{
-		{"card", renderCard},
-		{"dashboard", renderDashboard},
-		{"minimal", renderMinimal},
-	}
-
-	files := make([]github.PullRequestFile, 35)
-	for i := range files {
-		files[i] = github.PullRequestFile{
-			Additions: 1,
-			Deletions: 0,
-			Path:      fmt.Sprintf("file%d.go", i),
-		}
-	}
-
-	pr := testPR()
-	pr.FilesChanged = 35
-
-	for _, r := range renderers {
-		t.Run(r.name, func(t *testing.T) {
-			var buf bytes.Buffer
-			err := r.render(&buf, pr, files, 60)
-			require.NoError(t, err)
-
-			output := buf.String()
-			assert.Contains(t, output, "file0.go")
-			assert.Contains(t, output, "5 more")
-			assert.NotContains(t, output, "file30.go")
-		})
-	}
-}
-
-func TestRenderGroupBStyles(t *testing.T) {
-	renderers := []struct {
-		name   string
-		render func(io.Writer, github.PullRequest, []github.PullRequestFile, int) error
-	}{
-		{"context", renderContext},
-		{"board", renderBoard},
-		{"timeline", renderTimeline},
-	}
-
-	pr := testPRWithExpanded()
-	files := testFiles()
-
-	for _, r := range renderers {
-		t.Run(r.name, func(t *testing.T) {
-			tests := []struct {
-				files        []github.PullRequestFile
-				name         string
-				pr           github.PullRequest
-				wantContains []string
-			}{
-				{
-					name:  "full PR with all data",
-					pr:    pr,
-					files: files,
-					wantContains: []string{
-						"#42",
-						"Fix login flow",
-						"dev",
-						"fix/login",
-						"main",
-						"open",
-						"auth.go",
-						"+15",
-						"-5",
-						"bug",
-						"priority",
-						"ci/test",
-						"ci/lint",
-						"reviewer1",
-						"reviewer2",
-					},
-				},
-				{
-					name: "no labels reviews or checks",
-					pr: func() github.PullRequest {
-						p := pr
-						p.Labels = nil
-						p.Reviews = nil
-						p.StatusChecks = nil
-						return p
-					}(),
-					files:        files,
-					wantContains: []string{"#42", "Fix login flow", "auth.go"},
-				},
-				{
-					name: "empty body",
-					pr: func() github.PullRequest {
-						p := pr
-						p.Body = ""
-						return p
-					}(),
-					files:        files,
-					wantContains: []string{"#42", "Fix login flow"},
-				},
-				{
-					name: "no base ref",
-					pr: func() github.PullRequest {
-						p := pr
-						p.BaseRefName = ""
-						return p
-					}(),
-					files:        files,
-					wantContains: []string{"fix/login"},
-				},
-				{
-					name: "merged state",
-					pr: func() github.PullRequest {
-						p := pr
-						p.State = github.PRStateMerged
-						return p
-					}(),
-					files:        files,
-					wantContains: []string{"merged"},
-				},
-			}
-
-			for _, tt := range tests {
-				t.Run(tt.name, func(t *testing.T) {
-					var buf bytes.Buffer
-					err := r.render(&buf, tt.pr, tt.files, 60)
-					require.NoError(t, err)
-
-					output := buf.String()
-					assert.NotEmpty(t, output)
-					for _, want := range tt.wantContains {
-						assert.Contains(t, output, want)
-					}
-				})
-			}
-		})
-	}
-}
-
-func TestRenderGroupBFileTruncation(t *testing.T) {
-	renderers := []struct {
-		name   string
-		render func(io.Writer, github.PullRequest, []github.PullRequestFile, int) error
-	}{
-		{"context", renderContext},
-		{"board", renderBoard},
-		{"timeline", renderTimeline},
-	}
-
-	files := make([]github.PullRequestFile, 35)
-	for i := range files {
-		files[i] = github.PullRequestFile{
-			Additions: 1,
-			Deletions: 0,
-			Path:      fmt.Sprintf("file%d.go", i),
-		}
-	}
-
-	pr := testPRWithExpanded()
-	pr.FilesChanged = 35
-
-	for _, r := range renderers {
-		t.Run(r.name, func(t *testing.T) {
-			var buf bytes.Buffer
-			err := r.render(&buf, pr, files, 60)
-			require.NoError(t, err)
-
-			output := buf.String()
-			assert.Contains(t, output, "file0.go")
-			assert.Contains(t, output, "5 more")
-			assert.NotContains(t, output, "file30.go")
-		})
 	}
 }
 
@@ -824,64 +298,6 @@ func TestRelativeTime(t *testing.T) {
 	}
 }
 
-func TestTimelineEventSorting(t *testing.T) {
-	pr := testPRWithExpanded()
-	files := testFiles()
-
-	var buf bytes.Buffer
-	err := renderTimeline(&buf, pr, files, 80)
-	require.NoError(t, err)
-
-	output := buf.String()
-	openedIdx := strings.Index(output, "opened this PR")
-	approvedIdx := strings.Index(output, "approved")
-	changesIdx := strings.Index(output, "requested changes")
-
-	assert.Greater(t, openedIdx, -1, "should contain opened event")
-	assert.Greater(t, approvedIdx, -1, "should contain approved event")
-	assert.Greater(t, changesIdx, -1, "should contain changes requested event")
-	assert.Less(t, openedIdx, approvedIdx, "opened should appear before approved")
-	assert.Less(t, approvedIdx, changesIdx, "approved should appear before changes requested")
-}
-
-func TestOutputPRPreviewAllStates(t *testing.T) {
-	now := time.Now()
-
-	// Test that all PR states are formatted correctly
-	states := []struct {
-		state    github.PRState
-		wantText string
-	}{
-		{github.PRStateOpen, "State:  open"},
-		{github.PRStateDraft, "State:  draft"},
-		{github.PRStateClosed, "State:  closed"},
-		{github.PRStateMerged, "State:  merged"},
-	}
-
-	for _, st := range states {
-		t.Run(string(st.state), func(t *testing.T) {
-			pr := github.PullRequest{
-				AuthorLogin:  "test",
-				Body:         "",
-				BranchName:   "test-branch",
-				FilesChanged: 0,
-				Number:       1,
-				State:        st.state,
-				Title:        "Test",
-				UpdatedAt:    now,
-			}
-
-			var buf bytes.Buffer
-
-			err := outputPRPreview(&buf, pr, []github.PullRequestFile{})
-			require.NoError(t, err)
-
-			output := buf.String()
-			assert.Contains(t, output, st.wantText, "output should contain lowercase state")
-		})
-	}
-}
-
 func TestIsTestFile(t *testing.T) {
 	tests := []struct {
 		name string
@@ -937,7 +353,7 @@ func testTimelineEvents() []github.TimelineEvent {
 	}
 }
 
-func TestRenderReview(t *testing.T) {
+func TestRenderPreview(t *testing.T) {
 	pr := testPRWithExpanded()
 	files := testReviewFiles()
 	comments := testFileComments()
@@ -1029,7 +445,7 @@ func TestRenderReview(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
-			err := renderReview(&buf, tt.pr, tt.files, tt.comments, tt.timeline, 60, "auto")
+			err := renderPreview(&buf, tt.pr, tt.files, tt.comments, tt.timeline, 60, "auto")
 			require.NoError(t, err)
 
 			output := buf.String()
@@ -1041,12 +457,12 @@ func TestRenderReview(t *testing.T) {
 	}
 }
 
-func TestRenderReviewHighActivity(t *testing.T) {
+func TestRenderHighActivity(t *testing.T) {
 	files := testReviewFiles()
 	comments := testFileComments()
 
 	scored := scoreFiles(files, comments)
-	output, shown := renderReviewHighActivity(scored, 56)
+	output, shown := renderHighActivity(scored, 56)
 
 	assert.Contains(t, output, "High Activity Files")
 	assert.Contains(t, output, "server.go", "highest churn non-test file should appear")
@@ -1055,16 +471,15 @@ func TestRenderReviewHighActivity(t *testing.T) {
 	assert.NotContains(t, output, "auth_test.go", "test files should be excluded")
 	assert.NotEmpty(t, shown)
 
-	// Test with 0 non-test files
 	testOnlyFiles := []github.PullRequestFile{
 		{Path: "foo_test.go", Additions: 100, Deletions: 50},
 	}
-	output, shown = renderReviewHighActivity(scoreFiles(testOnlyFiles, map[string]int{}), 56)
+	output, shown = renderHighActivity(scoreFiles(testOnlyFiles, map[string]int{}), 56)
 	assert.Empty(t, output)
 	assert.Nil(t, shown)
 }
 
-func TestRenderReviewFileComments(t *testing.T) {
+func TestRenderFileComments(t *testing.T) {
 	files := []github.PullRequestFile{
 		{Path: "with_comments.go", Additions: 10, Deletions: 5},
 		{Path: "no_comments.go", Additions: 3, Deletions: 1},
@@ -1074,113 +489,112 @@ func TestRenderReviewFileComments(t *testing.T) {
 	}
 	cw := computeFileColumnWidths(files, comments)
 
-	output := formatReviewFileEntry(files[0], comments["with_comments.go"], 56, cw)
+	output := formatFileEntry(files[0], comments["with_comments.go"], 56, cw)
 	assert.Contains(t, output, "💬")
 	assert.Contains(t, output, "3")
 
-	output = formatReviewFileEntry(files[1], comments["no_comments.go"], 56, cw)
+	output = formatFileEntry(files[1], comments["no_comments.go"], 56, cw)
 	assert.NotContains(t, output, "💬")
 }
 
-func TestFormatReviewFileEntryAlignment(t *testing.T) {
+func TestFormatFileEntryAlignment(t *testing.T) {
 	files := []github.PullRequestFile{
 		{Path: "small.go", Additions: 3, Deletions: 1},
 		{Path: "large.go", Additions: 181, Deletions: 42},
 	}
 	cw := computeFileColumnWidths(files, nil)
 
-	out1 := formatReviewFileEntry(files[0], 0, 80, cw)
-	out2 := formatReviewFileEntry(files[1], 0, 80, cw)
+	out1 := formatFileEntry(files[0], 0, 80, cw)
+	out2 := formatFileEntry(files[1], 0, 80, cw)
 
-	// Numbers should be right-aligned: +3 padded to match +181
 	assert.Contains(t, out1, "  +3")
 	assert.Contains(t, out2, "+181")
 	assert.Contains(t, out1, " -1")
 	assert.Contains(t, out2, "-42")
 }
 
-func TestRenderReviewBody(t *testing.T) {
+func TestRenderBody(t *testing.T) {
 	tests := []struct {
-		body string
-		name string
-		want func(string, *testing.T)
+		body         string
+		name         string
+		wantContains []string
+		wantEmpty    bool
 	}{
 		{
-			name: "empty body returns empty",
-			body: "",
-			want: func(output string, t *testing.T) {
-				assert.Empty(t, output)
-			},
+			name:      "empty body returns empty",
+			body:      "",
+			wantEmpty: true,
 		},
 		{
-			name: "markdown is rendered with ANSI",
-			body: "## Heading\n\nSome **bold** text.",
-			want: func(output string, t *testing.T) {
-				assert.NotEmpty(t, output)
-				assert.Contains(t, output, "Heading")
-				assert.Contains(t, output, "bold")
-			},
+			name:         "markdown is rendered with ANSI",
+			body:         "## Heading\n\nSome **bold** text.",
+			wantContains: []string{"Heading", "bold"},
 		},
 		{
-			name: "plain text passes through",
-			body: "Just some plain text.",
-			want: func(output string, t *testing.T) {
-				assert.Contains(t, output, "plain text")
-			},
+			name:         "plain text passes through",
+			body:         "Just some plain text.",
+			wantContains: []string{"plain text"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			output := renderReviewBody(tt.body, 60, "auto")
-			tt.want(output, t)
+			output := renderBody(tt.body, 60, "auto")
+			if tt.wantEmpty {
+				assert.Empty(t, output)
+			} else {
+				for _, want := range tt.wantContains {
+					assert.Contains(t, output, want)
+				}
+			}
 		})
 	}
 }
 
-func TestRenderReviewTimeline(t *testing.T) {
+func TestRenderTimeline(t *testing.T) {
 	pr := testPRWithExpanded()
 
-	timeline := []github.TimelineEvent{
-		{Actor: "dev", CreatedAt: time.Now().Add(-90 * time.Minute), Details: "initial commit", Type: "committed"},
-		{Actor: "reviewer1", CreatedAt: time.Now().Add(-1 * time.Hour), Details: "approved", Type: "reviewed"},
-		{Actor: "merger", CreatedAt: time.Now().Add(-30 * time.Minute), Type: "merged"},
-	}
+	t.Run("events are ordered chronologically", func(t *testing.T) {
+		timeline := []github.TimelineEvent{
+			{Actor: "dev", CreatedAt: time.Now().Add(-90 * time.Minute), Details: "initial commit", Type: "committed"},
+			{Actor: "reviewer1", CreatedAt: time.Now().Add(-1 * time.Hour), Details: "approved", Type: "reviewed"},
+			{Actor: "merger", CreatedAt: time.Now().Add(-30 * time.Minute), Type: "merged"},
+		}
 
-	output := renderReviewTimeline(pr, timeline, 60)
+		output := renderTimeline(pr, timeline)
 
-	assert.Contains(t, output, "Activity")
-	assert.Contains(t, output, "opened this PR")
-	assert.Contains(t, output, "initial commit")
-	assert.Contains(t, output, "@reviewer1 approved")
-	assert.Contains(t, output, "@merger merged")
+		assert.Contains(t, output, "Activity")
+		assert.Contains(t, output, "opened this PR")
+		assert.Contains(t, output, "initial commit")
+		assert.Contains(t, output, "@reviewer1 approved")
+		assert.Contains(t, output, "@merger merged")
 
-	// Verify chronological order: opened(-2h) < committed(-90m) < approved(-1h) < merged(-30m)
-	openedIdx := strings.Index(output, "opened this PR")
-	commitIdx := strings.Index(output, "initial commit")
-	approvedIdx := strings.Index(output, "@reviewer1 approved")
-	mergedIdx := strings.Index(output, "@merger merged")
-	assert.Less(t, openedIdx, commitIdx)
-	assert.Less(t, commitIdx, approvedIdx)
-	assert.Less(t, approvedIdx, mergedIdx)
+		openedIdx := strings.Index(output, "opened this PR")
+		commitIdx := strings.Index(output, "initial commit")
+		approvedIdx := strings.Index(output, "@reviewer1 approved")
+		mergedIdx := strings.Index(output, "@merger merged")
+		assert.Less(t, openedIdx, commitIdx)
+		assert.Less(t, commitIdx, approvedIdx)
+		assert.Less(t, approvedIdx, mergedIdx)
+	})
 
-	// Empty timeline with no createdAt
-	emptyPR := github.PullRequest{}
-	output = renderReviewTimeline(emptyPR, nil, 60)
-	assert.Empty(t, output)
+	t.Run("empty PR and timeline returns empty", func(t *testing.T) {
+		output := renderTimeline(github.PullRequest{}, nil)
+		assert.Empty(t, output)
+	})
 
-	// Consecutive commits by same author are collapsed
-	// All 3 commits at -90m..-80m, which is after opened at -2h
-	batchTimeline := []github.TimelineEvent{
-		{Actor: "dev", CreatedAt: time.Now().Add(-90 * time.Minute), Details: "first", Type: "committed"},
-		{Actor: "dev", CreatedAt: time.Now().Add(-85 * time.Minute), Details: "second", Type: "committed"},
-		{Actor: "dev", CreatedAt: time.Now().Add(-80 * time.Minute), Details: "third", Type: "committed"},
-		{Actor: "reviewer1", CreatedAt: time.Now().Add(-1 * time.Hour), Details: "approved", Type: "reviewed"},
-	}
-	output = renderReviewTimeline(pr, batchTimeline, 60)
-	assert.Contains(t, output, "pushed 3 commits")
-	assert.NotContains(t, output, "first")
-	assert.NotContains(t, output, "second")
+	t.Run("consecutive commits are collapsed", func(t *testing.T) {
+		timeline := []github.TimelineEvent{
+			{Actor: "dev", CreatedAt: time.Now().Add(-90 * time.Minute), Details: "first", Type: "committed"},
+			{Actor: "dev", CreatedAt: time.Now().Add(-85 * time.Minute), Details: "second", Type: "committed"},
+			{Actor: "dev", CreatedAt: time.Now().Add(-80 * time.Minute), Details: "third", Type: "committed"},
+			{Actor: "reviewer1", CreatedAt: time.Now().Add(-1 * time.Hour), Details: "approved", Type: "reviewed"},
+		}
+		output := renderTimeline(pr, timeline)
+		assert.Contains(t, output, "pushed 3 commits")
+		assert.NotContains(t, output, "first")
+		assert.NotContains(t, output, "second")
+	})
 }
 
 func TestHighActivityIncludesCommentedFiles(t *testing.T) {
@@ -1195,7 +609,7 @@ func TestHighActivityIncludesCommentedFiles(t *testing.T) {
 	}
 
 	scored := scoreFiles(files, comments)
-	output, shown := renderReviewHighActivity(scored, 80)
+	output, shown := renderHighActivity(scored, 80)
 
 	assert.Contains(t, output, "low_churn_commented.go", "low-churn file with comments should appear")
 	assert.Contains(t, output, "High Activity Files")
@@ -1207,10 +621,10 @@ func TestHighActivityIncludesCommentedFiles(t *testing.T) {
 	assert.Contains(t, shownPaths, "low_churn_commented.go")
 }
 
-func TestRenderReviewStateBadge(t *testing.T) {
+func TestRenderStateBadge(t *testing.T) {
 	pr := testPRWithExpanded()
 
-	output := renderReviewHeader(pr, 60)
+	output := renderHeader(pr)
 	assert.Contains(t, output, "OPEN")
 }
 
@@ -1219,7 +633,7 @@ func TestHighActivityCountInHeader(t *testing.T) {
 	comments := testFileComments()
 
 	scored := scoreFiles(files, comments)
-	output, shown := renderReviewHighActivity(scored, 56)
+	output, shown := renderHighActivity(scored, 56)
 
 	assert.Contains(t, output, fmt.Sprintf("High Activity Files (%d)", len(shown)))
 }
