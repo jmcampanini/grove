@@ -1012,7 +1012,7 @@ func TestRenderReviewHighActivity(t *testing.T) {
 	comments := testFileComments()
 
 	scored := scoreFiles(files, comments)
-	output := renderReviewHighActivity(scored)
+	output := renderReviewHighActivity(scored, 56)
 
 	assert.Contains(t, output, "High Activity")
 	assert.Contains(t, output, "server.go", "highest churn non-test file should appear")
@@ -1024,7 +1024,7 @@ func TestRenderReviewHighActivity(t *testing.T) {
 	testOnlyFiles := []github.PullRequestFile{
 		{Path: "foo_test.go", Additions: 100, Deletions: 50},
 	}
-	output = renderReviewHighActivity(scoreFiles(testOnlyFiles, map[string]int{}))
+	output = renderReviewHighActivity(scoreFiles(testOnlyFiles, map[string]int{}), 56)
 	assert.Empty(t, output)
 }
 
@@ -1037,11 +1037,11 @@ func TestRenderReviewFileComments(t *testing.T) {
 		"with_comments.go": 3,
 	}
 
-	output := formatReviewFileEntry(files[0], comments["with_comments.go"])
+	output := formatReviewFileEntry(files[0], comments["with_comments.go"], 56)
 	assert.Contains(t, output, "💬")
 	assert.Contains(t, output, "3")
 
-	output = formatReviewFileEntry(files[1], comments["no_comments.go"])
+	output = formatReviewFileEntry(files[1], comments["no_comments.go"], 56)
 	assert.NotContains(t, output, "💬")
 }
 
@@ -1114,4 +1114,17 @@ func TestRenderReviewTimeline(t *testing.T) {
 	emptyPR := github.PullRequest{}
 	output = renderReviewTimeline(emptyPR, nil, 60)
 	assert.Empty(t, output)
+
+	// Consecutive commits by same author are collapsed
+	// All 3 commits at -90m..-80m, which is after opened at -2h
+	batchTimeline := []github.TimelineEvent{
+		{Actor: "dev", CreatedAt: time.Now().Add(-90 * time.Minute), Details: "first", Type: "committed"},
+		{Actor: "dev", CreatedAt: time.Now().Add(-85 * time.Minute), Details: "second", Type: "committed"},
+		{Actor: "dev", CreatedAt: time.Now().Add(-80 * time.Minute), Details: "third", Type: "committed"},
+		{Actor: "reviewer1", CreatedAt: time.Now().Add(-1 * time.Hour), Details: "approved", Type: "reviewed"},
+	}
+	output = renderReviewTimeline(pr, batchTimeline, 60)
+	assert.Contains(t, output, "pushed 3 commits")
+	assert.NotContains(t, output, "first")
+	assert.NotContains(t, output, "second")
 }

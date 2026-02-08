@@ -693,7 +693,7 @@ func timelineEventMessage(e github.TimelineEvent) string {
 	}
 }
 
-func formatReviewFileEntry(f github.PullRequestFile, comments int) string {
+func formatReviewFileEntry(f github.PullRequestFile, comments int, contentWidth int) string {
 	added := lipgloss.NewStyle().Foreground(colorGreen).Render(fmt.Sprintf("+%d", f.Additions))
 	deleted := lipgloss.NewStyle().Foreground(colorRed).Render(fmt.Sprintf("-%d", f.Deletions))
 
@@ -713,7 +713,15 @@ func formatReviewFileEntry(f github.PullRequestFile, comments int) string {
 		left = name + " " + lipgloss.NewStyle().Foreground(colorGray).Render(dir)
 	}
 
-	return fmt.Sprintf("  %s  %s", left, right)
+	leftWidth := lipgloss.Width(left)
+	rightWidth := lipgloss.Width(right)
+	// 2 for leading indent, 2 for minimum gap
+	gap := contentWidth - 2 - leftWidth - rightWidth
+	if gap < 2 {
+		gap = 2
+	}
+
+	return fmt.Sprintf("  %s%s%s", left, strings.Repeat(" ", gap), right)
 }
 
 func renderReviewHeader(pr github.PullRequest, width int) string {
@@ -785,7 +793,7 @@ func scoreFiles(files []github.PullRequestFile, fileComments map[string]int) []s
 	return scored
 }
 
-func renderReviewHighActivity(scored []scoredFile) string {
+func renderReviewHighActivity(scored []scoredFile, contentWidth int) string {
 	count := min(len(scored), maxHighActivityFiles)
 	if count == 0 {
 		return ""
@@ -796,13 +804,13 @@ func renderReviewHighActivity(scored []scoredFile) string {
 	sb.WriteString(header)
 	sb.WriteString("\n")
 	for _, sf := range scored[:count] {
-		sb.WriteString(formatReviewFileEntry(sf.file, sf.comments))
+		sb.WriteString(formatReviewFileEntry(sf.file, sf.comments, contentWidth))
 		sb.WriteString("\n")
 	}
 	return strings.TrimRight(sb.String(), "\n")
 }
 
-func renderReviewFileList(files []github.PullRequestFile, fileComments map[string]int, totalChanged int, haPaths map[string]bool) string {
+func renderReviewFileList(files []github.PullRequestFile, fileComments map[string]int, totalChanged int, haPaths map[string]bool, contentWidth int) string {
 	header := lipgloss.NewStyle().Foreground(colorCyan).Bold(true).Render(fmt.Sprintf("Files (%d)", totalChanged))
 	var sb strings.Builder
 	sb.WriteString(header)
@@ -817,7 +825,7 @@ func renderReviewFileList(files []github.PullRequestFile, fileComments map[strin
 			break
 		}
 		comments := fileComments[f.Path]
-		sb.WriteString(formatReviewFileEntry(f, comments))
+		sb.WriteString(formatReviewFileEntry(f, comments, contentWidth))
 		sb.WriteString("\n")
 		displayed++
 	}
@@ -848,6 +856,26 @@ func renderReviewBody(body string, width int) string {
 	return strings.TrimSpace(rendered)
 }
 
+type collapsedEvent struct {
+	count int
+	event github.TimelineEvent
+}
+
+func collapseTimeline(events []github.TimelineEvent) []collapsedEvent {
+	var collapsed []collapsedEvent
+	for _, e := range events {
+		n := len(collapsed)
+		if n > 0 && collapsed[n-1].event.Type == "committed" && e.Type == "committed" && collapsed[n-1].event.Actor == e.Actor {
+			collapsed[n-1].count++
+			collapsed[n-1].event.CreatedAt = e.CreatedAt
+			collapsed[n-1].event.Details = e.Details
+		} else {
+			collapsed = append(collapsed, collapsedEvent{count: 1, event: e})
+		}
+	}
+	return collapsed
+}
+
 func renderReviewTimeline(pr github.PullRequest, timeline []github.TimelineEvent, width int) string {
 	var events []github.TimelineEvent
 
@@ -864,7 +892,8 @@ func renderReviewTimeline(pr github.PullRequest, timeline []github.TimelineEvent
 		return events[i].CreatedAt.Before(events[j].CreatedAt)
 	})
 
-	if len(events) == 0 {
+	collapsed := collapseTimeline(events)
+	if len(collapsed) == 0 {
 		return ""
 	}
 
@@ -875,17 +904,21 @@ func renderReviewTimeline(pr github.PullRequest, timeline []github.TimelineEvent
 	var sb strings.Builder
 	sb.WriteString(header)
 	sb.WriteString("\n")
-	for i, e := range events {
+	for i, ce := range collapsed {
+		e := ce.event
 		var icon, msg string
 		if e.Type == "opened" {
-			icon = lipgloss.NewStyle().Foreground(colorGreen).Render("●")
+			icon = styleIcon("●", colorGreen)
 			msg = fmt.Sprintf("@%s opened this PR", e.Actor)
+		} else if e.Type == "committed" && ce.count > 1 {
+			icon = styleIcon("⊙", colorPurple)
+			msg = fmt.Sprintf("@%s pushed %d commits", e.Actor, ce.count)
 		} else {
 			icon = timelineEventIcon(e.Type, e.Details)
 			msg = timelineEventMessage(e)
 		}
 		sb.WriteString(fmt.Sprintf("  %s  %s %s\n", timeStyle.Render(relativeTime(e.CreatedAt)), icon, msg))
-		if i < len(events)-1 {
+		if i < len(collapsed)-1 {
 			sb.WriteString(fmt.Sprintf("  %s  %s\n", strings.Repeat(" ", 16), lineStyle.Render("│")))
 		}
 	}
@@ -909,8 +942,9 @@ func renderReview(w io.Writer, pr github.PullRequest, files []github.PullRequest
 	}
 
 	scored := scoreFiles(files, fileComments)
+	contentWidth := width - 4
 
-	if highActivity := renderReviewHighActivity(scored); highActivity != "" {
+	if highActivity := renderReviewHighActivity(scored, contentWidth); highActivity != "" {
 		sections = append(sections, boxStyle.Render(highActivity))
 	}
 
@@ -922,7 +956,7 @@ func renderReview(w io.Writer, pr github.PullRequest, files []github.PullRequest
 		haPaths[sf.file.Path] = true
 	}
 
-	sections = append(sections, boxStyle.Render(renderReviewFileList(files, fileComments, pr.FilesChanged, haPaths)))
+	sections = append(sections, boxStyle.Render(renderReviewFileList(files, fileComments, pr.FilesChanged, haPaths, contentWidth)))
 
 	if body := renderReviewBody(pr.Body, width); body != "" {
 		sections = append(sections, boxStyle.Render(body))
