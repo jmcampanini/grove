@@ -667,6 +667,64 @@ func TestCheckIcon(t *testing.T) {
 	}
 }
 
+func TestDeduplicateReviews(t *testing.T) {
+	now := time.Now()
+	tests := []struct {
+		name        string
+		reviews     []github.Review
+		wantAuthors []string
+		wantStates  []string
+	}{
+		{
+			name:        "empty",
+			reviews:     nil,
+			wantAuthors: nil,
+			wantStates:  nil,
+		},
+		{
+			name: "single review unchanged",
+			reviews: []github.Review{
+				{AuthorLogin: "alice", State: "APPROVED", SubmittedAt: now},
+			},
+			wantAuthors: []string{"alice"},
+			wantStates:  []string{"APPROVED"},
+		},
+		{
+			name: "same author keeps latest",
+			reviews: []github.Review{
+				{AuthorLogin: "alice", State: "COMMENTED", SubmittedAt: now.Add(-2 * time.Hour)},
+				{AuthorLogin: "alice", State: "COMMENTED", SubmittedAt: now.Add(-1 * time.Hour)},
+				{AuthorLogin: "alice", State: "APPROVED", SubmittedAt: now},
+			},
+			wantAuthors: []string{"alice"},
+			wantStates:  []string{"APPROVED"},
+		},
+		{
+			name: "multiple authors keep each latest",
+			reviews: []github.Review{
+				{AuthorLogin: "alice", State: "COMMENTED", SubmittedAt: now.Add(-3 * time.Hour)},
+				{AuthorLogin: "bob", State: "CHANGES_REQUESTED", SubmittedAt: now.Add(-2 * time.Hour)},
+				{AuthorLogin: "alice", State: "APPROVED", SubmittedAt: now.Add(-1 * time.Hour)},
+			},
+			wantAuthors: []string{"bob", "alice"},
+			wantStates:  []string{"CHANGES_REQUESTED", "APPROVED"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := deduplicateReviews(tt.reviews)
+			var gotAuthors, gotStates []string
+			for _, r := range result {
+				gotAuthors = append(gotAuthors, r.AuthorLogin)
+				gotStates = append(gotStates, r.State)
+			}
+			assert.Equal(t, tt.wantAuthors, gotAuthors)
+			assert.Equal(t, tt.wantStates, gotStates)
+		})
+	}
+}
+
 func TestReviewIcon(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -1014,13 +1072,31 @@ func TestRenderReviewFileComments(t *testing.T) {
 	comments := map[string]int{
 		"with_comments.go": 3,
 	}
+	cw := computeFileColumnWidths(files, comments)
 
-	output := formatReviewFileEntry(files[0], comments["with_comments.go"], 56)
+	output := formatReviewFileEntry(files[0], comments["with_comments.go"], 56, cw)
 	assert.Contains(t, output, "💬")
 	assert.Contains(t, output, "3")
 
-	output = formatReviewFileEntry(files[1], comments["no_comments.go"], 56)
+	output = formatReviewFileEntry(files[1], comments["no_comments.go"], 56, cw)
 	assert.NotContains(t, output, "💬")
+}
+
+func TestFormatReviewFileEntryAlignment(t *testing.T) {
+	files := []github.PullRequestFile{
+		{Path: "small.go", Additions: 3, Deletions: 1},
+		{Path: "large.go", Additions: 181, Deletions: 42},
+	}
+	cw := computeFileColumnWidths(files, nil)
+
+	out1 := formatReviewFileEntry(files[0], 0, 80, cw)
+	out2 := formatReviewFileEntry(files[1], 0, 80, cw)
+
+	// Numbers should be right-aligned: +3 padded to match +181
+	assert.Contains(t, out1, "  +3")
+	assert.Contains(t, out2, "+181")
+	assert.Contains(t, out1, " -1")
+	assert.Contains(t, out2, "-42")
 }
 
 func TestRenderReviewBody(t *testing.T) {

@@ -4,8 +4,10 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"maps"
 	"path/filepath"
-	"sort"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,7 +18,7 @@ import (
 )
 
 var (
-	colorCyan   = lipgloss.Color("44")
+	colorCyan   = lipgloss.AdaptiveColor{Light: "30", Dark: "44"}
 	colorGray   = lipgloss.Color("245")
 	colorGreen  = lipgloss.Color("76")
 	colorPurple = lipgloss.Color("99")
@@ -208,7 +210,7 @@ func renderMinimal(w io.Writer, pr github.PullRequest, files []github.PullReques
 	return err
 }
 
-func styleIcon(icon string, color lipgloss.Color) string {
+func styleIcon(icon string, color lipgloss.TerminalColor) string {
 	return lipgloss.NewStyle().Foreground(color).Render(icon)
 }
 
@@ -462,12 +464,27 @@ func renderChecksLines(checks []github.StatusCheck) string {
 	return strings.Join(lines, "\n")
 }
 
+func deduplicateReviews(reviews []github.Review) []github.Review {
+	latest := make(map[string]github.Review, len(reviews))
+	for _, r := range reviews {
+		if existing, ok := latest[r.AuthorLogin]; !ok || r.SubmittedAt.After(existing.SubmittedAt) {
+			latest[r.AuthorLogin] = r
+		}
+	}
+	deduped := slices.Collect(maps.Values(latest))
+	slices.SortFunc(deduped, func(a, b github.Review) int {
+		return a.SubmittedAt.Compare(b.SubmittedAt)
+	})
+	return deduped
+}
+
 func renderReviewLines(reviews []github.Review) string {
 	if len(reviews) == 0 {
 		return ""
 	}
+	deduped := deduplicateReviews(reviews)
 	var lines []string
-	for _, r := range reviews {
+	for _, r := range deduped {
 		lines = append(lines, fmt.Sprintf("  %s @%s %s",
 			reviewIcon(r.State),
 			r.AuthorLogin,
@@ -496,8 +513,8 @@ func buildTimelineEvents(pr github.PullRequest) []timelineEvent {
 		})
 	}
 
-	sort.Slice(events, func(i, j int) bool {
-		return events[i].time.Before(events[j].time)
+	slices.SortFunc(events, func(a, b timelineEvent) int {
+		return a.time.Compare(b.time)
 	})
 
 	return events
@@ -655,13 +672,42 @@ func timelineEventMessage(e github.TimelineEvent) string {
 	}
 }
 
-func formatReviewFileEntry(f github.PullRequestFile, comments int, contentWidth int) string {
-	added := lipgloss.NewStyle().Foreground(colorGreen).Render(fmt.Sprintf("+%d", f.Additions))
-	deleted := lipgloss.NewStyle().Foreground(colorRed).Render(fmt.Sprintf("-%d", f.Deletions))
+type fileColumnWidths struct {
+	addWidth     int
+	commentWidth int
+	delWidth     int
+}
+
+func computeFileColumnWidths(files []github.PullRequestFile, fileComments map[string]int) fileColumnWidths {
+	var w fileColumnWidths
+	for _, f := range files {
+		if aw := len(strconv.Itoa(f.Additions)) + 1; aw > w.addWidth {
+			w.addWidth = aw
+		}
+		if dw := len(strconv.Itoa(f.Deletions)) + 1; dw > w.delWidth {
+			w.delWidth = dw
+		}
+		if c := fileComments[f.Path]; c > 0 {
+			if cw := len(strconv.Itoa(c)); cw > w.commentWidth {
+				w.commentWidth = cw
+			}
+		}
+	}
+	return w
+}
+
+func formatReviewFileEntry(f github.PullRequestFile, comments int, contentWidth int, cw fileColumnWidths) string {
+	added := lipgloss.NewStyle().Foreground(colorGreen).Render(fmt.Sprintf("%+*d", cw.addWidth, f.Additions))
+	deleted := lipgloss.NewStyle().Foreground(colorRed).Render(fmt.Sprintf("%*s", cw.delWidth, fmt.Sprintf("-%d", f.Deletions)))
 
 	var right string
-	if comments > 0 {
-		right = fmt.Sprintf("💬 %d  %s  %s", comments, added, deleted)
+	if cw.commentWidth > 0 {
+		if comments > 0 {
+			right = fmt.Sprintf("💬 %*d  %s  %s", cw.commentWidth, comments, added, deleted)
+		} else {
+			commentColWidth := lipgloss.Width(fmt.Sprintf("💬 %*d", cw.commentWidth, 0))
+			right = fmt.Sprintf("%s  %s  %s", strings.Repeat(" ", commentColWidth), added, deleted)
+		}
 	} else {
 		right = fmt.Sprintf("%s  %s", added, deleted)
 	}
@@ -677,7 +723,6 @@ func formatReviewFileEntry(f github.PullRequestFile, comments int, contentWidth 
 
 	leftWidth := lipgloss.Width(left)
 	rightWidth := lipgloss.Width(right)
-	// 2 for leading indent, 2 for minimum gap
 	gap := contentWidth - 2 - leftWidth - rightWidth
 	if gap < 2 {
 		gap = 2
@@ -754,8 +799,8 @@ func scoreFiles(files []github.PullRequestFile, fileComments map[string]int) []s
 			scored = append(scored, scoredFile{comments: comments, file: f, score: score})
 		}
 	}
-	sort.Slice(scored, func(i, j int) bool {
-		return scored[i].score > scored[j].score
+	slices.SortFunc(scored, func(a, b scoredFile) int {
+		return b.score - a.score
 	})
 	return scored
 }
@@ -785,39 +830,52 @@ func renderReviewHighActivity(scored []scoredFile, contentWidth int) (string, []
 		return "", nil
 	}
 
+	shownComments := make(map[string]int, len(shown))
+	var shownFiles []github.PullRequestFile
+	for _, sf := range shown {
+		shownFiles = append(shownFiles, sf.file)
+		if sf.comments > 0 {
+			shownComments[sf.file.Path] = sf.comments
+		}
+	}
+	cw := computeFileColumnWidths(shownFiles, shownComments)
+
 	header := lipgloss.NewStyle().Foreground(colorCyan).Bold(true).
 		Render(fmt.Sprintf("High Activity Files (%d)", len(shown)))
 	var sb strings.Builder
 	sb.WriteString(header)
 	sb.WriteString("\n")
 	for _, sf := range shown {
-		sb.WriteString(formatReviewFileEntry(sf.file, sf.comments, contentWidth))
+		sb.WriteString(formatReviewFileEntry(sf.file, sf.comments, contentWidth, cw))
 		sb.WriteString("\n")
 	}
 	return strings.TrimRight(sb.String(), "\n"), shown
 }
 
 func renderReviewFileList(files []github.PullRequestFile, fileComments map[string]int, totalChanged int, haPaths map[string]bool, contentWidth int) string {
+	var displayFiles []github.PullRequestFile
+	for _, f := range files {
+		if haPaths[f.Path] {
+			continue
+		}
+		if len(displayFiles) >= maxPreviewFiles {
+			break
+		}
+		displayFiles = append(displayFiles, f)
+	}
+	cw := computeFileColumnWidths(displayFiles, fileComments)
+
 	header := lipgloss.NewStyle().Foreground(colorCyan).Bold(true).Render(fmt.Sprintf("Files (%d)", totalChanged))
 	var sb strings.Builder
 	sb.WriteString(header)
 	sb.WriteString("\n")
 
-	displayed := 0
-	for _, f := range files {
-		if haPaths[f.Path] {
-			continue
-		}
-		if displayed >= maxPreviewFiles {
-			break
-		}
-		comments := fileComments[f.Path]
-		sb.WriteString(formatReviewFileEntry(f, comments, contentWidth))
+	for _, f := range displayFiles {
+		sb.WriteString(formatReviewFileEntry(f, fileComments[f.Path], contentWidth, cw))
 		sb.WriteString("\n")
-		displayed++
 	}
 
-	remaining := totalChanged - displayed - len(haPaths)
+	remaining := totalChanged - len(displayFiles) - len(haPaths)
 	if remaining > 0 {
 		sb.WriteString(fmt.Sprintf("  … and %d more\n", remaining))
 	}
@@ -882,8 +940,8 @@ func renderReviewTimeline(pr github.PullRequest, timeline []github.TimelineEvent
 	}
 	events = append(events, timeline...)
 
-	sort.Slice(events, func(i, j int) bool {
-		return events[i].CreatedAt.Before(events[j].CreatedAt)
+	slices.SortFunc(events, func(a, b github.TimelineEvent) int {
+		return a.CreatedAt.Compare(b.CreatedAt)
 	})
 
 	collapsed := collapseTimeline(events)

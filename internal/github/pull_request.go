@@ -226,7 +226,7 @@ func (pr *PullRequest) UnmarshalJSON(data []byte) error {
 			})
 		} else {
 			pr.StatusChecks = append(pr.StatusChecks, StatusCheck{
-				Conclusion: sc.Conclusion,
+				Conclusion: strings.ToLower(sc.Conclusion),
 				Name:       sc.Name,
 				Status:     sc.Status,
 			})
