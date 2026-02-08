@@ -7,7 +7,7 @@
 #   {1}            → PR number for pr create and preview
 #   cut -f1        → extract PR number after selection
 grp() {
-    local style="${1:-context}"
+    local style="${1:-review}"
     local pr_num
     pr_num=$(grove pr list --fzf | fzf \
         --delimiter '\t' \

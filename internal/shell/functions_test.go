@@ -102,7 +102,7 @@ func TestFunctionGenerator_GrpStylePassthrough(t *testing.T) {
 			name:     "bash",
 			generate: gen.GenerateBash,
 			contains: []string{
-				`style="${1:-context}"`,
+				`style="${1:-review}"`,
 				"--style $style",
 				"grove pr preview",
 			},
@@ -111,7 +111,7 @@ func TestFunctionGenerator_GrpStylePassthrough(t *testing.T) {
 			name:     "zsh",
 			generate: gen.GenerateZsh,
 			contains: []string{
-				`style="${1:-context}"`,
+				`style="${1:-review}"`,
 				"--style $style",
 				"grove pr preview",
 			},
@@ -120,7 +120,7 @@ func TestFunctionGenerator_GrpStylePassthrough(t *testing.T) {
 			name:     "fish",
 			generate: gen.GenerateFish,
 			contains: []string{
-				"set -l style context",
+				"set -l style review",
 				"count $argv",
 				"set style $argv[1]",
 				"--style $style",

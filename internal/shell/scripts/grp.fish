@@ -7,7 +7,7 @@
 #   {1}            → PR number for pr create and preview
 #   cut -f1        → extract PR number after selection
 function grp -d "Create or switch to a PR worktree using fzf"
-    set -l style context
+    set -l style review
     if test (count $argv) -gt 0
         set style $argv[1]
     end

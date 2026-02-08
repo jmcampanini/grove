@@ -43,7 +43,7 @@ making it suitable for use in fzf preview panes.`,
 
 func init() {
 	prPreviewCmd.Flags().BoolVar(&prPreviewFzfFlag, "fzf", false, "Print errors to stdout instead of returning error (for fzf preview)")
-	prPreviewCmd.Flags().StringVar(&prPreviewStyleFlag, "style", "context", "Preview style: card, dashboard, minimal, context, board, timeline, review")
+	prPreviewCmd.Flags().StringVar(&prPreviewStyleFlag, "style", "review", "Preview style: card, dashboard, minimal, context, board, timeline, review")
 	prCmd.AddCommand(prPreviewCmd)
 }
 
