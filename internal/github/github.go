@@ -9,10 +9,9 @@ type GitHub interface {
 	GetPullRequestByBranch(branchName string) (*PullRequest, error)
 
 	// GetPullRequestFiles returns the list of files changed in a pull request.
-	// Note: GitHub API returns max 30 files per page; pagination is not implemented.
 	GetPullRequestFiles(prNum int) ([]PullRequestFile, error)
 
-	// GetPullRequestReviewThreads returns review threads grouped by file path.
+	// GetPullRequestReviewThreads returns review threads aggregated per file path.
 	GetPullRequestReviewThreads(prNum int) ([]ReviewThread, error)
 
 	// GetPullRequestTimeline returns normalized timeline events for a pull request.
@@ -23,6 +22,5 @@ type GitHub interface {
 	ListPullRequests(query PRQuery, limit int) ([]PullRequest, error)
 
 	// Validate checks if gh CLI is available and authenticated.
-	// Returns nil if ready to use, or a descriptive error:
 	Validate() error
 }

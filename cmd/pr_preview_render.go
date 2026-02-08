@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -28,8 +29,8 @@ var (
 )
 
 const (
-	maxHighActivityFiles = 3
-	maxPreviewFiles      = 30
+	targetHighActivityFiles = 3
+	maxPreviewFiles         = 30
 
 	iconArchive  = "\uea98" // nf-cod-archive
 	iconBell     = "\ueaa2" // nf-cod-bell
@@ -73,24 +74,24 @@ func colorIcon(icon string, color lipgloss.TerminalColor) string {
 	return lipgloss.NewStyle().Foreground(color).Render(icon)
 }
 
-func checkIcon(conclusion string) string {
+func checkIcon(conclusion github.CheckConclusion) string {
 	switch conclusion {
-	case "success":
+	case github.CheckConclusionSuccess:
 		return colorIcon(iconCheck, colorGreen)
-	case "failure", "timed_out", "action_required":
+	case github.CheckConclusionFailure, github.CheckConclusionTimedOut, github.CheckConclusionActionRequired:
 		return colorIcon(iconCross, colorRed)
-	case "cancelled", "skipped":
+	case github.CheckConclusionCancelled, github.CheckConclusionSkipped:
 		return colorIcon(iconCross, colorGray)
 	default:
 		return colorIcon(iconPending, colorYellow)
 	}
 }
 
-func reviewIcon(state string) string {
+func reviewIcon(state github.ReviewState) string {
 	switch state {
-	case "APPROVED":
+	case github.ReviewStateApproved:
 		return colorIcon(iconCheck, colorGreen)
-	case "CHANGES_REQUESTED":
+	case github.ReviewStateChangesRequested:
 		return colorIcon(iconCross, colorRed)
 	default:
 		return colorIcon(iconCircle, colorGray)
@@ -110,9 +111,9 @@ func labelColor(hexColor string) lipgloss.Color {
 
 func checkStatusText(sc github.StatusCheck) string {
 	if sc.Conclusion != "" {
-		return sc.Conclusion
+		return string(sc.Conclusion)
 	}
-	return strings.ToLower(sc.Status)
+	return strings.ToLower(string(sc.Status))
 }
 
 func branchInfo(branchName, baseRefName string) string {
@@ -235,18 +236,18 @@ func deduplicateReviews(reviews []github.Review) []github.Review {
 	return deduped
 }
 
-func reviewActionText(state string) string {
+func reviewActionText(state github.ReviewState) string {
 	switch state {
-	case "APPROVED":
+	case github.ReviewStateApproved:
 		return "approved"
-	case "CHANGES_REQUESTED":
+	case github.ReviewStateChangesRequested:
 		return "requested changes"
-	case "COMMENTED":
+	case github.ReviewStateCommented:
 		return "commented"
-	case "DISMISSED":
+	case github.ReviewStateDismissed:
 		return "review dismissed"
 	default:
-		return strings.ToLower(state)
+		return strings.ToLower(string(state))
 	}
 }
 
@@ -280,9 +281,9 @@ func isTestFile(path string) bool {
 	return slices.ContainsFunc(testDirSegments, func(s string) bool { return strings.Contains(prefixed, s) })
 }
 
-func timelineEventIcon(eventType, details string) string {
+func timelineEventIcon(eventType github.TimelineEventType, details string) string {
 	switch eventType {
-	case "reviewed":
+	case github.TimelineEventReviewed:
 		switch details {
 		case "approved":
 			return colorIcon(iconCheck, colorGreen)
@@ -291,25 +292,25 @@ func timelineEventIcon(eventType, details string) string {
 		default:
 			return colorIcon(iconComment, colorGray)
 		}
-	case "commented":
+	case github.TimelineEventCommented:
 		return colorIcon(iconComment, colorCyan)
-	case "committed":
+	case github.TimelineEventCommitted:
 		return colorIcon(iconGitRef, colorPurple)
-	case "force_pushed":
+	case github.TimelineEventForcePushed:
 		return colorIcon(iconZap, colorYellow)
-	case "labeled":
+	case github.TimelineEventLabeled:
 		return colorIcon(iconTag, colorCyan)
-	case "merged":
+	case github.TimelineEventMerged:
 		return colorIcon(iconMerge, colorPurple)
-	case "closed":
+	case github.TimelineEventClosed:
 		return colorIcon(iconArchive, colorRed)
-	case "reopened":
+	case github.TimelineEventReopened:
 		return colorIcon(iconReopened, colorGreen)
-	case "ready_for_review":
+	case github.TimelineEventReadyForReview:
 		return colorIcon(iconBell, colorGreen)
-	case "convert_to_draft":
+	case github.TimelineEventConvertToDraft:
 		return colorIcon(iconDraft, colorYellow)
-	case "review_requested":
+	case github.TimelineEventReviewRequested:
 		return colorIcon(iconBell, colorCyan)
 	default:
 		return colorIcon(iconCircle, colorGray)
@@ -318,30 +319,30 @@ func timelineEventIcon(eventType, details string) string {
 
 func timelineEventMessage(e github.TimelineEvent) string {
 	switch e.Type {
-	case "reviewed":
+	case github.TimelineEventReviewed:
 		return fmt.Sprintf("@%s %s", e.Actor, e.Details)
-	case "commented":
+	case github.TimelineEventCommented:
 		return fmt.Sprintf("@%s commented", e.Actor)
-	case "committed":
+	case github.TimelineEventCommitted:
 		if e.Details != "" {
 			return fmt.Sprintf("@%s committed: %s", e.Actor, e.Details)
 		}
 		return fmt.Sprintf("@%s committed", e.Actor)
-	case "force_pushed":
+	case github.TimelineEventForcePushed:
 		return fmt.Sprintf("@%s force pushed", e.Actor)
-	case "labeled":
+	case github.TimelineEventLabeled:
 		return fmt.Sprintf("@%s added %s", e.Actor, e.Details)
-	case "merged":
+	case github.TimelineEventMerged:
 		return fmt.Sprintf("@%s merged", e.Actor)
-	case "closed":
+	case github.TimelineEventClosed:
 		return fmt.Sprintf("@%s closed", e.Actor)
-	case "reopened":
+	case github.TimelineEventReopened:
 		return fmt.Sprintf("@%s reopened", e.Actor)
-	case "ready_for_review":
+	case github.TimelineEventReadyForReview:
 		return fmt.Sprintf("@%s marked ready for review", e.Actor)
-	case "convert_to_draft":
+	case github.TimelineEventConvertToDraft:
 		return fmt.Sprintf("@%s converted to draft", e.Actor)
-	case "review_requested":
+	case github.TimelineEventReviewRequested:
 		return fmt.Sprintf("@%s requested review from @%s", e.Actor, e.Details)
 	default:
 		return fmt.Sprintf("@%s %s", e.Actor, e.Type)
@@ -502,7 +503,7 @@ func selectHighActivityFiles(scored []scoredFile) []scoredFile {
 	}
 
 	result := commented
-	remaining := maxHighActivityFiles - len(result)
+	remaining := targetHighActivityFiles - len(result)
 	if remaining > 0 {
 		result = append(result, uncommented[:min(remaining, len(uncommented))]...)
 	}
@@ -581,13 +582,18 @@ func renderBody(body string, width int, colorMode string) string {
 	case "never":
 		opts = append(opts, glamour.WithColorProfile(termenv.Ascii))
 	}
+	// TODO: replace with structured debug logging when a logging framework is added
 	renderer, err := glamour.NewTermRenderer(opts...)
-	if err == nil {
-		if rendered, renderErr := renderer.Render(body); renderErr == nil {
-			return strings.TrimSpace(rendered)
-		}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: markdown renderer init failed, using plain text: %v\n", err)
+		return wrapBody(body, width)
 	}
-	return wrapBody(body, width)
+	rendered, err := renderer.Render(body)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: markdown rendering failed, using plain text: %v\n", err)
+		return wrapBody(body, width)
+	}
+	return strings.TrimSpace(rendered)
 }
 
 type collapsedEvent struct {
@@ -596,7 +602,9 @@ type collapsedEvent struct {
 }
 
 func isConsecutiveCommit(prev collapsedEvent, next github.TimelineEvent) bool {
-	return prev.event.Type == "committed" && next.Type == "committed" && prev.event.Actor == next.Actor
+	return prev.event.Type == github.TimelineEventCommitted &&
+		next.Type == github.TimelineEventCommitted &&
+		prev.event.Actor == next.Actor
 }
 
 func collapseTimeline(events []github.TimelineEvent) []collapsedEvent {
@@ -621,7 +629,7 @@ func renderTimeline(pr github.PullRequest, timeline []github.TimelineEvent) stri
 		events = append(events, github.TimelineEvent{
 			Actor:     pr.AuthorLogin,
 			CreatedAt: pr.CreatedAt,
-			Type:      "opened",
+			Type:      github.TimelineEventOpened,
 		})
 	}
 	events = append(events, timeline...)
@@ -646,10 +654,10 @@ func renderTimeline(pr github.PullRequest, timeline []github.TimelineEvent) stri
 		e := ce.event
 		var icon, msg string
 		switch {
-		case e.Type == "opened":
+		case e.Type == github.TimelineEventOpened:
 			icon = colorIcon(iconOpened, colorGreen)
 			msg = fmt.Sprintf("@%s opened this PR", e.Actor)
-		case e.Type == "committed" && ce.count > 1:
+		case e.Type == github.TimelineEventCommitted && ce.count > 1:
 			icon = colorIcon(iconGitRef, colorPurple)
 			msg = fmt.Sprintf("@%s pushed %d commits", e.Actor, ce.count)
 		default:

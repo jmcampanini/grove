@@ -9,10 +9,23 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/jmcampanini/grove-cli/internal/github"
+	"github.com/muesli/termenv"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func pinTestColorProfile(t *testing.T) {
+	t.Helper()
+	origProfile := lipgloss.ColorProfile()
+	origDark := lipgloss.DefaultRenderer().HasDarkBackground()
+	lipgloss.SetColorProfile(termenv.Ascii)
+	lipgloss.SetHasDarkBackground(true)
+	t.Cleanup(func() {
+		lipgloss.SetColorProfile(origProfile)
+		lipgloss.SetHasDarkBackground(origDark)
+	})
+}
 
 func TestHandlePreviewError(t *testing.T) {
 	tests := []struct {
@@ -99,14 +112,14 @@ func testPRWithExpanded() github.PullRequest {
 		LinesDeleted: 10,
 		Number:       42,
 		Reviews: []github.Review{
-			{AuthorLogin: "reviewer1", State: "APPROVED", SubmittedAt: time.Now().Add(-1 * time.Hour)},
-			{AuthorLogin: "reviewer2", State: "CHANGES_REQUESTED", SubmittedAt: time.Now().Add(-30 * time.Minute)},
+			{AuthorLogin: "reviewer1", State: github.ReviewStateApproved, SubmittedAt: time.Now().Add(-1 * time.Hour)},
+			{AuthorLogin: "reviewer2", State: github.ReviewStateChangesRequested, SubmittedAt: time.Now().Add(-30 * time.Minute)},
 		},
 		State: github.PRStateOpen,
 		StatusChecks: []github.StatusCheck{
-			{Conclusion: "success", DetailURL: "https://github.com/owner/repo/actions/runs/1", Name: "ci/test", Status: "COMPLETED"},
-			{Conclusion: "failure", DetailURL: "https://github.com/owner/repo/actions/runs/2", Name: "ci/lint", Status: "COMPLETED"},
-			{Conclusion: "", Name: "ci/deploy", Status: "PENDING"},
+			{Conclusion: github.CheckConclusionSuccess, DetailURL: "https://github.com/owner/repo/actions/runs/1", Name: "ci/test", Status: github.CheckStatusCompleted},
+			{Conclusion: github.CheckConclusionFailure, DetailURL: "https://github.com/owner/repo/actions/runs/2", Name: "ci/lint", Status: github.CheckStatusCompleted},
+			{Conclusion: "", Name: "ci/deploy", Status: github.CheckStatusPending},
 		},
 		Title: "Fix login flow",
 		URL:   "https://github.com/owner/repo/pull/42",
@@ -122,16 +135,16 @@ func testFiles() []github.PullRequestFile {
 
 func TestCheckIcon(t *testing.T) {
 	tests := []struct {
-		conclusion string
+		conclusion github.CheckConclusion
 		name       string
 		wantChar   string
 	}{
-		{name: "success", conclusion: "success", wantChar: iconCheck},
-		{name: "failure", conclusion: "failure", wantChar: iconCross},
-		{name: "cancelled", conclusion: "cancelled", wantChar: iconCross},
+		{name: "success", conclusion: github.CheckConclusionSuccess, wantChar: iconCheck},
+		{name: "failure", conclusion: github.CheckConclusionFailure, wantChar: iconCross},
+		{name: "cancelled", conclusion: github.CheckConclusionCancelled, wantChar: iconCross},
 		{name: "pending empty", conclusion: "", wantChar: iconPending},
-		{name: "timed_out", conclusion: "timed_out", wantChar: iconCross},
-		{name: "skipped", conclusion: "skipped", wantChar: iconCross},
+		{name: "timed_out", conclusion: github.CheckConclusionTimedOut, wantChar: iconCross},
+		{name: "skipped", conclusion: github.CheckConclusionSkipped, wantChar: iconCross},
 	}
 
 	for _, tt := range tests {
@@ -148,7 +161,7 @@ func TestDeduplicateReviews(t *testing.T) {
 		name        string
 		reviews     []github.Review
 		wantAuthors []string
-		wantStates  []string
+		wantStates  []github.ReviewState
 	}{
 		{
 			name:        "empty",
@@ -159,37 +172,38 @@ func TestDeduplicateReviews(t *testing.T) {
 		{
 			name: "single review unchanged",
 			reviews: []github.Review{
-				{AuthorLogin: "alice", State: "APPROVED", SubmittedAt: now},
+				{AuthorLogin: "alice", State: github.ReviewStateApproved, SubmittedAt: now},
 			},
 			wantAuthors: []string{"alice"},
-			wantStates:  []string{"APPROVED"},
+			wantStates:  []github.ReviewState{github.ReviewStateApproved},
 		},
 		{
 			name: "same author keeps latest",
 			reviews: []github.Review{
-				{AuthorLogin: "alice", State: "COMMENTED", SubmittedAt: now.Add(-2 * time.Hour)},
-				{AuthorLogin: "alice", State: "COMMENTED", SubmittedAt: now.Add(-1 * time.Hour)},
-				{AuthorLogin: "alice", State: "APPROVED", SubmittedAt: now},
+				{AuthorLogin: "alice", State: github.ReviewStateCommented, SubmittedAt: now.Add(-2 * time.Hour)},
+				{AuthorLogin: "alice", State: github.ReviewStateCommented, SubmittedAt: now.Add(-1 * time.Hour)},
+				{AuthorLogin: "alice", State: github.ReviewStateApproved, SubmittedAt: now},
 			},
 			wantAuthors: []string{"alice"},
-			wantStates:  []string{"APPROVED"},
+			wantStates:  []github.ReviewState{github.ReviewStateApproved},
 		},
 		{
 			name: "multiple authors keep each latest",
 			reviews: []github.Review{
-				{AuthorLogin: "alice", State: "COMMENTED", SubmittedAt: now.Add(-3 * time.Hour)},
-				{AuthorLogin: "bob", State: "CHANGES_REQUESTED", SubmittedAt: now.Add(-2 * time.Hour)},
-				{AuthorLogin: "alice", State: "APPROVED", SubmittedAt: now.Add(-1 * time.Hour)},
+				{AuthorLogin: "alice", State: github.ReviewStateCommented, SubmittedAt: now.Add(-3 * time.Hour)},
+				{AuthorLogin: "bob", State: github.ReviewStateChangesRequested, SubmittedAt: now.Add(-2 * time.Hour)},
+				{AuthorLogin: "alice", State: github.ReviewStateApproved, SubmittedAt: now.Add(-1 * time.Hour)},
 			},
 			wantAuthors: []string{"bob", "alice"},
-			wantStates:  []string{"CHANGES_REQUESTED", "APPROVED"},
+			wantStates:  []github.ReviewState{github.ReviewStateChangesRequested, github.ReviewStateApproved},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := deduplicateReviews(tt.reviews)
-			var gotAuthors, gotStates []string
+			var gotAuthors []string
+			var gotStates []github.ReviewState
 			for _, r := range result {
 				gotAuthors = append(gotAuthors, r.AuthorLogin)
 				gotStates = append(gotStates, r.State)
@@ -203,13 +217,13 @@ func TestDeduplicateReviews(t *testing.T) {
 func TestReviewIcon(t *testing.T) {
 	tests := []struct {
 		name     string
-		state    string
+		state    github.ReviewState
 		wantChar string
 	}{
-		{name: "approved", state: "APPROVED", wantChar: iconCheck},
-		{name: "changes requested", state: "CHANGES_REQUESTED", wantChar: iconCross},
-		{name: "commented", state: "COMMENTED", wantChar: iconCircle},
-		{name: "dismissed", state: "DISMISSED", wantChar: iconCircle},
+		{name: "approved", state: github.ReviewStateApproved, wantChar: iconCheck},
+		{name: "changes requested", state: github.ReviewStateChangesRequested, wantChar: iconCross},
+		{name: "commented", state: github.ReviewStateCommented, wantChar: iconCircle},
+		{name: "dismissed", state: github.ReviewStateDismissed, wantChar: iconCircle},
 	}
 
 	for _, tt := range tests {
@@ -240,6 +254,7 @@ func TestLabelColor(t *testing.T) {
 }
 
 func TestRenderLabels(t *testing.T) {
+	pinTestColorProfile(t)
 	tests := []struct {
 		labels       []github.Label
 		name         string
@@ -348,13 +363,14 @@ func testFileComments() map[string]int {
 
 func testTimelineEvents() []github.TimelineEvent {
 	return []github.TimelineEvent{
-		{Actor: "dev", CreatedAt: time.Now().Add(-90 * time.Minute), Details: "initial commit", Type: "committed"},
-		{Actor: "reviewer1", CreatedAt: time.Now().Add(-1 * time.Hour), Details: "approved", Type: "reviewed"},
-		{Actor: "merger", CreatedAt: time.Now().Add(-30 * time.Minute), Type: "merged"},
+		{Actor: "dev", CreatedAt: time.Now().Add(-90 * time.Minute), Details: "initial commit", Type: github.TimelineEventCommitted},
+		{Actor: "reviewer1", CreatedAt: time.Now().Add(-1 * time.Hour), Details: "approved", Type: github.TimelineEventReviewed},
+		{Actor: "merger", CreatedAt: time.Now().Add(-30 * time.Minute), Type: github.TimelineEventMerged},
 	}
 }
 
 func TestRenderPreview(t *testing.T) {
+	pinTestColorProfile(t)
 	pr := testPRWithExpanded()
 	files := testReviewFiles()
 	comments := testFileComments()
@@ -459,6 +475,7 @@ func TestRenderPreview(t *testing.T) {
 }
 
 func TestRenderHighActivity(t *testing.T) {
+	pinTestColorProfile(t)
 	files := testReviewFiles()
 	comments := testFileComments()
 
@@ -481,6 +498,7 @@ func TestRenderHighActivity(t *testing.T) {
 }
 
 func TestRenderFileComments(t *testing.T) {
+	pinTestColorProfile(t)
 	files := []github.PullRequestFile{
 		{Path: "with_comments.go", Additions: 10, Deletions: 5},
 		{Path: "no_comments.go", Additions: 3, Deletions: 1},
@@ -515,6 +533,7 @@ func TestFormatFileEntryAlignment(t *testing.T) {
 }
 
 func TestRenderBody(t *testing.T) {
+	pinTestColorProfile(t)
 	tests := []struct {
 		body         string
 		name         string
@@ -553,13 +572,14 @@ func TestRenderBody(t *testing.T) {
 }
 
 func TestRenderTimeline(t *testing.T) {
+	pinTestColorProfile(t)
 	pr := testPRWithExpanded()
 
 	t.Run("events are ordered chronologically", func(t *testing.T) {
 		timeline := []github.TimelineEvent{
-			{Actor: "dev", CreatedAt: time.Now().Add(-90 * time.Minute), Details: "initial commit", Type: "committed"},
-			{Actor: "reviewer1", CreatedAt: time.Now().Add(-1 * time.Hour), Details: "approved", Type: "reviewed"},
-			{Actor: "merger", CreatedAt: time.Now().Add(-30 * time.Minute), Type: "merged"},
+			{Actor: "dev", CreatedAt: time.Now().Add(-90 * time.Minute), Details: "initial commit", Type: github.TimelineEventCommitted},
+			{Actor: "reviewer1", CreatedAt: time.Now().Add(-1 * time.Hour), Details: "approved", Type: github.TimelineEventReviewed},
+			{Actor: "merger", CreatedAt: time.Now().Add(-30 * time.Minute), Type: github.TimelineEventMerged},
 		}
 
 		output := renderTimeline(pr, timeline)
@@ -586,10 +606,10 @@ func TestRenderTimeline(t *testing.T) {
 
 	t.Run("consecutive commits are collapsed", func(t *testing.T) {
 		timeline := []github.TimelineEvent{
-			{Actor: "dev", CreatedAt: time.Now().Add(-90 * time.Minute), Details: "first", Type: "committed"},
-			{Actor: "dev", CreatedAt: time.Now().Add(-85 * time.Minute), Details: "second", Type: "committed"},
-			{Actor: "dev", CreatedAt: time.Now().Add(-80 * time.Minute), Details: "third", Type: "committed"},
-			{Actor: "reviewer1", CreatedAt: time.Now().Add(-1 * time.Hour), Details: "approved", Type: "reviewed"},
+			{Actor: "dev", CreatedAt: time.Now().Add(-90 * time.Minute), Details: "first", Type: github.TimelineEventCommitted},
+			{Actor: "dev", CreatedAt: time.Now().Add(-85 * time.Minute), Details: "second", Type: github.TimelineEventCommitted},
+			{Actor: "dev", CreatedAt: time.Now().Add(-80 * time.Minute), Details: "third", Type: github.TimelineEventCommitted},
+			{Actor: "reviewer1", CreatedAt: time.Now().Add(-1 * time.Hour), Details: "approved", Type: github.TimelineEventReviewed},
 		}
 		output := renderTimeline(pr, timeline)
 		assert.Contains(t, output, "pushed 3 commits")
@@ -623,6 +643,7 @@ func TestHighActivityIncludesCommentedFiles(t *testing.T) {
 }
 
 func TestRenderStateBadge(t *testing.T) {
+	pinTestColorProfile(t)
 	pr := testPRWithExpanded()
 
 	output := renderHeader(pr)
@@ -666,6 +687,7 @@ func TestFileDiffURL(t *testing.T) {
 }
 
 func TestHighActivityCountInHeader(t *testing.T) {
+	pinTestColorProfile(t)
 	files := testReviewFiles()
 	comments := testFileComments()
 

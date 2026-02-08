@@ -404,13 +404,13 @@ func TestPullRequest_UnmarshalJSON(t *testing.T) {
 				LinesDeleted: 3,
 				Number:       500,
 				Reviews: []Review{
-					{AuthorLogin: "reviewer1", State: "APPROVED", SubmittedAt: time.Date(2024, 6, 2, 8, 0, 0, 0, time.UTC)},
-					{AuthorLogin: "reviewer2", State: "CHANGES_REQUESTED", SubmittedAt: time.Date(2024, 6, 2, 9, 0, 0, 0, time.UTC)},
+					{AuthorLogin: "reviewer1", State: ReviewStateApproved, SubmittedAt: time.Date(2024, 6, 2, 8, 0, 0, 0, time.UTC)},
+					{AuthorLogin: "reviewer2", State: ReviewStateChangesRequested, SubmittedAt: time.Date(2024, 6, 2, 9, 0, 0, 0, time.UTC)},
 				},
 				State: PRStateOpen,
 				StatusChecks: []StatusCheck{
-					{Conclusion: "success", Name: "ci/test", Status: "COMPLETED"},
-					{Name: "ci/lint", Status: "IN_PROGRESS"},
+					{Conclusion: CheckConclusionSuccess, Name: "ci/test", Status: CheckStatusCompleted},
+					{Name: "ci/lint", Status: CheckStatusInProgress},
 				},
 				Title:     "Full featured PR",
 				UpdatedAt: time.Date(2024, 6, 2, 12, 0, 0, 0, time.UTC),
@@ -511,13 +511,47 @@ func TestPullRequest_UnmarshalJSON(t *testing.T) {
 				Number:      800,
 				State:       PRStateOpen,
 				StatusChecks: []StatusCheck{
-					{Conclusion: "success", DetailURL: "https://github.com/owner/repo/actions/runs/123", Name: "ci/test", Status: "COMPLETED"},
-					{Conclusion: "success", DetailURL: "https://deploy.example.com/staging", Name: "deploy/staging", Status: "COMPLETED"},
-					{Conclusion: "", Name: "deploy/prod", Status: "PENDING"},
+					{Conclusion: CheckConclusionSuccess, DetailURL: "https://github.com/owner/repo/actions/runs/123", Name: "ci/test", Status: CheckStatusCompleted},
+					{Conclusion: CheckConclusionSuccess, DetailURL: "https://deploy.example.com/staging", Name: "deploy/staging", Status: CheckStatusCompleted},
+					{Conclusion: "", Name: "deploy/prod", Status: CheckStatusPending},
 				},
 				Title:     "Mixed checks",
 				UpdatedAt: time.Date(2024, 9, 1, 0, 0, 0, 0, time.UTC),
 				URL:       "https://github.com/owner/repo/pull/800",
+			},
+		},
+		{
+			name: "StatusContext ERROR state maps to failure conclusion",
+			input: `{
+				"additions": 0,
+				"author": {"login": "dev"},
+				"body": "",
+				"changedFiles": 0,
+				"createdAt": "2024-09-01T00:00:00Z",
+				"deletions": 0,
+				"headRefName": "error-check",
+				"isDraft": false,
+				"number": 900,
+				"state": "OPEN",
+				"statusCheckRollup": [
+					{"__typename": "StatusContext", "context": "ci/external", "state": "ERROR", "targetUrl": "https://ci.example.com/build/1"}
+				],
+				"title": "Error check",
+				"updatedAt": "2024-09-01T00:00:00Z",
+				"url": "https://github.com/owner/repo/pull/900"
+			}`,
+			want: PullRequest{
+				AuthorLogin: "dev",
+				BranchName:  "error-check",
+				CreatedAt:   time.Date(2024, 9, 1, 0, 0, 0, 0, time.UTC),
+				Number:      900,
+				State:       PRStateOpen,
+				StatusChecks: []StatusCheck{
+					{Conclusion: CheckConclusionFailure, DetailURL: "https://ci.example.com/build/1", Name: "ci/external", Status: CheckStatusCompleted},
+				},
+				Title:     "Error check",
+				UpdatedAt: time.Date(2024, 9, 1, 0, 0, 0, 0, time.UTC),
+				URL:       "https://github.com/owner/repo/pull/900",
 			},
 		},
 	}

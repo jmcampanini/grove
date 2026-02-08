@@ -13,7 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// mockGitHub implements github.GitHub for testing
 type mockGitHub struct {
 	getPullRequestFn      func(prNum int) (github.PullRequest, error)
 	getPullRequestFilesFn func(prNum int) ([]github.PullRequestFile, error)
@@ -61,7 +60,6 @@ func (m *mockGitHub) Validate() error {
 	return nil
 }
 
-// mockGit implements git.Git for testing
 type mockGit struct {
 	branchExistsFn                      func(branchName string, caseInsensitive bool) (bool, error)
 	createWorktreeForExistingBranchFn   func(branchName, worktreeAbsPath string) error

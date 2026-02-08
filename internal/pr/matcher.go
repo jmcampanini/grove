@@ -1,6 +1,9 @@
 package pr
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/jmcampanini/grove-cli/internal/git"
 	"github.com/jmcampanini/grove-cli/internal/github"
 	"github.com/jmcampanini/grove-cli/internal/naming"
@@ -8,9 +11,12 @@ import (
 
 // Match represents a PR with its worktree matching status.
 type Match struct {
-	HasWorktree  bool
 	PR           github.PullRequest
 	WorktreePath string
+}
+
+func (m Match) HasWorktree() bool {
+	return m.WorktreePath != ""
 }
 
 // Matcher matches pull requests to existing worktrees.
@@ -28,16 +34,11 @@ func NewMatcher(namer *naming.PullRequestNamer) *Matcher {
 // MatchAll returns a Match for each PR, indicating whether a worktree exists.
 func (m *Matcher) MatchAll(prs []github.PullRequest, worktrees []git.Worktree) []Match {
 	result := make([]Match, len(prs))
-	for i, pr := range prs {
-		wt := m.FindWorktreeForPR(pr, worktrees)
-		match := Match{
-			PR: pr,
+	for i, p := range prs {
+		result[i] = Match{PR: p}
+		if wt := m.FindWorktreeForPR(p, worktrees); wt != nil {
+			result[i].WorktreePath = wt.AbsolutePath
 		}
-		if wt != nil {
-			match.HasWorktree = true
-			match.WorktreePath = wt.AbsolutePath
-		}
-		result[i] = match
 	}
 	return result
 }
@@ -55,7 +56,9 @@ func (m *Matcher) FindWorktreeForPR(pr github.PullRequest, worktrees []git.Workt
 	}
 	expectedBranch, err := m.namer.GenerateBranchName(prData)
 	if err != nil {
-		expectedBranch = "" // Continue with direct match only
+		// TODO: replace with structured debug logging when a logging framework is added
+		fmt.Fprintf(os.Stderr, "warning: branch name template failed, using direct match only: %v\n", err)
+		expectedBranch = ""
 	}
 
 	// Search worktrees for matching branch

@@ -21,7 +21,7 @@ func TestParseTimelineEvents(t *testing.T) {
 				{"__typename":"PullRequestReview","author":{"login":"alice"},"createdAt":"2024-06-01T10:00:00Z","state":"APPROVED"}
 			]}}}}}`,
 			want: []TimelineEvent{
-				{Actor: "alice", CreatedAt: time.Date(2024, 6, 1, 10, 0, 0, 0, time.UTC), Details: "approved", Type: "reviewed"},
+				{Actor: "alice", CreatedAt: time.Date(2024, 6, 1, 10, 0, 0, 0, time.UTC), Details: "approved", Type: TimelineEventReviewed},
 			},
 		},
 		{
@@ -30,7 +30,7 @@ func TestParseTimelineEvents(t *testing.T) {
 				{"__typename":"PullRequestReview","author":{"login":"bob"},"createdAt":"2024-06-01T11:00:00Z","state":"CHANGES_REQUESTED"}
 			]}}}}}`,
 			want: []TimelineEvent{
-				{Actor: "bob", CreatedAt: time.Date(2024, 6, 1, 11, 0, 0, 0, time.UTC), Details: "changes requested", Type: "reviewed"},
+				{Actor: "bob", CreatedAt: time.Date(2024, 6, 1, 11, 0, 0, 0, time.UTC), Details: "changes requested", Type: TimelineEventReviewed},
 			},
 		},
 		{
@@ -39,7 +39,7 @@ func TestParseTimelineEvents(t *testing.T) {
 				{"__typename":"IssueComment","author":{"login":"carol"},"createdAt":"2024-06-01T12:00:00Z"}
 			]}}}}}`,
 			want: []TimelineEvent{
-				{Actor: "carol", CreatedAt: time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC), Type: "commented"},
+				{Actor: "carol", CreatedAt: time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC), Type: TimelineEventCommented},
 			},
 		},
 		{
@@ -48,7 +48,7 @@ func TestParseTimelineEvents(t *testing.T) {
 				{"__typename":"HeadRefForcePushedEvent","actor":{"login":"dave"},"createdAt":"2024-06-01T13:00:00Z"}
 			]}}}}}`,
 			want: []TimelineEvent{
-				{Actor: "dave", CreatedAt: time.Date(2024, 6, 1, 13, 0, 0, 0, time.UTC), Type: "force_pushed"},
+				{Actor: "dave", CreatedAt: time.Date(2024, 6, 1, 13, 0, 0, 0, time.UTC), Type: TimelineEventForcePushed},
 			},
 		},
 		{
@@ -57,7 +57,7 @@ func TestParseTimelineEvents(t *testing.T) {
 				{"__typename":"PullRequestCommit","commit":{"author":{"user":{"login":"eve"}},"committedDate":"2024-06-01T14:00:00Z","messageHeadline":"fix: resolve null pointer"}}
 			]}}}}}`,
 			want: []TimelineEvent{
-				{Actor: "eve", CreatedAt: time.Date(2024, 6, 1, 14, 0, 0, 0, time.UTC), Details: "fix: resolve null pointer", Type: "committed"},
+				{Actor: "eve", CreatedAt: time.Date(2024, 6, 1, 14, 0, 0, 0, time.UTC), Details: "fix: resolve null pointer", Type: TimelineEventCommitted},
 			},
 		},
 		{
@@ -66,7 +66,7 @@ func TestParseTimelineEvents(t *testing.T) {
 				{"__typename":"LabeledEvent","actor":{"login":"frank"},"createdAt":"2024-06-01T15:00:00Z","label":{"name":"bug"}}
 			]}}}}}`,
 			want: []TimelineEvent{
-				{Actor: "frank", CreatedAt: time.Date(2024, 6, 1, 15, 0, 0, 0, time.UTC), Details: "bug", Type: "labeled"},
+				{Actor: "frank", CreatedAt: time.Date(2024, 6, 1, 15, 0, 0, 0, time.UTC), Details: "bug", Type: TimelineEventLabeled},
 			},
 		},
 		{
@@ -75,7 +75,7 @@ func TestParseTimelineEvents(t *testing.T) {
 				{"__typename":"MergedEvent","actor":{"login":"grace"},"createdAt":"2024-06-01T16:00:00Z"}
 			]}}}}}`,
 			want: []TimelineEvent{
-				{Actor: "grace", CreatedAt: time.Date(2024, 6, 1, 16, 0, 0, 0, time.UTC), Type: "merged"},
+				{Actor: "grace", CreatedAt: time.Date(2024, 6, 1, 16, 0, 0, 0, time.UTC), Type: TimelineEventMerged},
 			},
 		},
 		{
@@ -84,7 +84,7 @@ func TestParseTimelineEvents(t *testing.T) {
 				{"__typename":"ClosedEvent","actor":{"login":"hank"},"createdAt":"2024-06-01T17:00:00Z"}
 			]}}}}}`,
 			want: []TimelineEvent{
-				{Actor: "hank", CreatedAt: time.Date(2024, 6, 1, 17, 0, 0, 0, time.UTC), Type: "closed"},
+				{Actor: "hank", CreatedAt: time.Date(2024, 6, 1, 17, 0, 0, 0, time.UTC), Type: TimelineEventClosed},
 			},
 		},
 		{
@@ -93,7 +93,7 @@ func TestParseTimelineEvents(t *testing.T) {
 				{"__typename":"ReopenedEvent","actor":{"login":"iris"},"createdAt":"2024-06-01T18:00:00Z"}
 			]}}}}}`,
 			want: []TimelineEvent{
-				{Actor: "iris", CreatedAt: time.Date(2024, 6, 1, 18, 0, 0, 0, time.UTC), Type: "reopened"},
+				{Actor: "iris", CreatedAt: time.Date(2024, 6, 1, 18, 0, 0, 0, time.UTC), Type: TimelineEventReopened},
 			},
 		},
 		{
@@ -102,7 +102,7 @@ func TestParseTimelineEvents(t *testing.T) {
 				{"__typename":"ReadyForReviewEvent","actor":{"login":"jack"},"createdAt":"2024-06-01T19:00:00Z"}
 			]}}}}}`,
 			want: []TimelineEvent{
-				{Actor: "jack", CreatedAt: time.Date(2024, 6, 1, 19, 0, 0, 0, time.UTC), Type: "ready_for_review"},
+				{Actor: "jack", CreatedAt: time.Date(2024, 6, 1, 19, 0, 0, 0, time.UTC), Type: TimelineEventReadyForReview},
 			},
 		},
 		{
@@ -111,7 +111,7 @@ func TestParseTimelineEvents(t *testing.T) {
 				{"__typename":"ConvertToDraftEvent","actor":{"login":"kate"},"createdAt":"2024-06-01T20:00:00Z"}
 			]}}}}}`,
 			want: []TimelineEvent{
-				{Actor: "kate", CreatedAt: time.Date(2024, 6, 1, 20, 0, 0, 0, time.UTC), Type: "convert_to_draft"},
+				{Actor: "kate", CreatedAt: time.Date(2024, 6, 1, 20, 0, 0, 0, time.UTC), Type: TimelineEventConvertToDraft},
 			},
 		},
 		{
@@ -120,7 +120,7 @@ func TestParseTimelineEvents(t *testing.T) {
 				{"__typename":"ReviewRequestedEvent","actor":{"login":"leo"},"createdAt":"2024-06-01T21:00:00Z","requestedReviewer":{"login":"mike"}}
 			]}}}}}`,
 			want: []TimelineEvent{
-				{Actor: "leo", CreatedAt: time.Date(2024, 6, 1, 21, 0, 0, 0, time.UTC), Details: "mike", Type: "review_requested"},
+				{Actor: "leo", CreatedAt: time.Date(2024, 6, 1, 21, 0, 0, 0, time.UTC), Details: "mike", Type: TimelineEventReviewRequested},
 			},
 		},
 		{
@@ -131,9 +131,9 @@ func TestParseTimelineEvents(t *testing.T) {
 				{"__typename":"MergedEvent","actor":{"login":"merger"},"createdAt":"2024-06-01T12:00:00Z"}
 			]}}}}}`,
 			want: []TimelineEvent{
-				{Actor: "dev", CreatedAt: time.Date(2024, 6, 1, 10, 0, 0, 0, time.UTC), Details: "initial commit", Type: "committed"},
-				{Actor: "reviewer", CreatedAt: time.Date(2024, 6, 1, 11, 0, 0, 0, time.UTC), Details: "approved", Type: "reviewed"},
-				{Actor: "merger", CreatedAt: time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC), Type: "merged"},
+				{Actor: "dev", CreatedAt: time.Date(2024, 6, 1, 10, 0, 0, 0, time.UTC), Details: "initial commit", Type: TimelineEventCommitted},
+				{Actor: "reviewer", CreatedAt: time.Date(2024, 6, 1, 11, 0, 0, 0, time.UTC), Details: "approved", Type: TimelineEventReviewed},
+				{Actor: "merger", CreatedAt: time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC), Type: TimelineEventMerged},
 			},
 		},
 		{

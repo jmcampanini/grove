@@ -26,8 +26,6 @@ type GitHubCli struct {
 
 var _ GitHub = &GitHubCli{}
 
-// New creates a new GitHubCli instance that executes gh commands
-// in the specified working directory.
 func New(workingDir string, timeout time.Duration) GitHub {
 	return &GitHubCli{
 		log:        clog.Default().WithPrefix("github"),
@@ -309,7 +307,12 @@ func parseTimelineEvents(data string) ([]TimelineEvent, error) {
 
 	var events []TimelineEvent
 	for _, raw := range result.Data.Repository.PullRequest.TimelineItems.Nodes {
-		event, _ := parseTimelineNode(raw)
+		event, err := parseTimelineNode(raw)
+		if err != nil {
+			// TODO: replace with structured debug logging when a logging framework is added
+			fmt.Fprintf(os.Stderr, "warning: skipping timeline event: %v\n", err)
+			continue
+		}
 		if event != nil {
 			events = append(events, *event)
 		}
@@ -331,21 +334,21 @@ func parseTimelineNode(raw json.RawMessage) (*TimelineEvent, error) {
 	case "IssueComment":
 		return parseCommentEvent(raw)
 	case "HeadRefForcePushedEvent":
-		return parseActorEvent(raw, "force_pushed", "")
+		return parseActorEvent(raw, TimelineEventForcePushed, "")
 	case "PullRequestCommit":
 		return parseCommitEvent(raw)
 	case "LabeledEvent":
 		return parseLabeledEvent(raw)
 	case "MergedEvent":
-		return parseActorEvent(raw, "merged", "")
+		return parseActorEvent(raw, TimelineEventMerged, "")
 	case "ClosedEvent":
-		return parseActorEvent(raw, "closed", "")
+		return parseActorEvent(raw, TimelineEventClosed, "")
 	case "ReopenedEvent":
-		return parseActorEvent(raw, "reopened", "")
+		return parseActorEvent(raw, TimelineEventReopened, "")
 	case "ReadyForReviewEvent":
-		return parseActorEvent(raw, "ready_for_review", "")
+		return parseActorEvent(raw, TimelineEventReadyForReview, "")
 	case "ConvertToDraftEvent":
-		return parseActorEvent(raw, "convert_to_draft", "")
+		return parseActorEvent(raw, TimelineEventConvertToDraft, "")
 	case "ReviewRequestedEvent":
 		return parseReviewRequestedEvent(raw)
 	default:
@@ -366,7 +369,7 @@ func parseReviewEvent(raw json.RawMessage) (*TimelineEvent, error) {
 		Actor:     v.Author.Login,
 		CreatedAt: v.CreatedAt,
 		Details:   strings.ToLower(strings.ReplaceAll(v.State, "_", " ")),
-		Type:      "reviewed",
+		Type:      TimelineEventReviewed,
 	}, nil
 }
 
@@ -381,11 +384,11 @@ func parseCommentEvent(raw json.RawMessage) (*TimelineEvent, error) {
 	return &TimelineEvent{
 		Actor:     v.Author.Login,
 		CreatedAt: v.CreatedAt,
-		Type:      "commented",
+		Type:      TimelineEventCommented,
 	}, nil
 }
 
-func parseActorEvent(raw json.RawMessage, eventType, details string) (*TimelineEvent, error) {
+func parseActorEvent(raw json.RawMessage, eventType TimelineEventType, details string) (*TimelineEvent, error) {
 	var v struct {
 		Actor     struct{ Login string } `json:"actor"`
 		CreatedAt time.Time              `json:"createdAt"`
@@ -418,7 +421,7 @@ func parseCommitEvent(raw json.RawMessage) (*TimelineEvent, error) {
 		Actor:     v.Commit.Author.User.Login,
 		CreatedAt: v.Commit.CommittedDate,
 		Details:   v.Commit.MessageHeadline,
-		Type:      "committed",
+		Type:      TimelineEventCommitted,
 	}, nil
 }
 
@@ -435,7 +438,7 @@ func parseLabeledEvent(raw json.RawMessage) (*TimelineEvent, error) {
 		Actor:     v.Actor.Login,
 		CreatedAt: v.CreatedAt,
 		Details:   v.Label.Name,
-		Type:      "labeled",
+		Type:      TimelineEventLabeled,
 	}, nil
 }
 
@@ -452,7 +455,7 @@ func parseReviewRequestedEvent(raw json.RawMessage) (*TimelineEvent, error) {
 		Actor:     v.Actor.Login,
 		CreatedAt: v.CreatedAt,
 		Details:   v.RequestedReviewer.Login,
-		Type:      "review_requested",
+		Type:      TimelineEventReviewRequested,
 	}, nil
 }
 
@@ -504,14 +507,12 @@ func parseReviewThreadsFromJSON(data string) ([]ReviewThread, error) {
 }
 
 func (g *GitHubCli) Validate() error {
-	// Check if gh is installed
 	if _, err := exec.LookPath("gh"); err != nil {
 		return fmt.Errorf("gh CLI not found: install from https://cli.github.com")
 	}
 
-	// Check auth status - gh auth status exits non-zero if not authenticated
 	if _, err := g.executeGhCommand("auth", "status"); err != nil {
-		return fmt.Errorf("gh CLI not authenticated: run 'gh auth login'")
+		return fmt.Errorf("gh CLI not authenticated (run 'gh auth login'): %w", err)
 	}
 
 	return nil

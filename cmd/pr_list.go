@@ -91,7 +91,7 @@ func outputPRListTable(w io.Writer, matches []pr.Match) error {
 	rows := make([][]string, len(matches))
 	for i, match := range matches {
 		localMarker := ""
-		if match.HasWorktree {
+		if match.HasWorktree() {
 			localMarker = "\u2713" // checkmark
 		}
 
@@ -129,7 +129,6 @@ func outputPRListTable(w io.Writer, matches []pr.Match) error {
 	return err
 }
 
-// Format: <number>\t<searchable>\t<display>
 func outputPRListFzf(w io.Writer, matches []pr.Match) error {
 	for _, match := range matches {
 		number := fmt.Sprintf("%d", match.PR.Number)
@@ -144,7 +143,7 @@ func outputPRListFzf(w io.Writer, matches []pr.Match) error {
 		))
 
 		localPrefix := ""
-		if match.HasWorktree {
+		if match.HasWorktree() {
 			localPrefix = "\u2713 " // checkmark with space
 		}
 		display := sanitizeFzfField(fmt.Sprintf("%s#%d %s [%s] %s",
@@ -171,11 +170,12 @@ func sanitizeFzfField(s string) string {
 }
 
 func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
+	runes := []rune(s)
+	if len(runes) <= maxLen {
 		return s
 	}
 	if maxLen <= 3 {
-		return s[:maxLen]
+		return string(runes[:maxLen])
 	}
-	return s[:maxLen-3] + "..."
+	return string(runes[:maxLen-3]) + "..."
 }

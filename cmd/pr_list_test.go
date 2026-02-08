@@ -107,6 +107,18 @@ func TestTruncateString(t *testing.T) {
 			maxLen: 10,
 			want:   "",
 		},
+		{
+			name:   "multi-byte unicode truncation",
+			input:  "héllo wörld",
+			maxLen: 8,
+			want:   "héllo...",
+		},
+		{
+			name:   "emoji truncation",
+			input:  "🎉🎊🎈🎁🎂",
+			maxLen: 4,
+			want:   "🎉...",
+		},
 	}
 
 	for _, tt := range tests {
@@ -144,7 +156,6 @@ func TestOutputPRListFzf(t *testing.T) {
 						Title:       "Add authentication",
 						UpdatedAt:   now,
 					},
-					HasWorktree: false,
 				},
 			},
 			wantContains: []string{
@@ -169,7 +180,6 @@ func TestOutputPRListFzf(t *testing.T) {
 						Title:       "Add authentication",
 						UpdatedAt:   now,
 					},
-					HasWorktree:  true,
 					WorktreePath: "/path/to/worktree",
 				},
 			},
@@ -190,7 +200,6 @@ func TestOutputPRListFzf(t *testing.T) {
 						Title:       "Fix bug",
 						UpdatedAt:   now,
 					},
-					HasWorktree: false,
 				},
 				{
 					PR: github.PullRequest{
@@ -201,7 +210,7 @@ func TestOutputPRListFzf(t *testing.T) {
 						Title:       "New feature",
 						UpdatedAt:   now,
 					},
-					HasWorktree: true,
+					WorktreePath: "/path/to/worktree",
 				},
 			},
 			wantContains: []string{
@@ -224,7 +233,6 @@ func TestOutputPRListFzf(t *testing.T) {
 						Title:       "Fix\ttab\nand\rnewline",
 						UpdatedAt:   now,
 					},
-					HasWorktree: false,
 				},
 			},
 			wantContains: []string{
@@ -295,7 +303,7 @@ func TestOutputPRListTable(t *testing.T) {
 						Title:       "Add authentication",
 						UpdatedAt:   now,
 					},
-					HasWorktree: true,
+					WorktreePath: "/path/to/worktree",
 				},
 			},
 			wantContains: []string{
@@ -326,7 +334,6 @@ func TestOutputPRListTable(t *testing.T) {
 						Title:       "Draft PR",
 						UpdatedAt:   now,
 					},
-					HasWorktree: false,
 				},
 			},
 			wantContains: []string{
@@ -345,7 +352,6 @@ func TestOutputPRListTable(t *testing.T) {
 						Title:       "This is a very long title that exceeds the maximum display width",
 						UpdatedAt:   now,
 					},
-					HasWorktree: false,
 				},
 			},
 			wantContains: []string{
@@ -395,7 +401,6 @@ func TestOutputPRListFzfStateFormats(t *testing.T) {
 						Title:       "Test",
 						UpdatedAt:   now,
 					},
-					HasWorktree: false,
 				},
 			}
 

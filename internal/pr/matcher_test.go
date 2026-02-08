@@ -162,12 +162,11 @@ func TestMatcher_FindWorktreeForPR(t *testing.T) {
 
 func TestMatcher_MatchAll(t *testing.T) {
 	tests := []struct {
-		name        string
-		prCfg       config.PullRequestConfig
-		prs         []github.PullRequest
-		worktrees   []git.Worktree
-		wantMatches []bool   // HasWorktree for each PR
-		wantPaths   []string // WorktreePath for each PR (empty if no match)
+		name      string
+		prCfg     config.PullRequestConfig
+		prs       []github.PullRequest
+		worktrees []git.Worktree
+		wantPaths []string // WorktreePath for each PR (empty if no match)
 	}{
 		{
 			name:  "multiple PRs with some matching",
@@ -182,16 +181,14 @@ func TestMatcher_MatchAll(t *testing.T) {
 				createWorktree("/workspace/pr-feature-add-auth", "feature/add-auth"),
 				createWorktree("/workspace/pr-fix-bug", "fix/bug"),
 			},
-			wantMatches: []bool{true, false, true},
-			wantPaths:   []string{"/workspace/pr-feature-add-auth", "", "/workspace/pr-fix-bug"},
+			wantPaths: []string{"/workspace/pr-feature-add-auth", "", "/workspace/pr-fix-bug"},
 		},
 		{
-			name:        "empty PRs list",
-			prCfg:       defaultPRConfig(),
-			prs:         []github.PullRequest{},
-			worktrees:   []git.Worktree{createWorktree("/workspace/main", "main")},
-			wantMatches: []bool{},
-			wantPaths:   []string{},
+			name:      "empty PRs list",
+			prCfg:     defaultPRConfig(),
+			prs:       []github.PullRequest{},
+			worktrees: []git.Worktree{createWorktree("/workspace/main", "main")},
+			wantPaths: []string{},
 		},
 		{
 			name:  "all PRs match",
@@ -204,8 +201,7 @@ func TestMatcher_MatchAll(t *testing.T) {
 				createWorktree("/workspace/pr-branch-a", "branch-a"),
 				createWorktree("/workspace/pr-branch-b", "branch-b"),
 			},
-			wantMatches: []bool{true, true},
-			wantPaths:   []string{"/workspace/pr-branch-a", "/workspace/pr-branch-b"},
+			wantPaths: []string{"/workspace/pr-branch-a", "/workspace/pr-branch-b"},
 		},
 		{
 			name:  "no PRs match",
@@ -218,8 +214,7 @@ func TestMatcher_MatchAll(t *testing.T) {
 				createWorktree("/workspace/main", "main"),
 				createWorktree("/workspace/other", "other"),
 			},
-			wantMatches: []bool{false, false},
-			wantPaths:   []string{"", ""},
+			wantPaths: []string{"", ""},
 		},
 	}
 
@@ -233,7 +228,7 @@ func TestMatcher_MatchAll(t *testing.T) {
 			require.Len(t, got, len(tt.prs))
 			for i, match := range got {
 				assert.Equal(t, tt.prs[i].Number, match.PR.Number, "PR number mismatch at index %d", i)
-				assert.Equal(t, tt.wantMatches[i], match.HasWorktree, "HasWorktree mismatch at index %d", i)
+				assert.Equal(t, tt.wantPaths[i] != "", match.HasWorktree(), "HasWorktree mismatch at index %d", i)
 				assert.Equal(t, tt.wantPaths[i], match.WorktreePath, "WorktreePath mismatch at index %d", i)
 			}
 		})

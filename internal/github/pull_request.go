@@ -80,18 +80,68 @@ type Label struct {
 	Name  string `json:"name"`
 }
 
+type ReviewState string
+
+const (
+	ReviewStateApproved         ReviewState = "APPROVED"
+	ReviewStateChangesRequested ReviewState = "CHANGES_REQUESTED"
+	ReviewStateCommented        ReviewState = "COMMENTED"
+	ReviewStateDismissed        ReviewState = "DISMISSED"
+	ReviewStatePending          ReviewState = "PENDING"
+)
+
 type Review struct {
 	AuthorLogin string
-	State       string // APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED, PENDING
+	State       ReviewState
 	SubmittedAt time.Time
 }
 
+type CheckConclusion string
+
+const (
+	CheckConclusionActionRequired CheckConclusion = "action_required"
+	CheckConclusionCancelled      CheckConclusion = "cancelled"
+	CheckConclusionFailure        CheckConclusion = "failure"
+	CheckConclusionNeutral        CheckConclusion = "neutral"
+	CheckConclusionSkipped        CheckConclusion = "skipped"
+	CheckConclusionSuccess        CheckConclusion = "success"
+	CheckConclusionTimedOut       CheckConclusion = "timed_out"
+)
+
+type CheckStatus string
+
+const (
+	CheckStatusCompleted  CheckStatus = "COMPLETED"
+	CheckStatusInProgress CheckStatus = "IN_PROGRESS"
+	CheckStatusPending    CheckStatus = "PENDING"
+	CheckStatusQueued     CheckStatus = "QUEUED"
+	CheckStatusRequested  CheckStatus = "REQUESTED"
+	CheckStatusWaiting    CheckStatus = "WAITING"
+)
+
 type StatusCheck struct {
-	Conclusion string // success, failure, neutral, cancelled, timed_out, action_required, skipped
+	Conclusion CheckConclusion
 	DetailURL  string
 	Name       string
-	Status     string // COMPLETED, IN_PROGRESS, QUEUED, REQUESTED, WAITING, PENDING
+	Status     CheckStatus
 }
+
+type TimelineEventType string
+
+const (
+	TimelineEventClosed          TimelineEventType = "closed"
+	TimelineEventCommented       TimelineEventType = "commented"
+	TimelineEventCommitted       TimelineEventType = "committed"
+	TimelineEventConvertToDraft  TimelineEventType = "convert_to_draft"
+	TimelineEventForcePushed     TimelineEventType = "force_pushed"
+	TimelineEventLabeled         TimelineEventType = "labeled"
+	TimelineEventMerged          TimelineEventType = "merged"
+	TimelineEventOpened          TimelineEventType = "opened" // synthetic: injected by renderTimeline
+	TimelineEventReadyForReview  TimelineEventType = "ready_for_review"
+	TimelineEventReopened        TimelineEventType = "reopened"
+	TimelineEventReviewRequested TimelineEventType = "review_requested"
+	TimelineEventReviewed        TimelineEventType = "reviewed"
+)
 
 type PullRequest struct {
 	AuthorLogin       string // May be empty if author's account was deleted
@@ -133,8 +183,8 @@ type ReviewThread struct {
 type TimelineEvent struct {
 	Actor     string
 	CreatedAt time.Time
-	Details   string // commit headline, label name, reviewer login, etc.
-	Type      string // commented, force_pushed, committed, reviewed, labeled, merged, closed, reopened, ready_for_review, convert_to_draft, review_requested
+	Details   string
+	Type      TimelineEventType
 }
 
 const prJsonFields = "additions,author,baseRefName,body,changedFiles,comments,createdAt,deletions,headRefName,isCrossRepository,isDraft,labels,number,reviews,state,statusCheckRollup,title,updatedAt,url"
@@ -209,18 +259,21 @@ func (pr *PullRequest) UnmarshalJSON(data []byte) error {
 	for _, r := range raw.Reviews {
 		pr.Reviews = append(pr.Reviews, Review{
 			AuthorLogin: r.Author.Login,
-			State:       r.State,
+			State:       ReviewState(r.State),
 			SubmittedAt: r.SubmittedAt,
 		})
 	}
 
 	for _, sc := range raw.StatusCheckRollup {
 		if sc.TypeName == "StatusContext" {
-			status := "COMPLETED"
-			conclusion := strings.ToLower(sc.State)
-			if sc.State == "PENDING" || sc.State == "EXPECTED" {
-				status = "PENDING"
+			status := CheckStatusCompleted
+			conclusion := CheckConclusion(strings.ToLower(sc.State))
+			switch sc.State {
+			case "PENDING", "EXPECTED":
+				status = CheckStatusPending
 				conclusion = ""
+			case "ERROR":
+				conclusion = CheckConclusionFailure
 			}
 			pr.StatusChecks = append(pr.StatusChecks, StatusCheck{
 				Conclusion: conclusion,
@@ -230,10 +283,10 @@ func (pr *PullRequest) UnmarshalJSON(data []byte) error {
 			})
 		} else {
 			pr.StatusChecks = append(pr.StatusChecks, StatusCheck{
-				Conclusion: strings.ToLower(sc.Conclusion),
+				Conclusion: CheckConclusion(strings.ToLower(sc.Conclusion)),
 				DetailURL:  sc.DetailsURL,
 				Name:       sc.Name,
-				Status:     sc.Status,
+				Status:     CheckStatus(sc.Status),
 			})
 		}
 	}

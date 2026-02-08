@@ -130,9 +130,6 @@ func formatWorktree(wt git.Worktree, namer *naming.LocalBranchNamer, prWorktreeP
 	}
 }
 
-// getDisplayName returns the display name for a worktree.
-// If the basename has the configured prefix, strip it.
-// Otherwise, wrap in brackets to indicate non-standard naming.
 func getDisplayName(namer *naming.LocalBranchNamer, absPath string) string {
 	basename := filepath.Base(absPath)
 	if namer.HasPrefix(basename) {
@@ -142,8 +139,6 @@ func getDisplayName(namer *naming.LocalBranchNamer, absPath string) string {
 	return "[" + basename + "]"
 }
 
-// shortSHASafe safely truncates a SHA to the specified length.
-// Returns the full SHA if shorter than maxLen, or "(no sha)" if empty.
 func shortSHASafe(sha string, maxLen int) string {
 	if sha == "" {
 		return "(no sha)"
@@ -154,8 +149,6 @@ func shortSHASafe(sha string, maxLen int) string {
 	return sha[:maxLen]
 }
 
-// formatWorktreeName adds a [PR] marker to the display name if the worktree
-// directory name starts with the PR prefix.
 func formatWorktreeName(displayName, dirName, prWorktreePrefix string) string {
 	if prWorktreePrefix != "" && strings.HasPrefix(dirName, prWorktreePrefix) {
 		return "[PR] " + displayName
