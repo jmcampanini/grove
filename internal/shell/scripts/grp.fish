@@ -7,10 +7,14 @@
 #   {1}            → PR number for pr create and preview
 #   cut -f1        → extract PR number after selection
 function grp -d "Create or switch to a PR worktree using fzf"
+    set -l style context
+    if test (count $argv) -gt 0
+        set style $argv[1]
+    end
     set -l pr_num (grove pr list --fzf | fzf \
         --delimiter '\t' \
         --with-nth 3 \
-        --preview 'grove pr preview --fzf {1}' \
+        --preview "grove pr preview --style $style --fzf {1}" \
         --preview-window 'right:50%:wrap' \
         | cut -f1)
     if test -n "$pr_num"

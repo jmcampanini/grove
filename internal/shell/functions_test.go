@@ -90,6 +90,55 @@ func TestFunctionGenerator_NoEmptyOutput(t *testing.T) {
 	}
 }
 
+func TestFunctionGenerator_GrpStylePassthrough(t *testing.T) {
+	gen := NewFunctionGenerator()
+
+	tests := []struct {
+		generate func() string
+		name     string
+		contains []string
+	}{
+		{
+			name:     "bash",
+			generate: gen.GenerateBash,
+			contains: []string{
+				`style="${1:-context}"`,
+				"--style $style",
+				"grove pr preview",
+			},
+		},
+		{
+			name:     "zsh",
+			generate: gen.GenerateZsh,
+			contains: []string{
+				`style="${1:-context}"`,
+				"--style $style",
+				"grove pr preview",
+			},
+		},
+		{
+			name:     "fish",
+			generate: gen.GenerateFish,
+			contains: []string{
+				"set -l style context",
+				"count $argv",
+				"set style $argv[1]",
+				"--style $style",
+				"grove pr preview",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			output := tt.generate()
+			for _, want := range tt.contains {
+				assert.Contains(t, output, want)
+			}
+		})
+	}
+}
+
 func TestNewFunctionGenerator(t *testing.T) {
 	gen := NewFunctionGenerator()
 	assert.NotNil(t, gen)
