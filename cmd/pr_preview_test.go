@@ -329,26 +329,27 @@ func TestIsValidPreviewStyle(t *testing.T) {
 }
 
 func TestDetectPreviewWidth(t *testing.T) {
-	tests := []struct {
-		envVal string
-		name   string
-		want   int
-	}{
-		{name: "env not set", envVal: "", want: 60},
-		{name: "valid env", envVal: "80", want: 80},
-		{name: "invalid env", envVal: "abc", want: 60},
-		{name: "zero", envVal: "0", want: 60},
-		{name: "negative", envVal: "-1", want: 60},
-	}
+	t.Run("FZF_PREVIEW_COLUMNS takes precedence", func(t *testing.T) {
+		t.Setenv("FZF_PREVIEW_COLUMNS", "120")
+		assert.Equal(t, 120, detectPreviewWidth())
+	})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.envVal != "" {
-				t.Setenv("FZF_PREVIEW_COLUMNS", tt.envVal)
-			}
-			assert.Equal(t, tt.want, detectPreviewWidth())
-		})
-	}
+	t.Run("invalid env falls through to terminal or default", func(t *testing.T) {
+		t.Setenv("FZF_PREVIEW_COLUMNS", "abc")
+		w := detectPreviewWidth()
+		assert.Greater(t, w, 0)
+	})
+
+	t.Run("zero env falls through to terminal or default", func(t *testing.T) {
+		t.Setenv("FZF_PREVIEW_COLUMNS", "0")
+		w := detectPreviewWidth()
+		assert.Greater(t, w, 0)
+	})
+
+	t.Run("no env falls through to terminal or default", func(t *testing.T) {
+		w := detectPreviewWidth()
+		assert.Greater(t, w, 0)
+	})
 }
 
 func testPR() github.PullRequest {

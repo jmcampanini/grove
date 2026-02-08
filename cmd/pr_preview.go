@@ -9,6 +9,7 @@ import (
 
 	"github.com/jmcampanini/grove-cli/internal/github"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 var (
@@ -70,7 +71,10 @@ func detectPreviewWidth() int {
 			return n
 		}
 	}
-	return 60
+	if w, _, err := term.GetSize(int(os.Stdout.Fd())); err == nil && w > 0 {
+		return w
+	}
+	return 80
 }
 
 func runPRPreview(cmd *cobra.Command, args []string) error {
