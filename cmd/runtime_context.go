@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/jmcampanini/grove-cli/internal/cache"
 	"github.com/jmcampanini/grove-cli/internal/config"
 	"github.com/jmcampanini/grove-cli/internal/git"
 	"github.com/jmcampanini/grove-cli/internal/github"
@@ -19,8 +20,17 @@ type commandRuntime struct {
 	mainWorktreePath string
 }
 
-func (rt *commandRuntime) newGitHubClient() github.GitHub {
-	return github.New(rt.cwd, rt.cfg.Git.Timeout)
+func (rt *commandRuntime) newUncachedGitHubClient() github.GitHub {
+	return github.New(rt.cwd, rt.cfg.Git.Timeout, nil)
+}
+
+func (rt *commandRuntime) newCachedGitHubClient() (github.GitHub, error) {
+	dir, err := cache.DefaultDir()
+	if err != nil {
+		return nil, err
+	}
+	c := cache.New(dir, rt.cfg.GitHub.PreviewCacheTTL)
+	return github.New(rt.cwd, rt.cfg.Git.Timeout, c), nil
 }
 
 func loadCommandRuntime() (*commandRuntime, error) {

@@ -43,7 +43,7 @@ func runPRList(cmd *cobra.Command, _ []string) error {
 	}
 	cfg := rt.cfg
 
-	gh := rt.newGitHubClient()
+	gh := rt.newUncachedGitHubClient()
 
 	namer, err := naming.NewPullRequestNamer(cfg.PullRequest, cfg.Slugify)
 	if err != nil {

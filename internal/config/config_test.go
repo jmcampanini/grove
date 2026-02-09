@@ -16,6 +16,9 @@ func TestDefaultConfig(t *testing.T) {
 	// Git defaults
 	assert.Equal(t, 5*time.Second, cfg.Git.Timeout)
 
+	// GitHub defaults
+	assert.Equal(t, 5*time.Minute, cfg.GitHub.PreviewCacheTTL)
+
 	// Slugify defaults
 	assert.True(t, cfg.Slugify.CollapseDashes)
 	assert.Equal(t, 4, cfg.Slugify.HashLength)
@@ -28,6 +31,10 @@ func TestDefaultConfig(t *testing.T) {
 	assert.Equal(t, "feature/", cfg.LocalBranch.BranchPrefix)
 	assert.Equal(t, []string{"feature/"}, cfg.LocalBranch.StripBranchPrefix)
 	assert.Equal(t, "wt-", cfg.LocalBranch.WorktreePrefix)
+
+	// PullRequest defaults
+	assert.Equal(t, "{{.BranchName}}", cfg.PullRequest.BranchTemplate)
+	assert.Equal(t, "pr-", cfg.PullRequest.WorktreePrefix)
 
 	// Default config should be valid
 	assert.NoError(t, cfg.Validate())
@@ -44,6 +51,7 @@ func TestConfig_Validate(t *testing.T) {
 			modify:  func(c *Config) {},
 			wantErr: "",
 		},
+		// Git
 		{
 			name: "negative git timeout",
 			modify: func(c *Config) {
@@ -52,6 +60,37 @@ func TestConfig_Validate(t *testing.T) {
 			wantErr: "git.timeout cannot be negative",
 		},
 		{
+			name: "zero timeout is valid",
+			modify: func(c *Config) {
+				c.Git.Timeout = 0
+			},
+			wantErr: "",
+		},
+		// GitHub
+		{
+			name: "negative preview cache TTL",
+			modify: func(c *Config) {
+				c.GitHub.PreviewCacheTTL = -1 * time.Second
+			},
+			wantErr: "github.preview_cache_ttl cannot be negative",
+		},
+		{
+			name: "zero preview cache TTL is valid",
+			modify: func(c *Config) {
+				c.GitHub.PreviewCacheTTL = 0
+			},
+			wantErr: "",
+		},
+		// PullRequest
+		{
+			name: "empty pull request worktree prefix",
+			modify: func(c *Config) {
+				c.PullRequest.WorktreePrefix = ""
+			},
+			wantErr: "pull_request.worktree_prefix cannot be empty",
+		},
+		// Slugify
+		{
 			name: "negative hash length",
 			modify: func(c *Config) {
 				c.Slugify.HashLength = -1
@@ -59,25 +98,18 @@ func TestConfig_Validate(t *testing.T) {
 			wantErr: "slugify.hash_length cannot be negative",
 		},
 		{
-			name: "negative max length",
-			modify: func(c *Config) {
-				c.Slugify.MaxLength = -1
-			},
-			wantErr: "slugify.max_length cannot be negative",
-		},
-		{
-			name: "zero timeout is valid",
-			modify: func(c *Config) {
-				c.Git.Timeout = 0
-			},
-			wantErr: "",
-		},
-		{
 			name: "zero hash length is valid",
 			modify: func(c *Config) {
 				c.Slugify.HashLength = 0
 			},
 			wantErr: "",
+		},
+		{
+			name: "negative max length",
+			modify: func(c *Config) {
+				c.Slugify.MaxLength = -1
+			},
+			wantErr: "slugify.max_length cannot be negative",
 		},
 		{
 			name: "zero max length is valid",
@@ -290,17 +322,6 @@ func TestLoad_SingleFile(t *testing.T) {
 		check   func(*testing.T, Config)
 	}{
 		{
-			name: "branch prefix only",
-			content: `[local_branch]
-branch_prefix = "fix/"
-`,
-			check: func(t *testing.T, cfg Config) {
-				assert.Equal(t, "fix/", cfg.LocalBranch.BranchPrefix)
-				// Other defaults should remain
-				assert.Equal(t, 5*time.Second, cfg.Git.Timeout)
-			},
-		},
-		{
 			name: "git timeout",
 			content: `[git]
 timeout = "10s"
@@ -310,18 +331,22 @@ timeout = "10s"
 			},
 		},
 		{
-			name: "slugify options",
-			content: `[slugify]
-max_length = 30
-hash_length = 6
-lowercase = false
+			name: "github preview cache TTL",
+			content: `[github]
+preview_cache_ttl = "10m"
 `,
 			check: func(t *testing.T, cfg Config) {
-				assert.Equal(t, 30, cfg.Slugify.MaxLength)
-				assert.Equal(t, 6, cfg.Slugify.HashLength)
-				assert.False(t, cfg.Slugify.Lowercase)
-				// Defaults preserved for unset fields
-				assert.True(t, cfg.Slugify.CollapseDashes)
+				assert.Equal(t, 10*time.Minute, cfg.GitHub.PreviewCacheTTL)
+				assert.Equal(t, 5*time.Second, cfg.Git.Timeout)
+			},
+		},
+		{
+			name: "github preview cache TTL disabled",
+			content: `[github]
+preview_cache_ttl = "0s"
+`,
+			check: func(t *testing.T, cfg Config) {
+				assert.Equal(t, time.Duration(0), cfg.GitHub.PreviewCacheTTL)
 			},
 		},
 		{
@@ -338,10 +363,23 @@ strip_branch_prefix = ["fix/", "feature/", "chore/"]
 			},
 		},
 		{
+			name: "slugify options",
+			content: `[slugify]
+max_length = 30
+hash_length = 6
+lowercase = false
+`,
+			check: func(t *testing.T, cfg Config) {
+				assert.Equal(t, 30, cfg.Slugify.MaxLength)
+				assert.Equal(t, 6, cfg.Slugify.HashLength)
+				assert.False(t, cfg.Slugify.Lowercase)
+				assert.True(t, cfg.Slugify.CollapseDashes)
+			},
+		},
+		{
 			name:    "empty file",
 			content: "",
 			check: func(t *testing.T, cfg Config) {
-				// Should return defaults
 				assert.Equal(t, DefaultConfig(), cfg)
 			},
 		},
@@ -444,11 +482,18 @@ func TestLoad_InvalidConfigValues(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name: "negative max_length",
-			content: `[slugify]
-max_length = -1
+			name: "negative timeout",
+			content: `[git]
+timeout = "-5s"
 `,
-			wantErr: "slugify.max_length cannot be negative",
+			wantErr: "git.timeout cannot be negative",
+		},
+		{
+			name: "negative preview cache TTL",
+			content: `[github]
+preview_cache_ttl = "-1s"
+`,
+			wantErr: "github.preview_cache_ttl cannot be negative",
 		},
 		{
 			name: "negative hash_length",
@@ -458,11 +503,11 @@ hash_length = -5
 			wantErr: "slugify.hash_length cannot be negative",
 		},
 		{
-			name: "negative timeout",
-			content: `[git]
-timeout = "-5s"
+			name: "negative max_length",
+			content: `[slugify]
+max_length = -1
 `,
-			wantErr: "git.timeout cannot be negative",
+			wantErr: "slugify.max_length cannot be negative",
 		},
 	}
 

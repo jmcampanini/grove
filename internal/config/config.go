@@ -8,6 +8,7 @@ import (
 // Config represents the complete grove configuration.
 type Config struct {
 	Git         GitConfig         `toml:"git"`
+	GitHub      GitHubConfig      `toml:"github"`
 	LocalBranch LocalBranchConfig `toml:"local_branch"`
 	PullRequest PullRequestConfig `toml:"pull_request"`
 	Slugify     SlugifyConfig     `toml:"slugify"`
@@ -18,6 +19,9 @@ type Config struct {
 func (c Config) Validate() error {
 	if c.Git.Timeout < 0 {
 		return errors.New("git.timeout cannot be negative")
+	}
+	if c.GitHub.PreviewCacheTTL < 0 {
+		return errors.New("github.preview_cache_ttl cannot be negative")
 	}
 	if c.PullRequest.WorktreePrefix == "" {
 		return errors.New("pull_request.worktree_prefix cannot be empty")
@@ -37,6 +41,11 @@ func (c Config) Validate() error {
 // GitConfig configures git command execution.
 type GitConfig struct {
 	Timeout time.Duration `toml:"timeout"` // Timeout for git commands (e.g., "5s")
+}
+
+// GitHubConfig configures GitHub-related behavior.
+type GitHubConfig struct {
+	PreviewCacheTTL time.Duration `toml:"preview_cache_ttl"` // TTL for FZF preview cache (e.g., "5m"); 0 disables
 }
 
 // PullRequestConfig configures pull request worktree naming.

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	clog "github.com/charmbracelet/log"
+	"github.com/jmcampanini/grove-cli/internal/cache"
 )
 
 // DefaultPRLimit is the maximum number of pull requests returned by ListPullRequests.
@@ -19,6 +20,7 @@ const DefaultPRLimit = 20
 
 // GitHubCli provides GitHub operations by executing the gh CLI.
 type GitHubCli struct {
+	cache      *cache.Cache
 	log        *clog.Logger
 	timeout    time.Duration
 	workingDir string
@@ -26,15 +28,37 @@ type GitHubCli struct {
 
 var _ GitHub = &GitHubCli{}
 
-func New(workingDir string, timeout time.Duration) GitHub {
+func New(workingDir string, timeout time.Duration, c *cache.Cache) GitHub {
 	return &GitHubCli{
+		cache:      c,
 		log:        clog.Default().WithPrefix("github"),
 		timeout:    timeout,
 		workingDir: workingDir,
 	}
 }
 
+// executeGhCommand runs a read-only gh command, returning cached results when available.
 func (g *GitHubCli) executeGhCommand(args ...string) (string, error) {
+	if g.cache == nil {
+		return g.runGhProcess(args...)
+	}
+
+	cacheKey := cache.BuildKey(g.workingDir, args)
+	if payload, ok := g.cache.Get(cacheKey); ok {
+		g.log.Debug("gh command cache hit", "args", args)
+		return payload, nil
+	}
+
+	output, err := g.runGhProcess(args...)
+	if err != nil {
+		return "", err
+	}
+
+	g.cache.Set(cacheKey, output)
+	return output, nil
+}
+
+func (g *GitHubCli) runGhProcess(args ...string) (string, error) {
 	g.log.Debug("Executing gh command", "cmd", "gh", "args", args, "workingDir", g.workingDir)
 
 	ctx, cancel := context.WithTimeout(context.Background(), g.timeout)

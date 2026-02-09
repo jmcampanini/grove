@@ -61,8 +61,8 @@ func (g *GitCli) executeGitCommand(args ...string) (string, error) {
 	return output, nil
 }
 
-// executeMutatingCommand runs a git command that modifies state, unless in dry-run mode.
-func (g *GitCli) executeMutatingCommand(errContext string, args ...string) error {
+// executeMutatingGitCommand runs a git command that modifies state, unless in dry-run mode.
+func (g *GitCli) executeMutatingGitCommand(errContext string, args ...string) error {
 	if g.dryRun {
 		g.log.Info("Would execute git command", "cmd", "git", "args", args)
 		return nil
@@ -73,8 +73,8 @@ func (g *GitCli) executeMutatingCommand(errContext string, args ...string) error
 	return nil
 }
 
-// executeMutatingCommandWithOutput runs a git command that modifies state and returns its output.
-func (g *GitCli) executeMutatingCommandWithOutput(errContext string, args ...string) (string, error) {
+// executeMutatingGitCommandWithOutput runs a git command that modifies state and returns its output.
+func (g *GitCli) executeMutatingGitCommandWithOutput(errContext string, args ...string) (string, error) {
 	if g.dryRun {
 		g.log.Info("Would execute git command", "cmd", "git", "args", args)
 		return fmt.Sprintf("Would execute: git %s", strings.Join(args, " ")), nil
@@ -404,7 +404,7 @@ func (g *GitCli) SyncTags(remoteName string) error {
 
 	g.log.Info("Syncing tags from remote", "remote", remoteName)
 	args := []string{"fetch", remoteName, "--prune", "--prune-tags", "--tags"}
-	return g.executeMutatingCommand("failed to sync tags from remote", args...)
+	return g.executeMutatingGitCommand("failed to sync tags from remote", args...)
 }
 
 func (g *GitCli) ListTags() ([]Tag, error) {
@@ -624,7 +624,7 @@ func (g *GitCli) parseWorktreeBlock(lines []string, branchMap map[string]LocalBr
 func (g *GitCli) CreateWorktreeForNewBranch(newBranchName, worktreeAbsPath string) error {
 	g.log.Info("Creating worktree for new branch", "branch", newBranchName, "path", worktreeAbsPath)
 	args := []string{"worktree", "add", "-b", newBranchName, worktreeAbsPath}
-	return g.executeMutatingCommand("failed to create worktree for new branch", args...)
+	return g.executeMutatingGitCommand("failed to create worktree for new branch", args...)
 }
 
 func (g *GitCli) CreateWorktreeForNewBranchFromRef(newBranchName, worktreeAbsPath, baseRef string) error {
@@ -633,24 +633,24 @@ func (g *GitCli) CreateWorktreeForNewBranchFromRef(newBranchName, worktreeAbsPat
 	if baseRef != "" {
 		args = append(args, baseRef)
 	}
-	return g.executeMutatingCommand("failed to create worktree for new branch from ref", args...)
+	return g.executeMutatingGitCommand("failed to create worktree for new branch from ref", args...)
 }
 
 func (g *GitCli) CreateWorktreeForExistingBranch(branchName, worktreeAbsPath string) error {
 	g.log.Info("Creating worktree for existing branch", "branch", branchName, "path", worktreeAbsPath)
 	args := []string{"worktree", "add", worktreeAbsPath, branchName}
-	return g.executeMutatingCommand("failed to create worktree for existing branch", args...)
+	return g.executeMutatingGitCommand("failed to create worktree for existing branch", args...)
 }
 
 func (g *GitCli) FetchRemoteBranch(remote, remoteRef, localRef string) error {
 	g.log.Info("Fetching remote branch", "remote", remote, "remoteRef", remoteRef, "localRef", localRef)
 	refSpec := remoteRef + ":" + localRef
 	args := []string{"fetch", remote, refSpec}
-	return g.executeMutatingCommand("failed to fetch remote branch", args...)
+	return g.executeMutatingGitCommand("failed to fetch remote branch", args...)
 }
 
 func (g *GitCli) FetchRemote(remoteName string) (string, error) {
 	g.log.Info("Fetching from remote", "remote", remoteName)
 	args := []string{"fetch", remoteName, "--prune", "--prune-tags", "--tags"}
-	return g.executeMutatingCommandWithOutput("failed to fetch from remote", args...)
+	return g.executeMutatingGitCommandWithOutput("failed to fetch from remote", args...)
 }

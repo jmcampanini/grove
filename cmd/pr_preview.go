@@ -111,7 +111,14 @@ func runPRPreview(cmd *cobra.Command, args []string) error {
 		return handlePreviewError(cmd, err)
 	}
 
-	gh := rt.newGitHubClient()
+	gh := rt.newUncachedGitHubClient()
+	if prPreviewFzfFlag {
+		var err error
+		gh, err = rt.newCachedGitHubClient()
+		if err != nil {
+			return handlePreviewError(cmd, err)
+		}
+	}
 
 	pr, err := gh.GetPullRequest(prNum)
 	if err != nil {

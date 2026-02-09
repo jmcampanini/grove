@@ -8,6 +8,9 @@ func DefaultConfig() Config {
 		Git: GitConfig{
 			Timeout: 5 * time.Second,
 		},
+		GitHub: GitHubConfig{
+			PreviewCacheTTL: 5 * time.Minute,
+		},
 		LocalBranch: LocalBranchConfig{
 			BranchPrefix:      "feature/",
 			StripBranchPrefix: []string{"feature/"},

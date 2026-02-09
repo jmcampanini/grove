@@ -43,7 +43,7 @@ func runPRCreate(cmd *cobra.Command, args []string) error {
 
 	ctx := &prCreateContext{
 		cfg:       rt.cfg,
-		ghClient:  rt.newGitHubClient(),
+		ghClient:  rt.newUncachedGitHubClient(),
 		gitClient: rt.gitClient,
 	}
 
