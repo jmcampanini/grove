@@ -372,13 +372,12 @@ func testTimelineEvents() []github.TimelineEvent {
 func TestRenderPreview(t *testing.T) {
 	pinTestColorProfile(t)
 	pr := testPRWithExpanded()
-	files := testReviewFiles()
+	pr.Files = testReviewFiles()
 	comments := testFileComments()
 	timeline := testTimelineEvents()
 
 	tests := []struct {
 		comments     map[string]int
-		files        []github.PullRequestFile
 		name         string
 		pr           github.PullRequest
 		timeline     []github.TimelineEvent
@@ -387,7 +386,6 @@ func TestRenderPreview(t *testing.T) {
 		{
 			name:     "full PR with all data",
 			pr:       pr,
-			files:    files,
 			comments: comments,
 			timeline: timeline,
 			wantContains: []string{
@@ -418,7 +416,6 @@ func TestRenderPreview(t *testing.T) {
 				p.StatusChecks = nil
 				return p
 			}(),
-			files:    files,
 			comments: comments,
 			timeline: timeline,
 			wantContains: []string{
@@ -432,7 +429,6 @@ func TestRenderPreview(t *testing.T) {
 				p.Body = ""
 				return p
 			}(),
-			files:        files,
 			comments:     comments,
 			timeline:     timeline,
 			wantContains: []string{"#42", "Fix login flow"},
@@ -444,15 +440,17 @@ func TestRenderPreview(t *testing.T) {
 				p.State = github.PRStateMerged
 				return p
 			}(),
-			files:        files,
 			comments:     comments,
 			timeline:     timeline,
 			wantContains: []string{"MERGED"},
 		},
 		{
-			name:         "empty timeline and comments",
-			pr:           pr,
-			files:        testFiles(),
+			name: "empty timeline and comments",
+			pr: func() github.PullRequest {
+				p := pr
+				p.Files = testFiles()
+				return p
+			}(),
 			comments:     map[string]int{},
 			timeline:     nil,
 			wantContains: []string{"#42", "auth.go"},
@@ -462,7 +460,7 @@ func TestRenderPreview(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
-			err := renderPreview(&buf, tt.pr, tt.files, tt.comments, tt.timeline, 60, "auto")
+			err := renderPreview(&buf, tt.pr, tt.comments, tt.timeline, 60, "auto")
 			require.NoError(t, err)
 
 			output := buf.String()

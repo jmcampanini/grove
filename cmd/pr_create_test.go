@@ -25,7 +25,7 @@ func (m *mockGitHub) GetPullRequest(prNum int) (github.PullRequest, error) {
 	return github.PullRequest{}, nil
 }
 
-func (m *mockGitHub) GetPullRequestActivity(_ int) ([]github.ReviewThread, []github.TimelineEvent, error) {
+func (m *mockGitHub) GetPullRequestActivity(_, _ string, _ int) ([]github.ReviewThread, []github.TimelineEvent, error) {
 	return nil, nil, nil
 }
 

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/jmcampanini/grove-cli/internal/github"
 	"github.com/muesli/termenv"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -117,7 +118,12 @@ func runPRPreview(cmd *cobra.Command, args []string) error {
 		return handlePreviewError(cmd, err)
 	}
 
-	threads, timeline, err := gh.GetPullRequestActivity(prNum)
+	owner, repo, err := github.ParseRepoFromURL(pr.URL)
+	if err != nil {
+		return handlePreviewError(cmd, err)
+	}
+
+	threads, timeline, err := gh.GetPullRequestActivity(owner, repo, prNum)
 	if err != nil {
 		return handlePreviewError(cmd, err)
 	}
@@ -130,5 +136,5 @@ func runPRPreview(cmd *cobra.Command, args []string) error {
 	w := cmd.OutOrStdout()
 	width := detectPreviewWidth()
 
-	return renderPreview(w, pr, pr.Files, fileComments, timeline, width, prPreviewColorFlag)
+	return renderPreview(w, pr, fileComments, timeline, width, prPreviewColorFlag)
 }

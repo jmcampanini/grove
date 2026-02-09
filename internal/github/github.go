@@ -6,7 +6,7 @@ type GitHub interface {
 
 	// GetPullRequestActivity returns review threads and timeline events for a pull request
 	// in a single GraphQL call.
-	GetPullRequestActivity(prNum int) ([]ReviewThread, []TimelineEvent, error)
+	GetPullRequestActivity(owner, repo string, prNum int) ([]ReviewThread, []TimelineEvent, error)
 
 	// GetPullRequestByBranch returns the pull request for the given branch name.
 	// Returns nil if no pull request exists for the branch.

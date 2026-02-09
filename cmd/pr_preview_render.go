@@ -672,7 +672,7 @@ func renderTimeline(pr github.PullRequest, timeline []github.TimelineEvent) stri
 	return strings.TrimRight(sb.String(), "\n")
 }
 
-func renderPreview(w io.Writer, pr github.PullRequest, files []github.PullRequestFile, fileComments map[string]int, timeline []github.TimelineEvent, width int, colorMode string) error {
+func renderPreview(w io.Writer, pr github.PullRequest, fileComments map[string]int, timeline []github.TimelineEvent, width int, colorMode string) error {
 	border := lipgloss.RoundedBorder()
 	boxStyle := lipgloss.NewStyle().
 		Border(border).
@@ -688,7 +688,7 @@ func renderPreview(w io.Writer, pr github.PullRequest, files []github.PullReques
 		sections = append(sections, boxStyle.Render(checksContent))
 	}
 
-	scored := scoreFiles(files, fileComments)
+	scored := scoreFiles(pr.Files, fileComments)
 	contentWidth := width - 4
 
 	highActivity, shownFiles := renderHighActivity(scored, pr.URL, contentWidth)
@@ -701,7 +701,7 @@ func renderPreview(w io.Writer, pr github.PullRequest, files []github.PullReques
 		haPaths[sf.file.Path] = true
 	}
 
-	sections = append(sections, boxStyle.Render(renderFileList(files, fileComments, pr.FilesChanged, haPaths, pr.URL, contentWidth)))
+	sections = append(sections, boxStyle.Render(renderFileList(pr.Files, fileComments, pr.FilesChanged, haPaths, pr.URL, contentWidth)))
 
 	if body := renderBody(pr.Body, width, colorMode); body != "" {
 		sections = append(sections, boxStyle.Render(body))

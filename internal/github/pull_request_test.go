@@ -10,6 +10,39 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestParseRepoFromURL(t *testing.T) {
+	tests := []struct {
+		name      string
+		url       string
+		wantOwner string
+		wantRepo  string
+		wantErr   bool
+	}{
+		{name: "standard URL", url: "https://github.com/owner/repo/pull/42", wantOwner: "owner", wantRepo: "repo"},
+		{name: "GHE URL", url: "https://github.example.com/org/project/pull/99", wantOwner: "org", wantRepo: "project"},
+		{name: "trailing slash", url: "https://github.com/owner/repo/pull/42/", wantOwner: "owner", wantRepo: "repo"},
+		{name: "extra path segments", url: "https://github.com/owner/repo/pull/42/files", wantOwner: "owner", wantRepo: "repo"},
+		{name: "http scheme", url: "http://github.com/owner/repo/pull/1", wantOwner: "owner", wantRepo: "repo"},
+		{name: "non-pull URL", url: "https://github.com/owner/repo/issues/42", wantErr: true},
+		{name: "empty string", url: "", wantErr: true},
+		{name: "host only", url: "https://github.com", wantErr: true},
+		{name: "owner only", url: "https://github.com/owner", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			owner, repo, err := ParseRepoFromURL(tt.url)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantOwner, owner)
+			assert.Equal(t, tt.wantRepo, repo)
+		})
+	}
+}
+
 func TestPRState_String(t *testing.T) {
 	tests := []struct {
 		name  string

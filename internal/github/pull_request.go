@@ -3,6 +3,7 @@ package github
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -186,6 +187,20 @@ type TimelineEvent struct {
 	CreatedAt time.Time
 	Details   string
 	Type      TimelineEventType
+}
+
+// ParseRepoFromURL extracts owner and repo from a GitHub pull request URL.
+// Works for both github.com and GitHub Enterprise URLs (only the path is parsed).
+func ParseRepoFromURL(prURL string) (owner, repo string, err error) {
+	u, err := url.Parse(prURL)
+	if err != nil {
+		return "", "", fmt.Errorf("invalid PR URL %q: %w", prURL, err)
+	}
+	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
+	if len(parts) < 4 || parts[2] != "pull" {
+		return "", "", fmt.Errorf("unexpected PR URL format %q: expected /owner/repo/pull/number", prURL)
+	}
+	return parts[0], parts[1], nil
 }
 
 const prJsonFields = "additions,author,baseRefName,body,changedFiles,comments,createdAt,deletions,headRefName,isCrossRepository,isDraft,labels,number,reviews,state,statusCheckRollup,title,updatedAt,url"

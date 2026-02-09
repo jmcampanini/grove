@@ -9,7 +9,6 @@ import (
 	"os/exec"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 
 	clog "github.com/charmbracelet/log"
@@ -21,10 +20,6 @@ const DefaultPRLimit = 20
 // GitHubCli provides GitHub operations by executing the gh CLI.
 type GitHubCli struct {
 	log        *clog.Logger
-	repoErr    error
-	repoName   string
-	repoOnce   sync.Once
-	repoOwner  string
 	timeout    time.Duration
 	workingDir string
 }
@@ -67,23 +62,6 @@ func (g *GitHubCli) executeGhCommand(args ...string) (string, error) {
 	return output, nil
 }
 
-func (g *GitHubCli) repoOwnerName() (owner, name string, err error) {
-	g.repoOnce.Do(func() {
-		output, e := g.executeGhCommand("repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner")
-		if e != nil {
-			g.repoErr = fmt.Errorf("failed to get repo name: %w", e)
-			return
-		}
-		parts := strings.SplitN(output, "/", 2)
-		if len(parts) != 2 {
-			g.repoErr = fmt.Errorf("unexpected repo format: %s", output)
-			return
-		}
-		g.repoOwner, g.repoName = parts[0], parts[1]
-	})
-	return g.repoOwner, g.repoName, g.repoErr
-}
-
 func (g *GitHubCli) executeGraphQL(query string) (string, error) {
 	return g.executeGhCommand("api", "graphql", "-f", "query="+query)
 }
@@ -107,12 +85,7 @@ func (g *GitHubCli) GetPullRequest(prNum int) (PullRequest, error) {
 	return pr, nil
 }
 
-func (g *GitHubCli) GetPullRequestActivity(prNum int) ([]ReviewThread, []TimelineEvent, error) {
-	owner, name, err := g.repoOwnerName()
-	if err != nil {
-		return nil, nil, err
-	}
-
+func (g *GitHubCli) GetPullRequestActivity(owner, repo string, prNum int) ([]ReviewThread, []TimelineEvent, error) {
 	query := fmt.Sprintf(`{
   repository(owner: %q, name: %q) {
     pullRequest(number: %d) {
@@ -196,7 +169,7 @@ func (g *GitHubCli) GetPullRequestActivity(prNum int) ([]ReviewThread, []Timelin
       }
     }
   }
-}`, owner, name, prNum)
+}`, owner, repo, prNum)
 
 	output, err := g.executeGraphQL(query)
 	if err != nil {
@@ -338,21 +311,21 @@ func parseTimelineNode(raw json.RawMessage) (*TimelineEvent, error) {
 	case "IssueComment":
 		return parseCommentEvent(raw)
 	case "HeadRefForcePushedEvent":
-		return parseActorEvent(raw, TimelineEventForcePushed, "")
+		return parseActorEvent(raw, TimelineEventForcePushed)
 	case "PullRequestCommit":
 		return parseCommitEvent(raw)
 	case "LabeledEvent":
 		return parseLabeledEvent(raw)
 	case "MergedEvent":
-		return parseActorEvent(raw, TimelineEventMerged, "")
+		return parseActorEvent(raw, TimelineEventMerged)
 	case "ClosedEvent":
-		return parseActorEvent(raw, TimelineEventClosed, "")
+		return parseActorEvent(raw, TimelineEventClosed)
 	case "ReopenedEvent":
-		return parseActorEvent(raw, TimelineEventReopened, "")
+		return parseActorEvent(raw, TimelineEventReopened)
 	case "ReadyForReviewEvent":
-		return parseActorEvent(raw, TimelineEventReadyForReview, "")
+		return parseActorEvent(raw, TimelineEventReadyForReview)
 	case "ConvertToDraftEvent":
-		return parseActorEvent(raw, TimelineEventConvertToDraft, "")
+		return parseActorEvent(raw, TimelineEventConvertToDraft)
 	case "ReviewRequestedEvent":
 		return parseReviewRequestedEvent(raw)
 	default:
@@ -392,7 +365,7 @@ func parseCommentEvent(raw json.RawMessage) (*TimelineEvent, error) {
 	}, nil
 }
 
-func parseActorEvent(raw json.RawMessage, eventType TimelineEventType, details string) (*TimelineEvent, error) {
+func parseActorEvent(raw json.RawMessage, eventType TimelineEventType) (*TimelineEvent, error) {
 	var v struct {
 		Actor     struct{ Login string } `json:"actor"`
 		CreatedAt time.Time              `json:"createdAt"`
@@ -403,7 +376,6 @@ func parseActorEvent(raw json.RawMessage, eventType TimelineEventType, details s
 	return &TimelineEvent{
 		Actor:     v.Actor.Login,
 		CreatedAt: v.CreatedAt,
-		Details:   details,
 		Type:      eventType,
 	}, nil
 }
