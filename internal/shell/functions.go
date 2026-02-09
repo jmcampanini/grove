@@ -4,14 +4,23 @@ import (
 	_ "embed"
 )
 
-//go:embed scripts/grc.fish
-var grcFishScript string
-
 //go:embed scripts/grc.bash
 var grcBashScript string
 
+//go:embed scripts/grc.fish
+var grcFishScript string
+
 //go:embed scripts/grc.zsh
 var grcZshScript string
+
+//go:embed scripts/grd.bash
+var grdBashScript string
+
+//go:embed scripts/grd.fish
+var grdFishScript string
+
+//go:embed scripts/grd.zsh
+var grdZshScript string
 
 //go:embed scripts/grp.bash
 var grpBashScript string
@@ -41,15 +50,15 @@ func NewFunctionGenerator() *FunctionGenerator {
 
 // GenerateFish returns all fish shell functions.
 func (g *FunctionGenerator) GenerateFish() string {
-	return grcFishScript + "\n" + grpFishScript + "\n" + grsFishScript
+	return grcFishScript + "\n" + grdFishScript + "\n" + grpFishScript + "\n" + grsFishScript
 }
 
 // GenerateZsh returns all zsh shell functions.
 func (g *FunctionGenerator) GenerateZsh() string {
-	return grcZshScript + "\n" + grpZshScript + "\n" + grsZshScript
+	return grcZshScript + "\n" + grdZshScript + "\n" + grpZshScript + "\n" + grsZshScript
 }
 
 // GenerateBash returns all bash shell functions.
 func (g *FunctionGenerator) GenerateBash() string {
-	return grcBashScript + "\n" + grpBashScript + "\n" + grsBashScript
+	return grcBashScript + "\n" + grdBashScript + "\n" + grpBashScript + "\n" + grsBashScript
 }
