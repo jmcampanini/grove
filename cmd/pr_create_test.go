@@ -14,10 +14,9 @@ import (
 )
 
 type mockGitHub struct {
-	getPullRequestFn      func(prNum int) (github.PullRequest, error)
-	getPullRequestFilesFn func(prNum int) ([]github.PullRequestFile, error)
-	listPullRequestsFn    func(query github.PRQuery, limit int) ([]github.PullRequest, error)
-	validateFn            func() error
+	getPullRequestFn   func(prNum int) (github.PullRequest, error)
+	listPullRequestsFn func(query github.PRQuery, limit int) ([]github.PullRequest, error)
+	validateFn         func() error
 }
 
 func (m *mockGitHub) GetPullRequest(prNum int) (github.PullRequest, error) {
@@ -27,22 +26,11 @@ func (m *mockGitHub) GetPullRequest(prNum int) (github.PullRequest, error) {
 	return github.PullRequest{}, nil
 }
 
-func (m *mockGitHub) GetPullRequestByBranch(branchName string) (*github.PullRequest, error) {
-	return nil, nil
+func (m *mockGitHub) GetPullRequestActivity(_ int) ([]github.ReviewThread, []github.TimelineEvent, error) {
+	return nil, nil, nil
 }
 
-func (m *mockGitHub) GetPullRequestFiles(prNum int) ([]github.PullRequestFile, error) {
-	if m.getPullRequestFilesFn != nil {
-		return m.getPullRequestFilesFn(prNum)
-	}
-	return nil, nil
-}
-
-func (m *mockGitHub) GetPullRequestReviewThreads(_ int) ([]github.ReviewThread, error) {
-	return nil, nil
-}
-
-func (m *mockGitHub) GetPullRequestTimeline(_ int) ([]github.TimelineEvent, error) {
+func (m *mockGitHub) GetPullRequestByBranch(_ string) (*github.PullRequest, error) {
 	return nil, nil
 }
 

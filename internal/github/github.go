@@ -8,14 +8,9 @@ type GitHub interface {
 	// Returns nil if no pull request exists for the branch.
 	GetPullRequestByBranch(branchName string) (*PullRequest, error)
 
-	// GetPullRequestFiles returns the list of files changed in a pull request.
-	GetPullRequestFiles(prNum int) ([]PullRequestFile, error)
-
-	// GetPullRequestReviewThreads returns review threads aggregated per file path.
-	GetPullRequestReviewThreads(prNum int) ([]ReviewThread, error)
-
-	// GetPullRequestTimeline returns normalized timeline events for a pull request.
-	GetPullRequestTimeline(prNum int) ([]TimelineEvent, error)
+	// GetPullRequestActivity returns review threads and timeline events for a pull request
+	// in a single GraphQL call.
+	GetPullRequestActivity(prNum int) ([]ReviewThread, []TimelineEvent, error)
 
 	// ListPullRequests returns a list of pull requests matching the given query.
 	// Use DefaultPRLimit for the limit parameter to get the standard number of results.

@@ -120,17 +120,7 @@ func runPRPreview(cmd *cobra.Command, args []string) error {
 		return handlePreviewError(cmd, err)
 	}
 
-	files, err := gh.GetPullRequestFiles(prNum)
-	if err != nil {
-		return handlePreviewError(cmd, err)
-	}
-
-	threads, err := gh.GetPullRequestReviewThreads(prNum)
-	if err != nil {
-		return handlePreviewError(cmd, err)
-	}
-
-	timeline, err := gh.GetPullRequestTimeline(prNum)
+	threads, timeline, err := gh.GetPullRequestActivity(prNum)
 	if err != nil {
 		return handlePreviewError(cmd, err)
 	}
@@ -143,5 +133,5 @@ func runPRPreview(cmd *cobra.Command, args []string) error {
 	w := cmd.OutOrStdout()
 	width := detectPreviewWidth()
 
-	return renderPreview(w, pr, files, fileComments, timeline, width, prPreviewColorFlag)
+	return renderPreview(w, pr, pr.Files, fileComments, timeline, width, prPreviewColorFlag)
 }

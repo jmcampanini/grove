@@ -7,8 +7,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"sort"
+	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	clog "github.com/charmbracelet/log"
@@ -20,6 +21,10 @@ const DefaultPRLimit = 20
 // GitHubCli provides GitHub operations by executing the gh CLI.
 type GitHubCli struct {
 	log        *clog.Logger
+	repoErr    error
+	repoName   string
+	repoOnce   sync.Once
+	repoOwner  string
 	timeout    time.Duration
 	workingDir string
 }
@@ -63,15 +68,20 @@ func (g *GitHubCli) executeGhCommand(args ...string) (string, error) {
 }
 
 func (g *GitHubCli) repoOwnerName() (owner, name string, err error) {
-	output, err := g.executeGhCommand("repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner")
-	if err != nil {
-		return "", "", fmt.Errorf("failed to get repo name: %w", err)
-	}
-	parts := strings.SplitN(output, "/", 2)
-	if len(parts) != 2 {
-		return "", "", fmt.Errorf("unexpected repo format: %s", output)
-	}
-	return parts[0], parts[1], nil
+	g.repoOnce.Do(func() {
+		output, e := g.executeGhCommand("repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner")
+		if e != nil {
+			g.repoErr = fmt.Errorf("failed to get repo name: %w", e)
+			return
+		}
+		parts := strings.SplitN(output, "/", 2)
+		if len(parts) != 2 {
+			g.repoErr = fmt.Errorf("unexpected repo format: %s", output)
+			return
+		}
+		g.repoOwner, g.repoName = parts[0], parts[1]
+	})
+	return g.repoOwner, g.repoName, g.repoErr
 }
 
 func (g *GitHubCli) executeGraphQL(query string) (string, error) {
@@ -81,7 +91,7 @@ func (g *GitHubCli) executeGraphQL(query string) (string, error) {
 func (g *GitHubCli) GetPullRequest(prNum int) (PullRequest, error) {
 	args := []string{
 		"pr", "view", fmt.Sprintf("%d", prNum),
-		"--json", prJsonFields,
+		"--json", prJsonFields + ",files",
 	}
 
 	output, err := g.executeGhCommand(args...)
@@ -123,28 +133,6 @@ func (g *GitHubCli) GetPullRequestByBranch(branchName string) (*PullRequest, err
 	return &prs[0], nil
 }
 
-func (g *GitHubCli) GetPullRequestFiles(prNum int) ([]PullRequestFile, error) {
-	args := []string{
-		"pr", "view", fmt.Sprintf("%d", prNum),
-		"--json", "files",
-	}
-
-	output, err := g.executeGhCommand(args...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get files for pull request #%d: %w", prNum, err)
-	}
-
-	// gh returns: {"files": [{"path": "...", "additions": N, "deletions": N}, ...]}
-	var result struct {
-		Files []PullRequestFile `json:"files"`
-	}
-	if err := json.Unmarshal([]byte(output), &result); err != nil {
-		return nil, fmt.Errorf("failed to parse files for pull request #%d: %w", prNum, err)
-	}
-
-	return result.Files, nil
-}
-
 func (g *GitHubCli) ListPullRequests(query PRQuery, limit int) ([]PullRequest, error) {
 	searchQuery := query.ToSearchQuery()
 
@@ -168,10 +156,10 @@ func (g *GitHubCli) ListPullRequests(query PRQuery, limit int) ([]PullRequest, e
 	return prs, nil
 }
 
-func (g *GitHubCli) GetPullRequestReviewThreads(prNum int) ([]ReviewThread, error) {
+func (g *GitHubCli) GetPullRequestActivity(prNum int) ([]ReviewThread, []TimelineEvent, error) {
 	owner, name, err := g.repoOwnerName()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	query := fmt.Sprintf(`{
@@ -186,27 +174,6 @@ func (g *GitHubCli) GetPullRequestReviewThreads(prNum int) ([]ReviewThread, erro
           }
         }
       }
-    }
-  }
-}`, owner, name, prNum)
-
-	output, err := g.executeGraphQL(query)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get review threads for PR #%d: %w", prNum, err)
-	}
-
-	return parseReviewThreadsFromJSON(output)
-}
-
-func (g *GitHubCli) GetPullRequestTimeline(prNum int) ([]TimelineEvent, error) {
-	owner, name, err := g.repoOwnerName()
-	if err != nil {
-		return nil, err
-	}
-
-	query := fmt.Sprintf(`{
-  repository(owner: %q, name: %q) {
-    pullRequest(number: %d) {
       timelineItems(first: 100, itemTypes: [
         PULL_REQUEST_REVIEW,
         ISSUE_COMMENT,
@@ -282,17 +249,28 @@ func (g *GitHubCli) GetPullRequestTimeline(prNum int) ([]TimelineEvent, error) {
 
 	output, err := g.executeGraphQL(query)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get timeline for PR #%d: %w", prNum, err)
+		return nil, nil, fmt.Errorf("failed to get activity for PR #%d: %w", prNum, err)
 	}
 
-	return parseTimelineEvents(output)
+	return parseActivityResponse(output)
 }
 
-func parseTimelineEvents(data string) ([]TimelineEvent, error) {
+type graphQLThreadNode struct {
+	Comments struct {
+		TotalCount int `json:"totalCount"`
+	} `json:"comments"`
+	IsResolved bool   `json:"isResolved"`
+	Path       string `json:"path"`
+}
+
+func parseActivityResponse(data string) ([]ReviewThread, []TimelineEvent, error) {
 	var result struct {
 		Data struct {
 			Repository struct {
 				PullRequest struct {
+					ReviewThreads struct {
+						Nodes []graphQLThreadNode `json:"nodes"`
+					} `json:"reviewThreads"`
 					TimelineItems struct {
 						Nodes []json.RawMessage `json:"nodes"`
 					} `json:"timelineItems"`
@@ -302,14 +280,15 @@ func parseTimelineEvents(data string) ([]TimelineEvent, error) {
 	}
 
 	if err := json.Unmarshal([]byte(data), &result); err != nil {
-		return nil, fmt.Errorf("failed to parse timeline: %w", err)
+		return nil, nil, fmt.Errorf("failed to parse activity response: %w", err)
 	}
+
+	threads := aggregateThreadsByPath(result.Data.Repository.PullRequest.ReviewThreads.Nodes)
 
 	var events []TimelineEvent
 	for _, raw := range result.Data.Repository.PullRequest.TimelineItems.Nodes {
 		event, err := parseTimelineNode(raw)
 		if err != nil {
-			// TODO: replace with structured debug logging when a logging framework is added
 			fmt.Fprintf(os.Stderr, "warning: skipping timeline event: %v\n", err)
 			continue
 		}
@@ -317,7 +296,32 @@ func parseTimelineEvents(data string) ([]TimelineEvent, error) {
 			events = append(events, *event)
 		}
 	}
-	return events, nil
+
+	return threads, events, nil
+}
+
+func aggregateThreadsByPath(nodes []graphQLThreadNode) []ReviewThread {
+	byPath := make(map[string]*ReviewThread, len(nodes))
+	for _, node := range nodes {
+		if rt, ok := byPath[node.Path]; ok {
+			rt.CommentCount += node.Comments.TotalCount
+			rt.IsResolved = rt.IsResolved && node.IsResolved
+		} else {
+			byPath[node.Path] = &ReviewThread{
+				CommentCount: node.Comments.TotalCount,
+				IsResolved:   node.IsResolved,
+				Path:         node.Path,
+			}
+		}
+	}
+	threads := make([]ReviewThread, 0, len(byPath))
+	for _, rt := range byPath {
+		threads = append(threads, *rt)
+	}
+	slices.SortFunc(threads, func(a, b ReviewThread) int {
+		return strings.Compare(a.Path, b.Path)
+	})
+	return threads
 }
 
 func parseTimelineNode(raw json.RawMessage) (*TimelineEvent, error) {
@@ -457,53 +461,6 @@ func parseReviewRequestedEvent(raw json.RawMessage) (*TimelineEvent, error) {
 		Details:   v.RequestedReviewer.Login,
 		Type:      TimelineEventReviewRequested,
 	}, nil
-}
-
-func parseReviewThreadsFromJSON(data string) ([]ReviewThread, error) {
-	var result struct {
-		Data struct {
-			Repository struct {
-				PullRequest struct {
-					ReviewThreads struct {
-						Nodes []struct {
-							Comments struct {
-								TotalCount int `json:"totalCount"`
-							} `json:"comments"`
-							IsResolved bool   `json:"isResolved"`
-							Path       string `json:"path"`
-						} `json:"nodes"`
-					} `json:"reviewThreads"`
-				} `json:"pullRequest"`
-			} `json:"repository"`
-		} `json:"data"`
-	}
-
-	if err := json.Unmarshal([]byte(data), &result); err != nil {
-		return nil, fmt.Errorf("failed to parse review threads: %w", err)
-	}
-
-	threadsByPath := make(map[string]*ReviewThread)
-	for _, node := range result.Data.Repository.PullRequest.ReviewThreads.Nodes {
-		if rt, ok := threadsByPath[node.Path]; ok {
-			rt.CommentCount += node.Comments.TotalCount
-			rt.IsResolved = rt.IsResolved && node.IsResolved
-		} else {
-			threadsByPath[node.Path] = &ReviewThread{
-				CommentCount: node.Comments.TotalCount,
-				IsResolved:   node.IsResolved,
-				Path:         node.Path,
-			}
-		}
-	}
-
-	threads := make([]ReviewThread, 0, len(threadsByPath))
-	for _, rt := range threadsByPath {
-		threads = append(threads, *rt)
-	}
-	sort.Slice(threads, func(i, j int) bool {
-		return threads[i].Path < threads[j].Path
-	})
-	return threads, nil
 }
 
 func (g *GitHubCli) Validate() error {

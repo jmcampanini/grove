@@ -151,6 +151,7 @@ type PullRequest struct {
 	BranchName        string
 	Comments          int
 	CreatedAt         time.Time
+	Files             []PullRequestFile
 	FilesChanged      int
 	IsCrossRepository bool // True if PR is from a fork
 	Labels            []Label
@@ -222,6 +223,7 @@ func (pr *PullRequest) UnmarshalJSON(data []byte) error {
 		Comments          []json.RawMessage           `json:"comments"`
 		CreatedAt         time.Time                   `json:"createdAt"`
 		Deletions         int                         `json:"deletions"`
+		Files             []PullRequestFile           `json:"files"`
 		HeadRefName       string                      `json:"headRefName"`
 		IsCrossRepository bool                        `json:"isCrossRepository"`
 		IsDraft           bool                        `json:"isDraft"`
@@ -246,6 +248,7 @@ func (pr *PullRequest) UnmarshalJSON(data []byte) error {
 	pr.BranchName = raw.HeadRefName
 	pr.Comments = len(raw.Comments)
 	pr.CreatedAt = raw.CreatedAt
+	pr.Files = raw.Files
 	pr.FilesChanged = raw.ChangedFiles
 	pr.IsCrossRepository = raw.IsCrossRepository
 	pr.Labels = raw.Labels
