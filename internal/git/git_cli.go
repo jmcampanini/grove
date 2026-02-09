@@ -654,3 +654,36 @@ func (g *GitCli) FetchRemote(remoteName string) (string, error) {
 	args := []string{"fetch", remoteName, "--prune", "--prune-tags", "--tags"}
 	return g.executeMutatingGitCommandWithOutput("failed to fetch from remote", args...)
 }
+
+func (g *GitCli) DeleteBranch(name string, force bool) error {
+	g.log.Info("Deleting branch", "branch", name, "force", force)
+	flag := "-d"
+	if force {
+		flag = "-D"
+	}
+	return g.executeMutatingGitCommand("failed to delete branch", "branch", flag, name)
+}
+
+func (g *GitCli) IsWorktreeDirty(absPath string) (bool, error) {
+	g.log.Debug("Checking worktree dirty state", "path", absPath)
+	output, err := g.executeGitCommand("-C", absPath, "status", "--porcelain")
+	if err != nil {
+		return false, fmt.Errorf("failed to check worktree dirty state: %w", err)
+	}
+	return output != "", nil
+}
+
+func (g *GitCli) PruneWorktrees() error {
+	g.log.Info("Pruning stale worktree metadata")
+	return g.executeMutatingGitCommand("failed to prune worktrees", "worktree", "prune")
+}
+
+func (g *GitCli) RemoveWorktree(absPath string, force bool) error {
+	g.log.Info("Removing worktree", "path", absPath, "force", force)
+	args := []string{"worktree", "remove"}
+	if force {
+		args = append(args, "--force")
+	}
+	args = append(args, absPath)
+	return g.executeMutatingGitCommand("failed to remove worktree", args...)
+}

@@ -868,11 +868,8 @@ func TestCreateWorktreeForNewBranchFromRef_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify the branch is at the first commit
-	worktreeGit := New(false, worktreePath, testTimeout).(*GitCli)
 	currentSHA := strings.TrimSpace(runGit(t, worktreePath, "rev-parse", "--short", "HEAD"))
 	assert.Equal(t, firstSHA, currentSHA)
-
-	_ = worktreeGit // silence unused variable warning
 }
 
 func TestCreateWorktreeForNewBranchFromRef_Integration_EmptyRef(t *testing.T) {
@@ -1047,4 +1044,153 @@ func TestSyncTags_Integration_RemoteOnlyTag(t *testing.T) {
 	tags, err := repo.Git.ListTags()
 	require.NoError(t, err)
 	assert.Contains(t, tagNames(tags), "v-remote-only")
+}
+
+// =============================================================================
+// RemoveWorktree tests
+// =============================================================================
+
+func TestRemoveWorktree_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	repo := newTestRepo(t)
+	repo.commit("initial commit")
+	repo.createBranch("feature-remove")
+
+	worktreePath := filepath.Join(t.TempDir(), "wt-remove")
+	repo.createWorktree(worktreePath, "feature-remove")
+
+	err := repo.Git.RemoveWorktree(resolvePath(t, worktreePath), false)
+
+	require.NoError(t, err)
+
+	_, statErr := os.Stat(worktreePath)
+	assert.True(t, os.IsNotExist(statErr))
+
+	worktrees, err := repo.Git.ListWorktrees()
+	require.NoError(t, err)
+	for _, wt := range worktrees {
+		assert.NotEqual(t, resolvePath(t, worktreePath), wt.AbsolutePath)
+	}
+}
+
+func TestRemoveWorktree_Integration_Force(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	repo := newTestRepo(t)
+	repo.commit("initial commit")
+	repo.createBranch("feature-dirty")
+
+	worktreePath := filepath.Join(t.TempDir(), "wt-dirty")
+	repo.createWorktree(worktreePath, "feature-dirty")
+
+	appendToFile(t, filepath.Join(resolvePath(t, worktreePath), "dirty.txt"), "uncommitted\n")
+
+	err := repo.Git.RemoveWorktree(resolvePath(t, worktreePath), false)
+	require.Error(t, err)
+
+	err = repo.Git.RemoveWorktree(resolvePath(t, worktreePath), true)
+	require.NoError(t, err)
+
+	_, statErr := os.Stat(worktreePath)
+	assert.True(t, os.IsNotExist(statErr))
+}
+
+// =============================================================================
+// DeleteBranch tests
+// =============================================================================
+
+func TestDeleteBranch_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	repo := newTestRepo(t)
+	repo.commit("initial commit")
+	repo.createBranch("branch-to-delete")
+
+	err := repo.Git.DeleteBranch("branch-to-delete", false)
+	require.NoError(t, err)
+
+	exists, err := repo.Git.BranchExists("branch-to-delete", false)
+	require.NoError(t, err)
+	assert.False(t, exists)
+}
+
+func TestDeleteBranch_Integration_Force(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	repo := newTestRepo(t)
+	repo.commit("initial commit")
+	repo.createBranch("unmerged-branch")
+	repo.checkout("unmerged-branch")
+	repo.commit("unmerged commit")
+	repo.checkout("main")
+
+	err := repo.Git.DeleteBranch("unmerged-branch", false)
+	require.Error(t, err)
+
+	err = repo.Git.DeleteBranch("unmerged-branch", true)
+	require.NoError(t, err)
+
+	exists, err := repo.Git.BranchExists("unmerged-branch", false)
+	require.NoError(t, err)
+	assert.False(t, exists)
+}
+
+// =============================================================================
+// IsWorktreeDirty tests
+// =============================================================================
+
+func TestIsWorktreeDirty_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	repo := newTestRepo(t)
+	repo.commit("initial commit")
+
+	dirty, err := repo.Git.IsWorktreeDirty(repo.path())
+	require.NoError(t, err)
+	assert.False(t, dirty)
+
+	appendToFile(t, filepath.Join(repo.path(), "untracked.txt"), "new file\n")
+
+	dirty, err = repo.Git.IsWorktreeDirty(repo.path())
+	require.NoError(t, err)
+	assert.True(t, dirty)
+}
+
+// =============================================================================
+// PruneWorktrees tests
+// =============================================================================
+
+func TestPruneWorktrees_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	repo := newTestRepo(t)
+	repo.commit("initial commit")
+	repo.createBranch("stale-branch")
+
+	worktreePath := filepath.Join(t.TempDir(), "wt-stale")
+	repo.createWorktree(worktreePath, "stale-branch")
+
+	require.NoError(t, os.RemoveAll(worktreePath))
+
+	porcelainBefore := strings.TrimSpace(runGit(t, repo.path(), "worktree", "list", "--porcelain"))
+	assert.Contains(t, porcelainBefore, "wt-stale")
+
+	err := repo.Git.PruneWorktrees()
+	require.NoError(t, err)
+
+	porcelainAfter := strings.TrimSpace(runGit(t, repo.path(), "worktree", "list", "--porcelain"))
+	assert.NotContains(t, porcelainAfter, "wt-stale")
 }
