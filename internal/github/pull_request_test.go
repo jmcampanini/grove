@@ -10,6 +10,39 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestParseRepoFromURL(t *testing.T) {
+	tests := []struct {
+		name      string
+		url       string
+		wantOwner string
+		wantRepo  string
+		wantErr   bool
+	}{
+		{name: "standard URL", url: "https://github.com/owner/repo/pull/42", wantOwner: "owner", wantRepo: "repo"},
+		{name: "GHE URL", url: "https://github.example.com/org/project/pull/99", wantOwner: "org", wantRepo: "project"},
+		{name: "trailing slash", url: "https://github.com/owner/repo/pull/42/", wantOwner: "owner", wantRepo: "repo"},
+		{name: "extra path segments", url: "https://github.com/owner/repo/pull/42/files", wantOwner: "owner", wantRepo: "repo"},
+		{name: "http scheme", url: "http://github.com/owner/repo/pull/1", wantOwner: "owner", wantRepo: "repo"},
+		{name: "non-pull URL", url: "https://github.com/owner/repo/issues/42", wantErr: true},
+		{name: "empty string", url: "", wantErr: true},
+		{name: "host only", url: "https://github.com", wantErr: true},
+		{name: "owner only", url: "https://github.com/owner", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			owner, repo, err := ParseRepoFromURL(tt.url)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantOwner, owner)
+			assert.Equal(t, tt.wantRepo, repo)
+		})
+	}
+}
+
 func TestPRState_String(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -333,6 +366,99 @@ func TestPullRequest_UnmarshalJSON(t *testing.T) {
 			},
 		},
 		{
+			name: "PR with files",
+			input: `{
+				"additions": 5,
+				"author": {"login": "dev"},
+				"body": "",
+				"changedFiles": 2,
+				"createdAt": "2024-01-01T00:00:00Z",
+				"deletions": 2,
+				"files": [
+					{"path": "main.go", "additions": 3, "deletions": 1},
+					{"path": "util.go", "additions": 2, "deletions": 1}
+				],
+				"headRefName": "with-files",
+				"isDraft": false,
+				"number": 42,
+				"state": "OPEN",
+				"title": "PR with files",
+				"updatedAt": "2024-01-01T00:00:00Z",
+				"url": "https://github.com/owner/repo/pull/42"
+			}`,
+			want: PullRequest{
+				AuthorLogin: "dev",
+				BranchName:  "with-files",
+				CreatedAt:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+				Files: []PullRequestFile{
+					{Additions: 3, Deletions: 1, Path: "main.go"},
+					{Additions: 2, Deletions: 1, Path: "util.go"},
+				},
+				FilesChanged: 2,
+				LinesAdded:   5,
+				LinesDeleted: 2,
+				Number:       42,
+				State:        PRStateOpen,
+				Title:        "PR with files",
+				UpdatedAt:    time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+				URL:          "https://github.com/owner/repo/pull/42",
+			},
+		},
+		{
+			name: "PR with empty files array",
+			input: `{
+				"additions": 0,
+				"author": {"login": "dev"},
+				"body": "",
+				"changedFiles": 0,
+				"files": [],
+				"headRefName": "empty-files",
+				"isDraft": false,
+				"number": 43,
+				"state": "OPEN",
+				"title": "Empty files",
+				"updatedAt": "2024-01-01T00:00:00Z",
+				"url": "https://github.com/owner/repo/pull/43"
+			}`,
+			want: PullRequest{
+				AuthorLogin: "dev",
+				BranchName:  "empty-files",
+				Files:       []PullRequestFile{},
+				Number:      43,
+				State:       PRStateOpen,
+				Title:       "Empty files",
+				UpdatedAt:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+				URL:         "https://github.com/owner/repo/pull/43",
+			},
+		},
+		{
+			name: "PR without files key",
+			input: `{
+				"additions": 1,
+				"author": {"login": "dev"},
+				"body": "",
+				"changedFiles": 1,
+				"headRefName": "no-files-key",
+				"isDraft": false,
+				"number": 44,
+				"state": "OPEN",
+				"title": "No files key",
+				"updatedAt": "2024-01-01T00:00:00Z",
+				"url": "https://github.com/owner/repo/pull/44"
+			}`,
+			want: PullRequest{
+				AuthorLogin:  "dev",
+				BranchName:   "no-files-key",
+				FilesChanged: 1,
+				LinesAdded:   1,
+				Number:       44,
+				State:        PRStateOpen,
+				Title:        "No files key",
+				UpdatedAt:    time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+				URL:          "https://github.com/owner/repo/pull/44",
+			},
+		},
+		{
 			name:        "unknown state returns error",
 			input:       `{"state": "UNKNOWN", "number": 1, "headRefName": "test"}`,
 			wantErr:     true,
@@ -355,6 +481,203 @@ func TestPullRequest_UnmarshalJSON(t *testing.T) {
 				BranchName: "minimal",
 				Number:     1,
 				State:      PRStateOpen,
+			},
+		},
+		{
+			name: "PR with labels reviews and status checks",
+			input: `{
+				"additions": 10,
+				"author": {"login": "dev"},
+				"baseRefName": "main",
+				"body": "Full PR",
+				"changedFiles": 2,
+				"comments": [{"body": "lgtm"}, {"body": "nit"}],
+				"createdAt": "2024-06-01T10:00:00Z",
+				"deletions": 3,
+				"headRefName": "feature/full",
+				"isDraft": false,
+				"labels": [
+					{"name": "bug", "color": "d73a4a"},
+					{"name": "enhancement", "color": "a2eeef"}
+				],
+				"number": 500,
+				"reviews": [
+					{"author": {"login": "reviewer1"}, "state": "APPROVED", "submittedAt": "2024-06-02T08:00:00Z"},
+					{"author": {"login": "reviewer2"}, "state": "CHANGES_REQUESTED", "submittedAt": "2024-06-02T09:00:00Z"}
+				],
+				"state": "OPEN",
+				"statusCheckRollup": [
+					{"name": "ci/test", "status": "COMPLETED", "conclusion": "success"},
+					{"name": "ci/lint", "status": "IN_PROGRESS", "conclusion": ""}
+				],
+				"title": "Full featured PR",
+				"updatedAt": "2024-06-02T12:00:00Z",
+				"url": "https://github.com/owner/repo/pull/500"
+			}`,
+			want: PullRequest{
+				AuthorLogin:  "dev",
+				BaseRefName:  "main",
+				Body:         "Full PR",
+				BranchName:   "feature/full",
+				Comments:     2,
+				CreatedAt:    time.Date(2024, 6, 1, 10, 0, 0, 0, time.UTC),
+				FilesChanged: 2,
+				Labels: []Label{
+					{Name: "bug", Color: "d73a4a"},
+					{Name: "enhancement", Color: "a2eeef"},
+				},
+				LinesAdded:   10,
+				LinesDeleted: 3,
+				Number:       500,
+				Reviews: []Review{
+					{AuthorLogin: "reviewer1", State: ReviewStateApproved, SubmittedAt: time.Date(2024, 6, 2, 8, 0, 0, 0, time.UTC)},
+					{AuthorLogin: "reviewer2", State: ReviewStateChangesRequested, SubmittedAt: time.Date(2024, 6, 2, 9, 0, 0, 0, time.UTC)},
+				},
+				State: PRStateOpen,
+				StatusChecks: []StatusCheck{
+					{Conclusion: CheckConclusionSuccess, Name: "ci/test", Status: CheckStatusCompleted},
+					{Name: "ci/lint", Status: CheckStatusInProgress},
+				},
+				Title:     "Full featured PR",
+				UpdatedAt: time.Date(2024, 6, 2, 12, 0, 0, 0, time.UTC),
+				URL:       "https://github.com/owner/repo/pull/500",
+			},
+		},
+		{
+			name: "PR with empty labels reviews and status checks",
+			input: `{
+				"additions": 0,
+				"author": {"login": "dev"},
+				"baseRefName": "develop",
+				"body": "",
+				"changedFiles": 0,
+				"comments": [],
+				"createdAt": "2024-07-01T00:00:00Z",
+				"deletions": 0,
+				"headRefName": "empty-extras",
+				"isDraft": false,
+				"labels": [],
+				"number": 600,
+				"reviews": [],
+				"state": "OPEN",
+				"statusCheckRollup": [],
+				"title": "Empty extras",
+				"updatedAt": "2024-07-01T00:00:00Z",
+				"url": "https://github.com/owner/repo/pull/600"
+			}`,
+			want: PullRequest{
+				AuthorLogin: "dev",
+				BaseRefName: "develop",
+				BranchName:  "empty-extras",
+				CreatedAt:   time.Date(2024, 7, 1, 0, 0, 0, 0, time.UTC),
+				Labels:      []Label{},
+				Number:      600,
+				State:       PRStateOpen,
+				Title:       "Empty extras",
+				UpdatedAt:   time.Date(2024, 7, 1, 0, 0, 0, 0, time.UTC),
+				URL:         "https://github.com/owner/repo/pull/600",
+			},
+		},
+		{
+			name: "PR with missing optional new fields",
+			input: `{
+				"additions": 1,
+				"author": {"login": "dev"},
+				"body": "",
+				"changedFiles": 1,
+				"createdAt": "2024-08-01T00:00:00Z",
+				"deletions": 0,
+				"headRefName": "no-extras",
+				"isDraft": false,
+				"number": 700,
+				"state": "OPEN",
+				"title": "No extras",
+				"updatedAt": "2024-08-01T00:00:00Z",
+				"url": "https://github.com/owner/repo/pull/700"
+			}`,
+			want: PullRequest{
+				AuthorLogin:  "dev",
+				BranchName:   "no-extras",
+				CreatedAt:    time.Date(2024, 8, 1, 0, 0, 0, 0, time.UTC),
+				FilesChanged: 1,
+				LinesAdded:   1,
+				Number:       700,
+				State:        PRStateOpen,
+				Title:        "No extras",
+				UpdatedAt:    time.Date(2024, 8, 1, 0, 0, 0, 0, time.UTC),
+				URL:          "https://github.com/owner/repo/pull/700",
+			},
+		},
+		{
+			name: "mixed statusCheckRollup with CheckRun and StatusContext",
+			input: `{
+				"additions": 0,
+				"author": {"login": "dev"},
+				"body": "",
+				"changedFiles": 0,
+				"createdAt": "2024-09-01T00:00:00Z",
+				"deletions": 0,
+				"headRefName": "mixed-checks",
+				"isDraft": false,
+				"number": 800,
+				"state": "OPEN",
+				"statusCheckRollup": [
+					{"__typename": "CheckRun", "name": "ci/test", "status": "COMPLETED", "conclusion": "success", "detailsUrl": "https://github.com/owner/repo/actions/runs/123"},
+					{"__typename": "StatusContext", "context": "deploy/staging", "state": "SUCCESS", "targetUrl": "https://deploy.example.com/staging"},
+					{"__typename": "StatusContext", "context": "deploy/prod", "state": "PENDING"}
+				],
+				"title": "Mixed checks",
+				"updatedAt": "2024-09-01T00:00:00Z",
+				"url": "https://github.com/owner/repo/pull/800"
+			}`,
+			want: PullRequest{
+				AuthorLogin: "dev",
+				BranchName:  "mixed-checks",
+				CreatedAt:   time.Date(2024, 9, 1, 0, 0, 0, 0, time.UTC),
+				Number:      800,
+				State:       PRStateOpen,
+				StatusChecks: []StatusCheck{
+					{Conclusion: CheckConclusionSuccess, DetailURL: "https://github.com/owner/repo/actions/runs/123", Name: "ci/test", Status: CheckStatusCompleted},
+					{Conclusion: CheckConclusionSuccess, DetailURL: "https://deploy.example.com/staging", Name: "deploy/staging", Status: CheckStatusCompleted},
+					{Conclusion: "", Name: "deploy/prod", Status: CheckStatusPending},
+				},
+				Title:     "Mixed checks",
+				UpdatedAt: time.Date(2024, 9, 1, 0, 0, 0, 0, time.UTC),
+				URL:       "https://github.com/owner/repo/pull/800",
+			},
+		},
+		{
+			name: "StatusContext ERROR state maps to failure conclusion",
+			input: `{
+				"additions": 0,
+				"author": {"login": "dev"},
+				"body": "",
+				"changedFiles": 0,
+				"createdAt": "2024-09-01T00:00:00Z",
+				"deletions": 0,
+				"headRefName": "error-check",
+				"isDraft": false,
+				"number": 900,
+				"state": "OPEN",
+				"statusCheckRollup": [
+					{"__typename": "StatusContext", "context": "ci/external", "state": "ERROR", "targetUrl": "https://ci.example.com/build/1"}
+				],
+				"title": "Error check",
+				"updatedAt": "2024-09-01T00:00:00Z",
+				"url": "https://github.com/owner/repo/pull/900"
+			}`,
+			want: PullRequest{
+				AuthorLogin: "dev",
+				BranchName:  "error-check",
+				CreatedAt:   time.Date(2024, 9, 1, 0, 0, 0, 0, time.UTC),
+				Number:      900,
+				State:       PRStateOpen,
+				StatusChecks: []StatusCheck{
+					{Conclusion: CheckConclusionFailure, DetailURL: "https://ci.example.com/build/1", Name: "ci/external", Status: CheckStatusCompleted},
+				},
+				Title:     "Error check",
+				UpdatedAt: time.Date(2024, 9, 1, 0, 0, 0, 0, time.UTC),
+				URL:       "https://github.com/owner/repo/pull/900",
 			},
 		},
 	}

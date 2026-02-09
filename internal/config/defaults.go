@@ -5,11 +5,20 @@ import "time"
 // DefaultConfig returns sensible defaults for all configuration.
 func DefaultConfig() Config {
 	return Config{
-		Branch: BranchConfig{
-			NewPrefix: "feature/",
-		},
 		Git: GitConfig{
 			Timeout: 5 * time.Second,
+		},
+		GitHub: GitHubConfig{
+			PreviewCacheTTL: 5 * time.Minute,
+		},
+		LocalBranch: LocalBranchConfig{
+			BranchPrefix:      "feature/",
+			StripBranchPrefix: []string{"feature/"},
+			WorktreePrefix:    "wt-",
+		},
+		PullRequest: PullRequestConfig{
+			BranchTemplate: "{{.BranchName}}",
+			WorktreePrefix: "pr-",
 		},
 		Slugify: SlugifyConfig{
 			CollapseDashes:     true,
@@ -18,10 +27,6 @@ func DefaultConfig() Config {
 			MaxLength:          50,
 			ReplaceNonAlphanum: true,
 			TrimDashes:         true,
-		},
-		Worktree: WorktreeConfig{
-			NewPrefix:         "wt-",
-			StripBranchPrefix: []string{"feature/"},
 		},
 	}
 }

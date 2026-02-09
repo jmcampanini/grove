@@ -3,6 +3,7 @@ package github
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -75,42 +76,180 @@ func (q PRQuery) ToSearchQuery() string {
 	return strings.Join(parts, " ")
 }
 
-type PullRequest struct {
-	AuthorLogin  string // May be empty if author's account was deleted
-	AuthorName   string // May be empty if author's account was deleted
-	Body         string
-	BranchName   string
-	CreatedAt    time.Time
-	FilesChanged int
-	LinesAdded   int
-	LinesDeleted int
-	Number       int
-	State        PRState
-	Title        string
-	UpdatedAt    time.Time
-	URL          string
+type Label struct {
+	Color string `json:"color"`
+	Name  string `json:"name"`
 }
 
-const prJsonFields = "additions,author,body,changedFiles,createdAt,deletions,headRefName,isDraft,number,state,title,updatedAt,url"
+type ReviewState string
+
+const (
+	ReviewStateApproved         ReviewState = "APPROVED"
+	ReviewStateChangesRequested ReviewState = "CHANGES_REQUESTED"
+	ReviewStateCommented        ReviewState = "COMMENTED"
+	ReviewStateDismissed        ReviewState = "DISMISSED"
+	ReviewStatePending          ReviewState = "PENDING"
+)
+
+type Review struct {
+	AuthorLogin string
+	State       ReviewState
+	SubmittedAt time.Time
+}
+
+type CheckConclusion string
+
+const (
+	CheckConclusionActionRequired CheckConclusion = "action_required"
+	CheckConclusionCancelled      CheckConclusion = "cancelled"
+	CheckConclusionFailure        CheckConclusion = "failure"
+	CheckConclusionNeutral        CheckConclusion = "neutral"
+	CheckConclusionSkipped        CheckConclusion = "skipped"
+	CheckConclusionSuccess        CheckConclusion = "success"
+	CheckConclusionTimedOut       CheckConclusion = "timed_out"
+)
+
+type CheckStatus string
+
+const (
+	CheckStatusCompleted  CheckStatus = "COMPLETED"
+	CheckStatusInProgress CheckStatus = "IN_PROGRESS"
+	CheckStatusPending    CheckStatus = "PENDING"
+	CheckStatusQueued     CheckStatus = "QUEUED"
+	CheckStatusRequested  CheckStatus = "REQUESTED"
+	CheckStatusWaiting    CheckStatus = "WAITING"
+)
+
+type StatusCheck struct {
+	Conclusion CheckConclusion
+	DetailURL  string
+	Name       string
+	Status     CheckStatus
+}
+
+type TimelineEventType string
+
+const (
+	TimelineEventClosed          TimelineEventType = "closed"
+	TimelineEventCommented       TimelineEventType = "commented"
+	TimelineEventCommitted       TimelineEventType = "committed"
+	TimelineEventConvertToDraft  TimelineEventType = "convert_to_draft"
+	TimelineEventForcePushed     TimelineEventType = "force_pushed"
+	TimelineEventLabeled         TimelineEventType = "labeled"
+	TimelineEventMerged          TimelineEventType = "merged"
+	TimelineEventOpened          TimelineEventType = "opened" // synthetic: injected by renderTimeline
+	TimelineEventReadyForReview  TimelineEventType = "ready_for_review"
+	TimelineEventReopened        TimelineEventType = "reopened"
+	TimelineEventReviewRequested TimelineEventType = "review_requested"
+	TimelineEventReviewed        TimelineEventType = "reviewed"
+)
+
+type PullRequest struct {
+	AuthorLogin       string // May be empty if author's account was deleted
+	AuthorName        string // May be empty if author's account was deleted
+	BaseRefName       string
+	Body              string
+	BranchName        string
+	Comments          int
+	CreatedAt         time.Time
+	Files             []PullRequestFile
+	FilesChanged      int
+	IsCrossRepository bool // True if PR is from a fork
+	Labels            []Label
+	LinesAdded        int
+	LinesDeleted      int
+	Number            int
+	Reviews           []Review
+	State             PRState
+	StatusChecks      []StatusCheck
+	Title             string
+	UpdatedAt         time.Time
+	URL               string
+}
+
+// PullRequestFile represents a file changed in a pull request.
+type PullRequestFile struct {
+	Additions int    `json:"additions"`
+	Deletions int    `json:"deletions"`
+	Path      string `json:"path"`
+}
+
+// ReviewThread represents a review thread on a specific file in a pull request.
+type ReviewThread struct {
+	CommentCount int
+	IsResolved   bool
+	Path         string
+}
+
+// TimelineEvent represents a normalized event from a pull request's timeline.
+type TimelineEvent struct {
+	Actor     string
+	CreatedAt time.Time
+	Details   string
+	Type      TimelineEventType
+}
+
+// ParseRepoFromURL extracts owner and repo from a GitHub pull request URL.
+// Works for both github.com and GitHub Enterprise URLs (only the path is parsed).
+func ParseRepoFromURL(prURL string) (owner, repo string, err error) {
+	u, err := url.Parse(prURL)
+	if err != nil {
+		return "", "", fmt.Errorf("invalid PR URL %q: %w", prURL, err)
+	}
+	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
+	if len(parts) < 4 || parts[2] != "pull" {
+		return "", "", fmt.Errorf("unexpected PR URL format %q: expected /owner/repo/pull/number", prURL)
+	}
+	return parts[0], parts[1], nil
+}
+
+const prJsonFields = "additions,author,baseRefName,body,changedFiles,comments,createdAt,deletions,headRefName,isCrossRepository,isDraft,labels,number,reviews,state,statusCheckRollup,title,updatedAt,url"
 
 func (pr *PullRequest) UnmarshalJSON(data []byte) error {
+	type rawReview struct {
+		Author struct {
+			Login string `json:"login"`
+		} `json:"author"`
+		State       string    `json:"state"`
+		SubmittedAt time.Time `json:"submittedAt"`
+	}
+	// gh CLI returns two shapes in statusCheckRollup:
+	//   CheckRun:      {"__typename":"CheckRun", "name":"ci/test", "status":"COMPLETED", "conclusion":"success"}
+	//   StatusContext:  {"__typename":"StatusContext", "context":"ci/deploy", "state":"SUCCESS"}
+	type rawStatusCheckRollupEntry struct {
+		Conclusion string `json:"conclusion"`
+		Context    string `json:"context"`
+		DetailsURL string `json:"detailsUrl"`
+		Name       string `json:"name"`
+		State      string `json:"state"`
+		Status     string `json:"status"`
+		TargetURL  string `json:"targetUrl"`
+		TypeName   string `json:"__typename"`
+	}
 	type rawPR struct {
-		Additions    int       `json:"additions"`
-		Body         string    `json:"body"`
-		ChangedFiles int       `json:"changedFiles"`
-		CreatedAt    time.Time `json:"createdAt"`
-		Deletions    int       `json:"deletions"`
-		HeadRefName  string    `json:"headRefName"`
-		IsDraft      bool      `json:"isDraft"`
-		Number       int       `json:"number"`
-		State        string    `json:"state"`
-		Title        string    `json:"title"`
-		UpdatedAt    time.Time `json:"updatedAt"`
-		URL          string    `json:"url"`
-		Author       struct {
+		Additions int `json:"additions"`
+		Author    struct {
 			Login string `json:"login"`
 			Name  string `json:"name"`
 		} `json:"author"`
+		BaseRefName       string                      `json:"baseRefName"`
+		Body              string                      `json:"body"`
+		ChangedFiles      int                         `json:"changedFiles"`
+		Comments          []json.RawMessage           `json:"comments"`
+		CreatedAt         time.Time                   `json:"createdAt"`
+		Deletions         int                         `json:"deletions"`
+		Files             []PullRequestFile           `json:"files"`
+		HeadRefName       string                      `json:"headRefName"`
+		IsCrossRepository bool                        `json:"isCrossRepository"`
+		IsDraft           bool                        `json:"isDraft"`
+		Labels            []Label                     `json:"labels"`
+		Number            int                         `json:"number"`
+		Reviews           []rawReview                 `json:"reviews"`
+		State             string                      `json:"state"`
+		StatusCheckRollup []rawStatusCheckRollupEntry `json:"statusCheckRollup"`
+		Title             string                      `json:"title"`
+		UpdatedAt         time.Time                   `json:"updatedAt"`
+		URL               string                      `json:"url"`
 	}
 	var raw rawPR
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -119,16 +258,56 @@ func (pr *PullRequest) UnmarshalJSON(data []byte) error {
 
 	pr.AuthorLogin = raw.Author.Login
 	pr.AuthorName = raw.Author.Name
+	pr.BaseRefName = raw.BaseRefName
 	pr.Body = raw.Body
 	pr.BranchName = raw.HeadRefName
+	pr.Comments = len(raw.Comments)
 	pr.CreatedAt = raw.CreatedAt
+	pr.Files = raw.Files
 	pr.FilesChanged = raw.ChangedFiles
+	pr.IsCrossRepository = raw.IsCrossRepository
+	pr.Labels = raw.Labels
 	pr.LinesAdded = raw.Additions
 	pr.LinesDeleted = raw.Deletions
 	pr.Number = raw.Number
 	pr.Title = raw.Title
 	pr.UpdatedAt = raw.UpdatedAt
 	pr.URL = raw.URL
+
+	for _, r := range raw.Reviews {
+		pr.Reviews = append(pr.Reviews, Review{
+			AuthorLogin: r.Author.Login,
+			State:       ReviewState(r.State),
+			SubmittedAt: r.SubmittedAt,
+		})
+	}
+
+	for _, sc := range raw.StatusCheckRollup {
+		if sc.TypeName == "StatusContext" {
+			status := CheckStatusCompleted
+			conclusion := CheckConclusion(strings.ToLower(sc.State))
+			switch sc.State {
+			case "PENDING", "EXPECTED":
+				status = CheckStatusPending
+				conclusion = ""
+			case "ERROR":
+				conclusion = CheckConclusionFailure
+			}
+			pr.StatusChecks = append(pr.StatusChecks, StatusCheck{
+				Conclusion: conclusion,
+				DetailURL:  sc.TargetURL,
+				Name:       sc.Context,
+				Status:     status,
+			})
+		} else {
+			pr.StatusChecks = append(pr.StatusChecks, StatusCheck{
+				Conclusion: CheckConclusion(strings.ToLower(sc.Conclusion)),
+				DetailURL:  sc.DetailsURL,
+				Name:       sc.Name,
+				Status:     CheckStatus(sc.Status),
+			})
+		}
+	}
 
 	if raw.IsDraft && raw.State == "OPEN" {
 		pr.State = PRStateDraft

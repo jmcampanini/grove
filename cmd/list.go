@@ -2,9 +2,10 @@ package cmd
 
 import (
 	"fmt"
-	"os"
+	"io"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/jmcampanini/grove-cli/internal/config"
 	"github.com/jmcampanini/grove-cli/internal/git"
@@ -38,44 +39,29 @@ func init() {
 	rootCmd.AddCommand(listCmd)
 }
 
+type listContext struct {
+	cfg              config.Config
+	gitClient        git.Git
+	mainWorktreePath string
+}
+
 func runList(cmd *cobra.Command, _ []string) error {
-	cwd, err := os.Getwd()
+	rt, err := loadCommandRuntime()
 	if err != nil {
-		return fmt.Errorf("failed to get current directory: %w", err)
+		return err
 	}
 
-	gitClient := git.New(false, cwd, config.DefaultConfig().Git.Timeout)
-
-	worktreeRoot, err := gitClient.GetWorktreeRoot()
-	if err != nil {
-		return fmt.Errorf("git error: %w", err)
-	}
-	if worktreeRoot == "" {
-		return fmt.Errorf("grove must be run inside a git repository")
+	ctx := &listContext{
+		cfg:              rt.cfg,
+		gitClient:        rt.gitClient,
+		mainWorktreePath: rt.mainWorktreePath,
 	}
 
-	mainWorktreePath, err := gitClient.GetMainWorktreePath()
-	if err != nil {
-		return fmt.Errorf("failed to get main worktree path: %w", err)
-	}
+	return executeList(cmd.OutOrStdout(), ctx, fzfFlag)
+}
 
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("failed to get user home directory: %w", err)
-	}
-
-	configPaths := config.ConfigPaths(cwd, worktreeRoot, mainWorktreePath, homeDir)
-	loader := config.NewDefaultLoader()
-	loadResult, err := loader.Load(configPaths)
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
-	cfg := loadResult.Config
-
-	// Recreate the git client using the config timeout
-	gitClient = git.New(false, cwd, cfg.Git.Timeout)
-
-	worktrees, err := gitClient.ListWorktrees()
+func executeList(w io.Writer, ctx *listContext, fzf bool) error {
+	worktrees, err := ctx.gitClient.ListWorktrees()
 	if err != nil {
 		return fmt.Errorf("failed to list worktrees: %w", err)
 	}
@@ -83,26 +69,27 @@ func runList(cmd *cobra.Command, _ []string) error {
 	var mainWT *git.Worktree
 	var others []git.Worktree
 	for i := range worktrees {
-		if worktrees[i].AbsolutePath == mainWorktreePath {
+		if worktrees[i].AbsolutePath == ctx.mainWorktreePath {
 			mainWT = &worktrees[i]
 		} else {
 			others = append(others, worktrees[i])
 		}
 	}
 
-	namer := naming.NewWorktreeNamer(cfg.Worktree, cfg.Slugify)
-
 	sort.Slice(others, func(i, j int) bool {
 		return others[i].AbsolutePath < others[j].AbsolutePath
 	})
 
+	namer := naming.NewLocalBranchNamer(ctx.cfg.LocalBranch, ctx.cfg.Slugify)
+	prWorktreePrefix := ctx.cfg.PullRequest.WorktreePrefix
+
 	if mainWT != nil {
-		if err := outputWorktree(cmd, *mainWT, namer, fzfFlag); err != nil {
+		if err := writeWorktree(w, *mainWT, namer, prWorktreePrefix, fzf); err != nil {
 			return err
 		}
 	}
 	for _, wt := range others {
-		if err := outputWorktree(cmd, wt, namer, fzfFlag); err != nil {
+		if err := writeWorktree(w, wt, namer, prWorktreePrefix, fzf); err != nil {
 			return err
 		}
 	}
@@ -110,18 +97,19 @@ func runList(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-func outputWorktree(cmd *cobra.Command, wt git.Worktree, namer *naming.WorktreeNamer, fzf bool) error {
+func writeWorktree(w io.Writer, wt git.Worktree, namer *naming.LocalBranchNamer, prWorktreePrefix string, fzf bool) error {
 	if fzf {
-		path, display := formatWorktree(wt, namer)
-		_, err := fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\n", path, display)
+		path, display := formatWorktree(wt, namer, prWorktreePrefix)
+		_, err := fmt.Fprintf(w, "%s\t%s\n", path, display)
 		return err
 	}
-	_, err := fmt.Fprintln(cmd.OutOrStdout(), wt.AbsolutePath)
+	_, err := fmt.Fprintln(w, wt.AbsolutePath)
 	return err
 }
 
-func formatWorktree(wt git.Worktree, namer *naming.WorktreeNamer) (path, display string) {
+func formatWorktree(wt git.Worktree, namer *naming.LocalBranchNamer, prWorktreePrefix string) (path, display string) {
 	name := getDisplayName(namer, wt.AbsolutePath)
+	name = formatWorktreeName(name, filepath.Base(wt.AbsolutePath), prWorktreePrefix)
 
 	switch wt.Ref.Type() {
 	case git.WorktreeRefTypeBranch:
@@ -142,10 +130,7 @@ func formatWorktree(wt git.Worktree, namer *naming.WorktreeNamer) (path, display
 	}
 }
 
-// getDisplayName returns the display name for a worktree.
-// If the basename has the configured prefix, strip it.
-// Otherwise, wrap in brackets to indicate non-standard naming.
-func getDisplayName(namer *naming.WorktreeNamer, absPath string) string {
+func getDisplayName(namer *naming.LocalBranchNamer, absPath string) string {
 	basename := filepath.Base(absPath)
 	if namer.HasPrefix(basename) {
 		return namer.ExtractFromAbsolutePath(absPath)
@@ -154,8 +139,6 @@ func getDisplayName(namer *naming.WorktreeNamer, absPath string) string {
 	return "[" + basename + "]"
 }
 
-// shortSHASafe safely truncates a SHA to the specified length.
-// Returns the full SHA if shorter than maxLen, or "(no sha)" if empty.
 func shortSHASafe(sha string, maxLen int) string {
 	if sha == "" {
 		return "(no sha)"
@@ -164,4 +147,11 @@ func shortSHASafe(sha string, maxLen int) string {
 		return sha
 	}
 	return sha[:maxLen]
+}
+
+func formatWorktreeName(displayName, dirName, prWorktreePrefix string) string {
+	if prWorktreePrefix != "" && strings.HasPrefix(dirName, prWorktreePrefix) {
+		return "[PR] " + displayName
+	}
+	return displayName
 }

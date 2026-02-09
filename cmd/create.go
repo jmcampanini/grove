@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -36,53 +37,41 @@ func init() {
 	rootCmd.AddCommand(createCmd)
 }
 
+type createContext struct {
+	cfg       config.Config
+	gitClient git.Git
+}
+
 func runCreate(cmd *cobra.Command, args []string) error {
 	phrase := args[0]
 
+	rt, err := loadCommandRuntime()
+	if err != nil {
+		return err
+	}
+
+	ctx := &createContext{
+		cfg:       rt.cfg,
+		gitClient: rt.gitClient,
+	}
+
+	return executeCreate(cmd.OutOrStdout(), ctx, phrase)
+}
+
+func executeCreate(stdout io.Writer, ctx *createContext, phrase string) error {
 	if strings.TrimSpace(phrase) == "" {
 		return errors.New("phrase cannot be empty")
 	}
 
-	cwd, err := os.Getwd()
+	namer := naming.NewLocalBranchNamer(ctx.cfg.LocalBranch, ctx.cfg.Slugify)
+
+	workspacePath, err := ctx.gitClient.GetWorkspacePath()
 	if err != nil {
-		return fmt.Errorf("failed to get current directory: %w", err)
+		return fmt.Errorf("failed to get workspace path: %w", err)
 	}
 
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("failed to get user home directory: %w", err)
-	}
-
-	gitClient := git.New(false, cwd, config.DefaultConfig().Git.Timeout)
-
-	worktreeRoot, err := gitClient.GetWorktreeRoot()
-	if err != nil {
-		return fmt.Errorf("git error: %w", err)
-	}
-	if worktreeRoot == "" {
-		return errors.New("grove must be run inside a git repository")
-	}
-
-	mainWorktreePath, err := gitClient.GetMainWorktreePath()
-	if err != nil {
-		return fmt.Errorf("failed to get main worktree path: %w", err)
-	}
-
-	configPaths := config.ConfigPaths(cwd, worktreeRoot, mainWorktreePath, homeDir)
-	loader := config.NewDefaultLoader()
-	loadResult, err := loader.Load(configPaths)
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
-	cfg := loadResult.Config
-
-	// recreate the git client using the config timeout
-	gitClient = git.New(false, cwd, cfg.Git.Timeout)
-
-	branchGen := naming.NewBranchNameGenerator(cfg.Branch, cfg.Slugify)
-	branchName := branchGen.Generate(phrase)
-
-	if branchName == "" || branchName == cfg.Branch.NewPrefix {
+	branchName := namer.GenerateBranchName(phrase)
+	if branchName == "" || branchName == ctx.cfg.LocalBranch.BranchPrefix {
 		return fmt.Errorf(`phrase %q produces an empty branch name after slugification
 
 Please provide a phrase with at least one alphanumeric character.
@@ -91,7 +80,7 @@ Examples:
   grove create "fix-bug-123"`, phrase)
 	}
 
-	exists, err := gitClient.BranchExists(branchName, false)
+	exists, err := ctx.gitClient.BranchExists(branchName, false)
 	if err != nil {
 		return fmt.Errorf("failed to check if branch exists: %w", err)
 	}
@@ -99,23 +88,17 @@ Examples:
 		return fmt.Errorf("branch %q already exists; to use it: git worktree add <path> %s", branchName, branchName)
 	}
 
-	worktreeNamer := naming.NewWorktreeNamer(cfg.Worktree, cfg.Slugify)
-	worktreeName := worktreeNamer.Generate(branchName)
-
-	workspacePath, err := gitClient.GetWorkspacePath()
-	if err != nil {
-		return fmt.Errorf("failed to get workspace path: %w", err)
-	}
+	worktreeName := namer.GenerateWorktreeName(branchName)
 	worktreePath := filepath.Join(workspacePath, worktreeName)
 
 	if _, err := os.Stat(worktreePath); err == nil {
 		return fmt.Errorf("worktree path %q already exists; to remove it: git worktree remove %s", worktreePath, worktreeName)
 	}
 
-	if err := gitClient.CreateWorktreeForNewBranchFromRef(branchName, worktreePath, ""); err != nil {
+	if err := ctx.gitClient.CreateWorktreeForNewBranchFromRef(branchName, worktreePath, ""); err != nil {
 		return fmt.Errorf("failed to create branch and worktree: %w", err)
 	}
 
-	_, err = fmt.Fprintln(cmd.OutOrStdout(), worktreePath)
+	_, err = fmt.Fprintln(stdout, worktreePath)
 	return err
 }

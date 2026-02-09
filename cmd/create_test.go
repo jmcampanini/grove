@@ -1,0 +1,201 @@
+package cmd
+
+import (
+	"bytes"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestExecuteCreate(t *testing.T) {
+	tests := []struct {
+		name           string
+		phrase         string
+		gitMock        func(workspaceDir string) *mockGit
+		setupFS        func(t *testing.T, workspaceDir string)
+		wantErr        bool
+		wantErrContain string
+		wantWorktree   string
+	}{
+		{
+			name:   "simple phrase",
+			phrase: "add logging support",
+			gitMock: func(workspaceDir string) *mockGit {
+				return &mockGit{
+					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
+				}
+			},
+			wantWorktree: "wt-add-logging-support",
+		},
+		{
+			name:   "special characters",
+			phrase: "fix: handle 404 & 500 errors!",
+			gitMock: func(workspaceDir string) *mockGit {
+				return &mockGit{
+					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
+				}
+			},
+			wantWorktree: "wt-fix-handle-404-500-errors",
+		},
+		{
+			name:   "mixed casing",
+			phrase: "Add OAuth2 Google Integration",
+			gitMock: func(workspaceDir string) *mockGit {
+				return &mockGit{
+					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
+				}
+			},
+			wantWorktree: "wt-add-oauth2-google-integration",
+		},
+		{
+			name:   "long phrase triggers hash truncation",
+			phrase: "implement comprehensive user authentication and authorization system with role based access",
+			gitMock: func(workspaceDir string) *mockGit {
+				return &mockGit{
+					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
+				}
+			},
+			wantWorktree: "wt-implement-comprehensive-user-authentication-a-nquu",
+		},
+		{
+			name:   "duplicate branch",
+			phrase: "add logging support",
+			gitMock: func(workspaceDir string) *mockGit {
+				return &mockGit{
+					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
+					branchExistsFn: func(branchName string, caseInsensitive bool) (bool, error) {
+						return true, nil
+					},
+				}
+			},
+			wantErr:        true,
+			wantErrContain: "already exists",
+		},
+		{
+			name:           "empty phrase",
+			phrase:         "   ",
+			gitMock:        func(workspaceDir string) *mockGit { return &mockGit{} },
+			wantErr:        true,
+			wantErrContain: "phrase cannot be empty",
+		},
+		{
+			name:   "all special chars slugifies to empty",
+			phrase: "@#$%^&*",
+			gitMock: func(workspaceDir string) *mockGit {
+				return &mockGit{
+					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
+				}
+			},
+			wantErr:        true,
+			wantErrContain: "empty branch name after slugification",
+		},
+		{
+			name:   "worktree path already exists on disk",
+			phrase: "add logging support",
+			gitMock: func(workspaceDir string) *mockGit {
+				return &mockGit{
+					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
+				}
+			},
+			setupFS: func(t *testing.T, workspaceDir string) {
+				t.Helper()
+				require.NoError(t, os.MkdirAll(filepath.Join(workspaceDir, "wt-add-logging-support"), 0o755))
+			},
+			wantErr:        true,
+			wantErrContain: "already exists",
+		},
+		{
+			name:   "workspace path error",
+			phrase: "add logging support",
+			gitMock: func(_ string) *mockGit {
+				return &mockGit{
+					getWorkspacePathFn: func() (string, error) {
+						return "", fmt.Errorf("git error")
+					},
+				}
+			},
+			wantErr:        true,
+			wantErrContain: "failed to get workspace path",
+		},
+		{
+			name:   "worktree creation error",
+			phrase: "add logging support",
+			gitMock: func(workspaceDir string) *mockGit {
+				return &mockGit{
+					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
+					createWorktreeForNewBranchFromRefFn: func(_, _, _ string) error {
+						return assert.AnError
+					},
+				}
+			},
+			wantErr:        true,
+			wantErrContain: "failed to create branch and worktree",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			workspaceDir := t.TempDir()
+
+			if tt.setupFS != nil {
+				tt.setupFS(t, workspaceDir)
+			}
+
+			var stdout bytes.Buffer
+			ctx := &createContext{
+				cfg:       defaultTestConfig(),
+				gitClient: tt.gitMock(workspaceDir),
+			}
+
+			err := executeCreate(&stdout, ctx, tt.phrase)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.wantErrContain != "" {
+					assert.Contains(t, err.Error(), tt.wantErrContain)
+				}
+				return
+			}
+
+			require.NoError(t, err)
+
+			if tt.wantWorktree != "" {
+				output := strings.TrimSpace(stdout.String())
+				assert.Equal(t, filepath.Join(workspaceDir, tt.wantWorktree), output)
+			}
+		})
+	}
+}
+
+func TestExecuteCreate_VerifiesGitArgs(t *testing.T) {
+	workspaceDir := t.TempDir()
+
+	var gotBranch, gotPath, gotBaseRef string
+	gitMock := &mockGit{
+		getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
+		createWorktreeForNewBranchFromRefFn: func(newBranchName, worktreeAbsPath, baseRef string) error {
+			gotBranch = newBranchName
+			gotPath = worktreeAbsPath
+			gotBaseRef = baseRef
+			return nil
+		},
+	}
+
+	var stdout bytes.Buffer
+	ctx := &createContext{
+		cfg:       defaultTestConfig(),
+		gitClient: gitMock,
+	}
+
+	err := executeCreate(&stdout, ctx, "add logging support")
+	require.NoError(t, err)
+
+	assert.Equal(t, "feature/add-logging-support", gotBranch)
+	assert.Equal(t, filepath.Join(workspaceDir, "wt-add-logging-support"), gotPath)
+	assert.Equal(t, "", gotBaseRef)
+}
