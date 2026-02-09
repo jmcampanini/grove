@@ -44,9 +44,6 @@ func runPRList(cmd *cobra.Command, _ []string) error {
 	cfg := rt.cfg
 
 	gh := rt.newGitHubClient()
-	if err := gh.Validate(); err != nil {
-		return err
-	}
 
 	namer, err := naming.NewPullRequestNamer(cfg.PullRequest, cfg.Slugify)
 	if err != nil {

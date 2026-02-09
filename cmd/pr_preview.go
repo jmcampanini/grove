@@ -111,9 +111,6 @@ func runPRPreview(cmd *cobra.Command, args []string) error {
 	}
 
 	gh := rt.newGitHubClient()
-	if err := gh.Validate(); err != nil {
-		return handlePreviewError(cmd, err)
-	}
 
 	pr, err := gh.GetPullRequest(prNum)
 	if err != nil {

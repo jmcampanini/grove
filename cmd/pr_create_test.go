@@ -16,7 +16,6 @@ import (
 type mockGitHub struct {
 	getPullRequestFn   func(prNum int) (github.PullRequest, error)
 	listPullRequestsFn func(query github.PRQuery, limit int) ([]github.PullRequest, error)
-	validateFn         func() error
 }
 
 func (m *mockGitHub) GetPullRequest(prNum int) (github.PullRequest, error) {
@@ -39,13 +38,6 @@ func (m *mockGitHub) ListPullRequests(query github.PRQuery, limit int) ([]github
 		return m.listPullRequestsFn(query, limit)
 	}
 	return nil, nil
-}
-
-func (m *mockGitHub) Validate() error {
-	if m.validateFn != nil {
-		return m.validateFn()
-	}
-	return nil
 }
 
 type mockGit struct {

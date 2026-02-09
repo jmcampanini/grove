@@ -107,55 +107,6 @@ func (g *GitHubCli) GetPullRequest(prNum int) (PullRequest, error) {
 	return pr, nil
 }
 
-func (g *GitHubCli) GetPullRequestByBranch(branchName string) (*PullRequest, error) {
-	args := []string{
-		"pr", "list",
-		"--head", branchName,
-		"--state", "all",
-		"--json", prJsonFields,
-		"--limit", "1",
-	}
-
-	output, err := g.executeGhCommand(args...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get pull request for branch %s: %w", branchName, err)
-	}
-
-	var prs []PullRequest
-	if err := json.Unmarshal([]byte(output), &prs); err != nil {
-		return nil, fmt.Errorf("failed to parse pull requests for branch %s: %w", branchName, err)
-	}
-
-	if len(prs) == 0 {
-		return nil, nil
-	}
-
-	return &prs[0], nil
-}
-
-func (g *GitHubCli) ListPullRequests(query PRQuery, limit int) ([]PullRequest, error) {
-	searchQuery := query.ToSearchQuery()
-
-	args := []string{
-		"pr", "list",
-		"--search", searchQuery,
-		"--json", prJsonFields,
-		"--limit", fmt.Sprintf("%d", limit),
-	}
-
-	output, err := g.executeGhCommand(args...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list pull requests: %w", err)
-	}
-
-	var prs []PullRequest
-	if err := json.Unmarshal([]byte(output), &prs); err != nil {
-		return nil, fmt.Errorf("failed to parse pull requests: %w", err)
-	}
-
-	return prs, nil
-}
-
 func (g *GitHubCli) GetPullRequestActivity(prNum int) ([]ReviewThread, []TimelineEvent, error) {
 	owner, name, err := g.repoOwnerName()
 	if err != nil {
@@ -253,6 +204,55 @@ func (g *GitHubCli) GetPullRequestActivity(prNum int) ([]ReviewThread, []Timelin
 	}
 
 	return parseActivityResponse(output)
+}
+
+func (g *GitHubCli) GetPullRequestByBranch(branchName string) (*PullRequest, error) {
+	args := []string{
+		"pr", "list",
+		"--head", branchName,
+		"--state", "all",
+		"--json", prJsonFields,
+		"--limit", "1",
+	}
+
+	output, err := g.executeGhCommand(args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pull request for branch %s: %w", branchName, err)
+	}
+
+	var prs []PullRequest
+	if err := json.Unmarshal([]byte(output), &prs); err != nil {
+		return nil, fmt.Errorf("failed to parse pull requests for branch %s: %w", branchName, err)
+	}
+
+	if len(prs) == 0 {
+		return nil, nil
+	}
+
+	return &prs[0], nil
+}
+
+func (g *GitHubCli) ListPullRequests(query PRQuery, limit int) ([]PullRequest, error) {
+	searchQuery := query.ToSearchQuery()
+
+	args := []string{
+		"pr", "list",
+		"--search", searchQuery,
+		"--json", prJsonFields,
+		"--limit", fmt.Sprintf("%d", limit),
+	}
+
+	output, err := g.executeGhCommand(args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list pull requests: %w", err)
+	}
+
+	var prs []PullRequest
+	if err := json.Unmarshal([]byte(output), &prs); err != nil {
+		return nil, fmt.Errorf("failed to parse pull requests: %w", err)
+	}
+
+	return prs, nil
 }
 
 type graphQLThreadNode struct {
@@ -461,16 +461,4 @@ func parseReviewRequestedEvent(raw json.RawMessage) (*TimelineEvent, error) {
 		Details:   v.RequestedReviewer.Login,
 		Type:      TimelineEventReviewRequested,
 	}, nil
-}
-
-func (g *GitHubCli) Validate() error {
-	if _, err := exec.LookPath("gh"); err != nil {
-		return fmt.Errorf("gh CLI not found: install from https://cli.github.com")
-	}
-
-	if _, err := g.executeGhCommand("auth", "status"); err != nil {
-		return fmt.Errorf("gh CLI not authenticated (run 'gh auth login'): %w", err)
-	}
-
-	return nil
 }

@@ -47,10 +47,6 @@ func runPRCreate(cmd *cobra.Command, args []string) error {
 		gitClient: rt.gitClient,
 	}
 
-	if err := ctx.ghClient.Validate(); err != nil {
-		return err
-	}
-
 	prInfo, err := ctx.ghClient.GetPullRequest(prNum)
 	if err != nil {
 		return fmt.Errorf("failed to get pull request: %w", err)
