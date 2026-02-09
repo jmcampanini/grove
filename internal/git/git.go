@@ -222,4 +222,23 @@ type Git interface {
 	// FetchRemote fetches from a remote with full sync (prune refs, prune tags, fetch tags).
 	// Will mutate the current git state.
 	FetchRemote(remoteName string) (output string, err error)
+
+	// DeleteBranch deletes a local branch.
+	// If force is true, uses -D (force delete even if not fully merged).
+	// Will mutate the current git state.
+	DeleteBranch(name string, force bool) error
+
+	// IsWorktreeDirty returns true if the worktree at absPath has uncommitted changes
+	// (modified, staged, or untracked files).
+	IsWorktreeDirty(absPath string) (bool, error)
+
+	// PruneWorktrees removes stale worktree metadata for worktrees whose directories
+	// no longer exist on disk.
+	// Will mutate the current git state.
+	PruneWorktrees() error
+
+	// RemoveWorktree removes a linked worktree at the given absolute path.
+	// If force is true, removes even if there are uncommitted changes.
+	// Will mutate the current git state.
+	RemoveWorktree(absPath string, force bool) error
 }
