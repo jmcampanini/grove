@@ -52,7 +52,7 @@ func (g *GitCli) executeGitCommand(args ...string) (string, error) {
 			g.log.Warn("git command timed out", "args", args, "timeout", g.timeout, "error", err)
 			return "", fmt.Errorf("git %s timed out after %s", strings.Join(args, " "), g.timeout)
 		}
-		g.log.Warn("Git command failed", "args", args, "stderr", stderr.String(), "error", err)
+		g.log.Debug("Git command failed", "args", args, "stderr", stderr.String(), "error", err)
 		return "", fmt.Errorf("git %s failed: %w: %s", strings.Join(args, " "), err, stderr.String())
 	}
 
