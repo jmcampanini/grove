@@ -1,6 +1,10 @@
 package cmd
 
-import "github.com/spf13/cobra"
+import (
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/log"
+	"github.com/spf13/cobra"
+)
 
 // Version is set at build time via ldflags.
 var Version = "n/a"
@@ -26,6 +30,31 @@ func init() {
 	)
 	rootCmd.SetHelpCommandGroupID("config")
 	rootCmd.SetCompletionCommandGroupID("config")
+	configureLogStyles()
+}
+
+func configureLogStyles() {
+	styles := log.DefaultStyles()
+
+	// Catppuccin Latte (light) / Mocha (dark) palette.
+	muted := lipgloss.AdaptiveColor{Light: "#6c6f85", Dark: "#7f849c"}
+	styles.Caller = lipgloss.NewStyle().Foreground(muted)
+	styles.Key = lipgloss.NewStyle().Foreground(muted)
+	styles.Prefix = lipgloss.NewStyle().Foreground(muted).Bold(true)
+	styles.Separator = lipgloss.NewStyle().Foreground(muted)
+
+	styles.Levels[log.DebugLevel] = styles.Levels[log.DebugLevel].
+		Foreground(lipgloss.AdaptiveColor{Light: "#8c8fa1", Dark: "#7f849c"})
+	styles.Levels[log.InfoLevel] = styles.Levels[log.InfoLevel].
+		Foreground(lipgloss.AdaptiveColor{Light: "#179299", Dark: "#94e2d5"})
+	styles.Levels[log.WarnLevel] = styles.Levels[log.WarnLevel].
+		Foreground(lipgloss.AdaptiveColor{Light: "#df8e1d", Dark: "#f9e2af"})
+	styles.Levels[log.ErrorLevel] = styles.Levels[log.ErrorLevel].
+		Foreground(lipgloss.AdaptiveColor{Light: "#d20f39", Dark: "#f38ba8"})
+	styles.Levels[log.FatalLevel] = styles.Levels[log.FatalLevel].
+		Foreground(lipgloss.AdaptiveColor{Light: "#8839ef", Dark: "#cba6f7"})
+
+	log.SetStyles(styles)
 }
 
 // Execute runs the root command.
