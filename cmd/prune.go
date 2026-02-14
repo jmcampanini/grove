@@ -1,14 +1,17 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/lipgloss/table"
 	"github.com/jmcampanini/grove-cli/internal/git"
 	"github.com/jmcampanini/grove-cli/internal/github"
 	"github.com/spf13/cobra"
@@ -82,6 +85,9 @@ func executePrune(w io.Writer, ctx *statusContext) error {
 
 	selected, err := promptPruneSelection(prunables)
 	if err != nil {
+		if errors.Is(err, huh.ErrUserAborted) {
+			return nil
+		}
 		return err
 	}
 	if len(selected) == 0 {
@@ -91,6 +97,9 @@ func executePrune(w io.Writer, ctx *statusContext) error {
 
 	confirmed, err := promptPruneConfirm(len(selected))
 	if err != nil {
+		if errors.Is(err, huh.ErrUserAborted) {
+			return nil
+		}
 		return err
 	}
 	if !confirmed {
@@ -160,6 +169,12 @@ func pruneReason(ws worktreeStatus, remoteBranches map[string]bool) string {
 	return ""
 }
 
+func pruneKeyMap() *huh.KeyMap {
+	km := huh.NewDefaultKeyMap()
+	km.Quit = key.NewBinding(key.WithKeys("ctrl+c", "esc", "q"))
+	return km
+}
+
 func promptPruneSelection(prunables []prunable) ([]prunable, error) {
 	options := make([]huh.Option[int], len(prunables))
 	for i, p := range prunables {
@@ -178,7 +193,7 @@ func promptPruneSelection(prunables []prunable) ([]prunable, error) {
 				Options(options...).
 				Value(&selected),
 		),
-	).Run()
+	).WithKeyMap(pruneKeyMap()).Run()
 	if err != nil {
 		return nil, err
 	}
@@ -205,38 +220,74 @@ func promptPruneConfirm(count int) (bool, error) {
 				Negative("No").
 				Value(&confirmed),
 		),
-	).Run()
+	).WithKeyMap(pruneKeyMap()).Run()
 	if err != nil {
 		return false, err
 	}
 	return confirmed, nil
 }
 
-func executeRemovals(w io.Writer, gitClient git.Git, selected []prunable) error {
-	var removed []string
-	var errs []string
+type pruneResult struct {
+	err      error
+	prunable prunable
+}
 
-	for _, p := range selected {
+func executeRemovals(w io.Writer, gitClient git.Git, selected []prunable) error {
+	results := make([]pruneResult, len(selected))
+	for i, p := range selected {
 		var err error
 		if p.reason == "orphaned" {
 			err = removeOrphanedWorktree(gitClient, p.branchName)
 		} else {
 			err = removeWorktreeAndBranch(gitClient, p.path, p.branchName)
 		}
-		if err != nil {
-			errs = append(errs, fmt.Sprintf("  %s: %v", p.name, err))
-		} else {
-			removed = append(removed, p.name)
-		}
+		results[i] = pruneResult{prunable: p, err: err}
 	}
 
-	if len(removed) > 0 {
-		if _, err := fmt.Fprintf(w, "Removed %d worktree(s): %s\n", len(removed), strings.Join(removed, ", ")); err != nil {
-			return err
+	return renderPruneResults(w, results)
+}
+
+func renderPruneResults(w io.Writer, results []pruneResult) error {
+	successStyle := lipgloss.NewStyle().Foreground(colorGreen)
+	failStyle := lipgloss.NewStyle().Foreground(colorRed)
+	reasonStyle := lipgloss.NewStyle().Foreground(colorGray)
+
+	var rows [][]string
+	var removed, failed int
+	for _, r := range results {
+		icon := successStyle.Render(iconCheck)
+		status := ""
+		if r.err != nil {
+			icon = failStyle.Render(iconCross)
+			status = failStyle.Render(r.err.Error())
+			failed++
+		} else {
+			removed++
 		}
+		rows = append(rows, []string{icon, r.prunable.name, r.prunable.branchName, reasonStyle.Render(r.prunable.reason), status})
 	}
-	if len(errs) > 0 {
-		return fmt.Errorf("some removals failed:\n%s", strings.Join(errs, "\n"))
+
+	t := table.New().
+		Border(lipgloss.HiddenBorder()).
+		StyleFunc(func(_, _ int) lipgloss.Style {
+			return lipgloss.NewStyle().Padding(0, 1)
+		}).
+		Rows(rows...)
+
+	if _, err := fmt.Fprintln(w, t); err != nil {
+		return err
+	}
+
+	summary := successStyle.Render(fmt.Sprintf("%d removed", removed))
+	if failed > 0 {
+		summary += ", " + failStyle.Render(fmt.Sprintf("%d failed", failed))
+	}
+	if _, err := fmt.Fprintln(w, summary); err != nil {
+		return err
+	}
+
+	if failed > 0 {
+		return fmt.Errorf("%d removal(s) failed", failed)
 	}
 	return nil
 }

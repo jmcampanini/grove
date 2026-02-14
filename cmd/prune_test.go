@@ -254,40 +254,41 @@ func TestExecuteRemovals(t *testing.T) {
 		prunables        []prunable
 		pruneWorktreeErr error
 		removeErr        error
+		wantContains     []string
 		wantErr          bool
 		wantErrContain   string
-		wantOutput       string
 	}{
 		{
 			name: "successful removal",
 			prunables: []prunable{
-				{branchName: "feature/test", name: "wt-test", path: "/workspace/wt-test"},
+				{branchName: "feature/test", name: "wt-test", path: "/workspace/wt-test", reason: "upstream gone"},
 			},
-			wantOutput: "Removed 1 worktree(s): wt-test\n",
+			wantContains: []string{"wt-test", "feature/test", "upstream gone", "1 removed"},
 		},
 		{
 			name: "multiple removals",
 			prunables: []prunable{
-				{branchName: "feature/a", name: "wt-a", path: "/workspace/wt-a"},
-				{branchName: "feature/b", name: "wt-b", path: "/workspace/wt-b"},
+				{branchName: "feature/a", name: "wt-a", path: "/workspace/wt-a", reason: "upstream gone"},
+				{branchName: "feature/b", name: "wt-b", path: "/workspace/wt-b", reason: "PR #5 merged"},
 			},
-			wantOutput: "Removed 2 worktree(s): wt-a, wt-b\n",
+			wantContains: []string{"wt-a", "wt-b", "2 removed"},
 		},
 		{
 			name: "removal error is reported",
 			prunables: []prunable{
-				{branchName: "feature/fail", name: "wt-fail", path: "/workspace/wt-fail"},
+				{branchName: "feature/fail", name: "wt-fail", path: "/workspace/wt-fail", reason: "upstream gone"},
 			},
 			removeErr:      errors.New("permission denied"),
 			wantErr:        true,
-			wantErrContain: "some removals failed",
+			wantErrContain: "1 removal(s) failed",
+			wantContains:   []string{"wt-fail", "permission denied", "1 failed"},
 		},
 		{
 			name: "orphaned worktree uses prune path",
 			prunables: []prunable{
 				{branchName: "feature/orphan", name: "wt-orphan", path: "/workspace/wt-orphan", reason: "orphaned"},
 			},
-			wantOutput: "Removed 1 worktree(s): wt-orphan\n",
+			wantContains: []string{"wt-orphan", "orphaned", "1 removed"},
 		},
 		{
 			name: "orphaned prune error is reported",
@@ -296,7 +297,8 @@ func TestExecuteRemovals(t *testing.T) {
 			},
 			pruneWorktreeErr: errors.New("prune failed"),
 			wantErr:          true,
-			wantErrContain:   "some removals failed",
+			wantErrContain:   "1 removal(s) failed",
+			wantContains:     []string{"wt-orphan", "1 failed"},
 		},
 	}
 
@@ -320,8 +322,9 @@ func TestExecuteRemovals(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			if tt.wantOutput != "" {
-				assert.Equal(t, tt.wantOutput, buf.String())
+			output := buf.String()
+			for _, s := range tt.wantContains {
+				assert.Contains(t, output, s, "output should contain %q", s)
 			}
 		})
 	}
