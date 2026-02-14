@@ -16,7 +16,7 @@ import (
 
 var createCmd = &cobra.Command{
 	Use:   "create <phrase>",
-	Short: "Create a new branch and worktree",
+	Short: "Create a new branch and worktree from a descriptive phrase",
 	Long: `Create creates a new git branch and worktree from a descriptive phrase.
 
 The new branch is created from the current HEAD (the commit you're currently on).
@@ -28,12 +28,15 @@ Example:
   grove create "fix bug in login"
 
 Note: The create command takes a single quoted string argument. The shell wrapper
-function (grc) can handle passing arbitrary phrases by quoting the arguments.`,
+function (grc) can handle passing arbitrary phrases by quoting the arguments.
+
+To check out an existing pull request, use 'grove pr create' instead.`,
 	Args: cobra.ExactArgs(1),
 	RunE: runCreate,
 }
 
 func init() {
+	createCmd.GroupID = "worktree"
 	rootCmd.AddCommand(createCmd)
 }
 

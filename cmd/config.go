@@ -22,6 +22,7 @@ The output can be redirected to a file to create a new configuration:
 }
 
 func init() {
+	configCmd.GroupID = "config"
 	rootCmd.AddCommand(configCmd)
 }
 

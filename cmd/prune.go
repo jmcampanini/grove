@@ -32,6 +32,7 @@ The main worktree is never prunable.`,
 }
 
 func init() {
+	pruneCmd.GroupID = "worktree"
 	rootCmd.AddCommand(pruneCmd)
 }
 

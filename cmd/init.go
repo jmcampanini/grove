@@ -39,6 +39,7 @@ Examples:
 }
 
 func init() {
+	initCmd.GroupID = "config"
 	initCmd.Flags().BoolVar(&initBashFlag, "bash", false, "Output bash shell functions")
 	initCmd.Flags().BoolVar(&initFishFlag, "fish", false, "Output fish shell functions")
 	initCmd.Flags().BoolVar(&initZshFlag, "zsh", false, "Output zsh shell functions")

@@ -8,5 +8,6 @@ var cacheCmd = &cobra.Command{
 }
 
 func init() {
+	cacheCmd.GroupID = "config"
 	rootCmd.AddCommand(cacheCmd)
 }

@@ -35,6 +35,7 @@ The main worktree cannot be removed.`,
 }
 
 func init() {
+	removeCmd.GroupID = "worktree"
 	removeCmd.Flags().BoolVar(&removeForceFlag, "force", false, "Force removal even with uncommitted changes")
 	removeCmd.Flags().BoolVar(&removeKeepBranchFlag, "keep-branch", false, "Keep the local branch after removing the worktree")
 	rootCmd.AddCommand(removeCmd)
