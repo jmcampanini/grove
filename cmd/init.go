@@ -22,6 +22,7 @@ Add to your shell config:
 }
 
 func init() {
+	initCmd.GroupID = "config"
 	rootCmd.AddCommand(initCmd)
 }
 

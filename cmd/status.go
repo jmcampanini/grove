@@ -23,6 +23,7 @@ dirty state, and PR information for worktrees associated with pull requests.`,
 }
 
 func init() {
+	statusCmd.GroupID = "worktree"
 	rootCmd.AddCommand(statusCmd)
 }
 

@@ -18,10 +18,12 @@ import (
 
 var prCreateCmd = &cobra.Command{
 	Use:   "create [number]",
-	Short: "Create worktree from pull request",
+	Short: "Check out a pull request into a local worktree",
 	Long: `Create a local worktree from a GitHub pull request.
 
-Note: Only works with PRs from the same repository. Fork PRs are not yet supported.`,
+Note: Only works with PRs from the same repository. Fork PRs are not yet supported.
+
+To start new local work (not from a PR), use 'grove create' instead.`,
 	Args: cobra.ExactArgs(1),
 	RunE: runPRCreate,
 }

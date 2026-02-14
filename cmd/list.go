@@ -35,6 +35,7 @@ Or for older fzf versions:
 }
 
 func init() {
+	listCmd.GroupID = "worktree"
 	listCmd.Flags().BoolVar(&fzfFlag, "fzf", false, "Output in fzf-compatible format")
 	rootCmd.AddCommand(listCmd)
 }
