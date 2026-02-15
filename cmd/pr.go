@@ -8,7 +8,7 @@ var prCmd = &cobra.Command{
 	Long: `Browse and check out GitHub pull requests into local worktrees.
 
 Subcommands:
-  create    Check out a pull request into a local worktree
+  checkout  Check out a pull request into a local worktree
   list      List open pull requests
   preview   Preview a pull request
 

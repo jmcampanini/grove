@@ -45,7 +45,7 @@ func (m *Matcher) MatchAll(prs []github.PullRequest, worktrees []git.Worktree) [
 
 // FindWorktreeForPR searches worktrees for one that matches the given PR.
 // It uses a dual-match strategy:
-// 1. Template-generated branch name (for worktrees created via grove pr create)
+// 1. Template-generated branch name (for worktrees created via grove pr checkout)
 // 2. PR's remote branch name directly (for manually created worktrees)
 // Returns nil if no match is found.
 func (m *Matcher) FindWorktreeForPR(pr github.PullRequest, worktrees []git.Worktree) *git.Worktree {
@@ -64,7 +64,7 @@ func (m *Matcher) FindWorktreeForPR(pr github.PullRequest, worktrees []git.Workt
 	// Search worktrees for matching branch
 	for i := range worktrees {
 		if branch, ok := worktrees[i].Ref.FullBranch(); ok {
-			// Match 1: Template-generated branch name (grove pr create)
+			// Match 1: Template-generated branch name (grove pr checkout)
 			if expectedBranch != "" && branch.Name == expectedBranch {
 				return &worktrees[i]
 			}

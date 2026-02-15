@@ -16,7 +16,7 @@ var rootCmd = &cobra.Command{
 
 Common workflows:
   Start new work:       grove create "add user auth"
-  Check out a PR:       grove pr create 42
+  Check out a PR:       grove pr checkout 42
   See all worktrees:    grove status`,
 }
 
