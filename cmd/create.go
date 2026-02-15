@@ -30,7 +30,7 @@ Example:
 Note: The create command takes a single quoted string argument. The shell wrapper
 function (grc) can handle passing arbitrary phrases by quoting the arguments.
 
-To check out an existing pull request, use 'grove pr create' instead.`,
+To check out an existing pull request, use 'grove pr checkout' instead.`,
 	Args: cobra.ExactArgs(1),
 	RunE: runCreate,
 }

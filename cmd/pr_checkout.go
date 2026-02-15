@@ -16,23 +16,23 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var prCreateCmd = &cobra.Command{
-	Use:   "create [number]",
+var prCheckoutCmd = &cobra.Command{
+	Use:   "checkout [number]",
 	Short: "Check out a pull request into a local worktree",
-	Long: `Create a local worktree from a GitHub pull request.
+	Long: `Check out a pull request into a local worktree.
 
 Note: Only works with PRs from the same repository. Fork PRs are not yet supported.
 
 To start new local work (not from a PR), use 'grove create' instead.`,
 	Args: cobra.ExactArgs(1),
-	RunE: runPRCreate,
+	RunE: runPRCheckout,
 }
 
 func init() {
-	prCmd.AddCommand(prCreateCmd)
+	prCmd.AddCommand(prCheckoutCmd)
 }
 
-func runPRCreate(cmd *cobra.Command, args []string) error {
+func runPRCheckout(cmd *cobra.Command, args []string) error {
 	prNum, err := strconv.Atoi(args[0])
 	if err != nil {
 		return fmt.Errorf("invalid PR number: %s", args[0])
@@ -43,7 +43,7 @@ func runPRCreate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	ctx := &prCreateContext{
+	ctx := &prCheckoutContext{
 		cfg:       rt.cfg,
 		ghClient:  rt.newUncachedGitHubClient(),
 		gitClient: rt.gitClient,
@@ -62,16 +62,16 @@ func runPRCreate(cmd *cobra.Command, args []string) error {
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Note: PR #%d is %s\n", prInfo.Number, strings.ToLower(string(prInfo.State)))
 	}
 
-	return createPRWorktree(cmd.OutOrStdout(), cmd.ErrOrStderr(), ctx, prInfo)
+	return checkoutPRWorktree(cmd.OutOrStdout(), cmd.ErrOrStderr(), ctx, prInfo)
 }
 
-type prCreateContext struct {
+type prCheckoutContext struct {
 	cfg       config.Config
 	ghClient  github.GitHub
 	gitClient git.Git
 }
 
-func createPRWorktree(stdout, stderr io.Writer, ctx *prCreateContext, prInfo github.PullRequest) error {
+func checkoutPRWorktree(stdout, stderr io.Writer, ctx *prCheckoutContext, prInfo github.PullRequest) error {
 	namer, err := naming.NewPullRequestNamer(ctx.cfg.PullRequest, ctx.cfg.Slugify)
 	if err != nil {
 		return fmt.Errorf("failed to create PR namer: %w", err)

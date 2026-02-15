@@ -244,7 +244,7 @@ func createTestWorktree(path string, branchName string) git.Worktree {
 	}
 }
 
-func TestCreatePRWorktree(t *testing.T) {
+func TestCheckoutPRWorktree(t *testing.T) {
 	tests := []struct {
 		name           string
 		prInfo         github.PullRequest
@@ -422,13 +422,13 @@ func TestCreatePRWorktree(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
 
-			ctx := &prCreateContext{
+			ctx := &prCheckoutContext{
 				cfg:       tt.cfg,
 				ghClient:  &mockGitHub{},
 				gitClient: tt.gitMock,
 			}
 
-			err := createPRWorktree(&stdout, &stderr, ctx, tt.prInfo)
+			err := checkoutPRWorktree(&stdout, &stderr, ctx, tt.prInfo)
 
 			if tt.wantErr {
 				require.Error(t, err)
@@ -450,7 +450,7 @@ func TestCreatePRWorktree(t *testing.T) {
 	}
 }
 
-func TestCreatePRWorktreeDirectBranchMatch(t *testing.T) {
+func TestCheckoutPRWorktreeDirectBranchMatch(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
 	gitMock := &mockGit{
@@ -461,7 +461,7 @@ func TestCreatePRWorktreeDirectBranchMatch(t *testing.T) {
 		},
 	}
 
-	ctx := &prCreateContext{
+	ctx := &prCheckoutContext{
 		cfg:       defaultTestConfig(),
 		ghClient:  &mockGitHub{},
 		gitClient: gitMock,
@@ -474,7 +474,7 @@ func TestCreatePRWorktreeDirectBranchMatch(t *testing.T) {
 		Title:      "Add auth",
 	}
 
-	err := createPRWorktree(&stdout, &stderr, ctx, prInfo)
+	err := checkoutPRWorktree(&stdout, &stderr, ctx, prInfo)
 	require.NoError(t, err)
 
 	assert.Contains(t, stdout.String(), "/workspace/wt-feature-add-auth")
