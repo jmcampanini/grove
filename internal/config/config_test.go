@@ -36,6 +36,9 @@ func TestDefaultConfig(t *testing.T) {
 	assert.Equal(t, "{{.BranchName}}", cfg.PullRequest.BranchTemplate)
 	assert.Equal(t, "pr-", cfg.PullRequest.WorktreePrefix)
 
+	// Workspace defaults
+	assert.Equal(t, []string{"main", "develop", "master"}, cfg.Workspace.PrimaryBranches)
+
 	// Default config should be valid
 	assert.NoError(t, cfg.Validate())
 }
@@ -149,6 +152,21 @@ func TestConfig_Validate(t *testing.T) {
 				c.Slugify.HashLength = 10
 			},
 			wantErr: "slugify.hash_length must be at least 2 less than slugify.max_length",
+		},
+		// Workspace
+		{
+			name: "empty primary branches",
+			modify: func(c *Config) {
+				c.Workspace.PrimaryBranches = []string{}
+			},
+			wantErr: "workspace.primary_branches cannot be empty",
+		},
+		{
+			name: "nil primary branches",
+			modify: func(c *Config) {
+				c.Workspace.PrimaryBranches = nil
+			},
+			wantErr: "workspace.primary_branches cannot be empty",
 		},
 	}
 
@@ -374,6 +392,15 @@ lowercase = false
 				assert.Equal(t, 6, cfg.Slugify.HashLength)
 				assert.False(t, cfg.Slugify.Lowercase)
 				assert.True(t, cfg.Slugify.CollapseDashes)
+			},
+		},
+		{
+			name: "workspace config",
+			content: `[workspace]
+primary_branches = ["trunk", "main"]
+`,
+			check: func(t *testing.T, cfg Config) {
+				assert.Equal(t, []string{"trunk", "main"}, cfg.Workspace.PrimaryBranches)
 			},
 		},
 		{

@@ -28,5 +28,8 @@ func DefaultConfig() Config {
 			ReplaceNonAlphanum: true,
 			TrimDashes:         true,
 		},
+		Workspace: WorkspaceConfig{
+			PrimaryBranches: []string{"main", "develop", "master"},
+		},
 	}
 }
