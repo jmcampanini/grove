@@ -29,6 +29,8 @@ go build -o /tmp/grove-test .
 ### 2. Ensure dummy PR exists
 The test run requires an open PR with at least two comments. If one already exists from a previous run, reuse it. Only create a new one if needed.
 
+**PR number: 22** (`https://github.com/jmcampanini/grove-cli/pull/22`)
+
 From `main/` worktree, check for an existing open PR with our test title:
 ```
 PR=$(gh pr list --repo jmcampanini/grove-cli --search "Test PR - grove workspace testing" --json number --jq '.[0].number')
@@ -52,7 +54,7 @@ If `$PR` is set, switch `main/` back to the main branch:
 git checkout main
 ```
 
-Verify: `echo $PR` should print the PR number.
+Verify: `echo $PR` should print `22`.
 
 ---
 
@@ -117,12 +119,18 @@ Prune uses a charmbracelet/huh TUI that requires a real TTY. **All prune command
 
 Each run needs a prunable worktree. We create one fresh before each prune test, push it, then delete the remote branch to trigger the "upstream gone" reason.
 
-**tmux pane setup:**
+**tmux pane setup:** Each interactive test should spin up a new tmux pane. Before starting a new pane, ensure the current test is complete, close the pane (`tmux kill-pane -t "$PANE_ID"`), and then move on to the next test.
 ```
 PANE_ID=$(tmux split-window -h -l 50% -t "$TMUX_PANE" -P -F '#{pane_id}')
 ```
 
 **Before each prune test** (setup can run non-interactively):
+
+> **Note:** If SSH to github.com is timing out, use the `gh` CLI instead:
+> - Push: `gh api repos/OWNER/REPO/git/refs -f ref=refs/heads/feature/prune-test-<N> -f sha=$(git rev-parse HEAD)`
+> - Delete: `gh api repos/OWNER/REPO/git/refs/heads/feature/prune-test-<N> -X DELETE`
+> - Then `git fetch --prune` (if SSH works) or manually: `git remote set-branches --add origin feature/prune-test-<N>` / `git config --unset branch.feature/prune-test-<N>.remote` etc.
+
 ```
 grove --debug create "prune test <N>"
 cd wt-prune-test-<N> && git push -u origin feature/prune-test-<N>
@@ -170,9 +178,21 @@ Before prune testing, remove any pre-existing stale worktrees so prune only show
 - Build the binary once, invoke via `/tmp/grove-test` from each location
 - **Prune commands require a tmux pane** (charmbracelet/huh TUI needs a real TTY)
 - Run commands sequentially, recording exit code for each
-- **When a command fails, capture and record the complete stdout and stderr output.** Do not truncate or summarize — the full output is essential for diagnosing the failure.
-- For L3 tests: these will initially fail (proving the bug), then pass after the fix
 - **Always pass `--debug`** on every grove command to get full `DEBU`-level log output (git commands executed, cache hits, etc.). Capture stderr alongside stdout (`2>&1`).
+- For L3 tests: these will initially fail (proving the bug), then pass after the fix
+
+### Results file
+
+Build a single `results_<N>.md` file (e.g., `results_1.md`, `results_2.md`) incrementally as the test progresses. Increment the number to avoid overwriting previous runs.
+
+1. **Before testing begins**, create `results.md` with a header, the date, binary path, PR number, location table, and an empty summary matrix.
+2. **After each test**, append the result to the file immediately — don't wait until the end. Each entry should include:
+   - Test number, location, command
+   - Exit code
+   - `PASS` or `FAIL`
+   - For **failed** tests: the complete, untruncated stdout+stderr output in a fenced code block. Do not summarize.
+   - For **passed** tests: a one-line confirmation is sufficient.
+3. **After all tests complete**, go back and fill in the summary matrix at the top, then append a "Findings" section at the bottom with root cause analysis and any notes (SSH workarounds, sandbox issues, etc.).
 
 ## Full Test Matrix (27 cells)
 
