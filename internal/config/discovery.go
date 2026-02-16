@@ -69,3 +69,13 @@ func ConfigPaths(cwd, worktreeRoot, gitRoot, homeDir string) []string {
 
 	return paths
 }
+
+// BootstrapConfigPaths returns config paths that don't require git context.
+// This is used during workspace root detection, before git context is available.
+//
+// Order (lowest to highest priority):
+//  1. File in XDG config directory (~/.config/grove/grove.toml)
+//  2. File in current working directory
+func BootstrapConfigPaths(cwd, homeDir string) []string {
+	return ConfigPaths(cwd, "", "", homeDir)
+}

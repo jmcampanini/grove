@@ -311,6 +311,61 @@ func TestConfigPaths(t *testing.T) {
 	}
 }
 
+func TestBootstrapConfigPaths(t *testing.T) {
+	tests := []struct {
+		name      string
+		cwd       string
+		homeDir   string
+		xdgConfig string
+		want      []string
+	}{
+		{
+			name:    "XDG and CWD included",
+			cwd:     "/Users/jim/code/org/project",
+			homeDir: "/Users/jim",
+			want: []string{
+				"/Users/jim/.config/grove/grove.toml",
+				"/Users/jim/code/org/project/grove.toml",
+			},
+		},
+		{
+			name:      "custom XDG_CONFIG_HOME",
+			cwd:       "/Users/jim/project",
+			homeDir:   "/Users/jim",
+			xdgConfig: "/custom/xdg",
+			want: []string{
+				"/custom/xdg/grove/grove.toml",
+				"/Users/jim/project/grove.toml",
+			},
+		},
+		{
+			name:    "empty homeDir",
+			cwd:     "/Users/jim/project",
+			homeDir: "",
+			want: []string{
+				"/Users/jim/project/grove.toml",
+			},
+		},
+		{
+			name:    "empty CWD",
+			cwd:     "",
+			homeDir: "/Users/jim",
+			want: []string{
+				"/Users/jim/.config/grove/grove.toml",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("XDG_CONFIG_HOME", tt.xdgConfig)
+
+			paths := BootstrapConfigPaths(tt.cwd, tt.homeDir)
+			assert.Equal(t, tt.want, paths)
+		})
+	}
+}
+
 // fakeFileSystem is a test double for FileSystem
 type fakeFileSystem struct {
 	existingFiles map[string]bool
