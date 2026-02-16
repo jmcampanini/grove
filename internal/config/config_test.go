@@ -351,21 +351,25 @@ func TestBootstrapConfigPaths(t *testing.T) {
 		want      []string
 	}{
 		{
-			name:    "XDG and CWD included",
+			name:    "XDG, ancestors, and CWD included",
 			cwd:     "/Users/jim/code/org/project",
 			homeDir: "/Users/jim",
 			want: []string{
 				"/Users/jim/.config/grove/grove.toml",
+				"/Users/jim/grove.toml",
+				"/Users/jim/code/grove.toml",
+				"/Users/jim/code/org/grove.toml",
 				"/Users/jim/code/org/project/grove.toml",
 			},
 		},
 		{
-			name:      "custom XDG_CONFIG_HOME",
+			name:      "custom XDG_CONFIG_HOME with ancestors",
 			cwd:       "/Users/jim/project",
 			homeDir:   "/Users/jim",
 			xdgConfig: "/custom/xdg",
 			want: []string{
 				"/custom/xdg/grove/grove.toml",
+				"/Users/jim/grove.toml",
 				"/Users/jim/project/grove.toml",
 			},
 		},

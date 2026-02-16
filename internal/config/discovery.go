@@ -79,7 +79,7 @@ func ConfigPaths(cwd, worktreeRoot, gitRoot, homeDir string) []string {
 //
 // Order (lowest to highest priority):
 //  1. File in XDG config directory (~/.config/grove/grove.toml)
-//  2. File in current working directory
+//  2. Files in each directory from home down to cwd (inclusive)
 func BootstrapConfigPaths(cwd, homeDir string) []string {
-	return ConfigPaths(cwd, "", "", homeDir)
+	return ConfigPaths(cwd, "", cwd, homeDir)
 }
