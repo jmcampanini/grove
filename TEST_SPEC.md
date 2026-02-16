@@ -26,8 +26,15 @@ Build from the current worktree so we can invoke it via absolute path from any d
 go build -o /tmp/grove-test .
 ```
 
-### 2. Create dummy PR
-From `main/` worktree:
+### 2. Ensure dummy PR exists
+The test run requires an open PR with at least two comments. If one already exists from a previous run, reuse it. Only create a new one if needed.
+
+From `main/` worktree, check for an existing open PR with our test title:
+```
+PR=$(gh pr list --repo jmcampanini/grove-cli --search "Test PR - grove workspace testing" --json number --jq '.[0].number')
+```
+
+If `$PR` is empty, create it:
 ```
 git checkout -b test/dummy-pr
 echo "test file for grove workspace testing" > test-dummy.txt
@@ -35,10 +42,17 @@ git add test-dummy.txt
 git commit -m "test: dummy PR for workspace testing"
 git push -u origin test/dummy-pr
 gh pr create --title "Test PR - grove workspace testing" --body "Dummy PR for testing grove commands from workspace root"
+PR=$(gh pr list --repo jmcampanini/grove-cli --search "Test PR - grove workspace testing" --json number --jq '.[0].number')
 gh pr comment $PR --body "First test comment"
 gh pr comment $PR --body "Second test comment"
 ```
-Record PR number as `$PR`.
+
+If `$PR` is set, switch `main/` back to the main branch:
+```
+git checkout main
+```
+
+Verify: `echo $PR` should print the PR number.
 
 ---
 
@@ -50,29 +64,29 @@ Each command runs once from each location. Success = exit code 0 + expected outp
 
 | # | Location | Command | Success criteria |
 |---|----------|---------|-----------------|
-| 1.1 | L1 | `grove config` | Exit 0, prints TOML |
-| 1.2 | L2 | `grove config` | Exit 0, prints TOML |
-| 1.3 | L3 | `grove config` | Exit 0, prints TOML |
-| 1.4 | L1 | `grove list` | Exit 0, lists worktree names |
-| 1.5 | L2 | `grove list` | Exit 0, lists worktree names |
-| 1.6 | L3 | `grove list` | Exit 0, lists worktree names |
-| 1.7 | L1 | `grove status` | Exit 0, renders dashboard table |
-| 1.8 | L2 | `grove status` | Exit 0, renders dashboard table |
-| 1.9 | L3 | `grove status` | Exit 0, renders dashboard table |
-| 1.10 | L1 | `grove pr list` | Exit 0, output includes PR `$PR` |
-| 1.11 | L2 | `grove pr list` | Exit 0, output includes PR `$PR` |
-| 1.12 | L3 | `grove pr list` | Exit 0, output includes PR `$PR` |
-| 1.13 | L1 | `grove pr preview $PR` | Exit 0, shows title/author/body |
-| 1.14 | L2 | `grove pr preview $PR` | Exit 0, shows title/author/body |
-| 1.15 | L3 | `grove pr preview $PR` | Exit 0, shows title/author/body |
+| 1.1 | L1 | `grove --debug config` | Exit 0, prints TOML |
+| 1.2 | L2 | `grove --debug config` | Exit 0, prints TOML |
+| 1.3 | L3 | `grove --debug config` | Exit 0, prints TOML |
+| 1.4 | L1 | `grove --debug list` | Exit 0, lists worktree names |
+| 1.5 | L2 | `grove --debug list` | Exit 0, lists worktree names |
+| 1.6 | L3 | `grove --debug list` | Exit 0, lists worktree names |
+| 1.7 | L1 | `grove --debug status` | Exit 0, renders dashboard table |
+| 1.8 | L2 | `grove --debug status` | Exit 0, renders dashboard table |
+| 1.9 | L3 | `grove --debug status` | Exit 0, renders dashboard table |
+| 1.10 | L1 | `grove --debug pr list` | Exit 0, output includes PR `$PR` |
+| 1.11 | L2 | `grove --debug pr list` | Exit 0, output includes PR `$PR` |
+| 1.12 | L3 | `grove --debug pr list` | Exit 0, output includes PR `$PR` |
+| 1.13 | L1 | `grove --debug pr preview $PR` | Exit 0, shows title/author/body |
+| 1.14 | L2 | `grove --debug pr preview $PR` | Exit 0, shows title/author/body |
+| 1.15 | L3 | `grove --debug pr preview $PR` | Exit 0, shows title/author/body |
 
 ### Phase 2: `grove create` (all locations)
 
 | # | Location | Command | Success criteria |
 |---|----------|---------|-----------------|
-| 2.1 | L1 | `grove create "test from primary"` | Exit 0, `wt-test-from-primary/` exists in workspace |
-| 2.2 | L2 | `grove create "test from linked"` | Exit 0, `wt-test-from-linked/` exists in workspace |
-| 2.3 | L3 | `grove create "test from workspace"` | Exit 0, `wt-test-from-workspace/` exists in workspace |
+| 2.1 | L1 | `grove --debug create "test from primary"` | Exit 0, `wt-test-from-primary/` exists in workspace |
+| 2.2 | L2 | `grove --debug create "test from linked"` | Exit 0, `wt-test-from-linked/` exists in workspace |
+| 2.3 | L3 | `grove --debug create "test from workspace"` | Exit 0, `wt-test-from-workspace/` exists in workspace |
 
 ### Phase 3: `grove pr checkout` (all locations, with cleanup)
 
@@ -80,12 +94,12 @@ Each run creates `pr-$PR/` in the workspace. Must remove before the next run.
 
 | # | Location | Command | Success criteria |
 |---|----------|---------|-----------------|
-| 3.1 | L1 | `grove pr checkout $PR` | Exit 0, `pr-$PR/` exists |
-| 3.2 | — | `grove remove pr-$PR` (cleanup) | `pr-$PR/` removed |
-| 3.3 | L2 | `grove pr checkout $PR` | Exit 0, `pr-$PR/` exists |
-| 3.4 | — | `grove remove pr-$PR` (cleanup) | `pr-$PR/` removed |
-| 3.5 | L3 | `grove pr checkout $PR` | Exit 0, `pr-$PR/` exists |
-| 3.6 | — | `grove remove pr-$PR` (cleanup) | `pr-$PR/` removed |
+| 3.1 | L1 | `grove --debug pr checkout $PR` | Exit 0, `pr-$PR/` exists |
+| 3.2 | — | `grove --debug remove pr-$PR` (cleanup) | `pr-$PR/` removed |
+| 3.3 | L2 | `grove --debug pr checkout $PR` | Exit 0, `pr-$PR/` exists |
+| 3.4 | — | `grove --debug remove pr-$PR` (cleanup) | `pr-$PR/` removed |
+| 3.5 | L3 | `grove --debug pr checkout $PR` | Exit 0, `pr-$PR/` exists |
+| 3.6 | — | `grove --debug remove pr-$PR` (cleanup) | `pr-$PR/` removed |
 
 ### Phase 4: `grove remove` (all locations)
 
@@ -93,29 +107,42 @@ Uses the 3 worktrees created in Phase 2.
 
 | # | Location | Command | Success criteria |
 |---|----------|---------|-----------------|
-| 4.1 | L1 | `grove remove wt-test-from-primary` | Exit 0, directory gone, branch deleted |
-| 4.2 | L2 | `grove remove wt-test-from-linked` | Exit 0, directory gone, branch deleted |
-| 4.3 | L3 | `grove remove wt-test-from-workspace` | Exit 0, directory gone, branch deleted |
+| 4.1 | L1 | `grove --debug remove wt-test-from-primary` | Exit 0, directory gone, branch deleted |
+| 4.2 | L2 | `grove --debug remove wt-test-from-linked` | Exit 0, directory gone, branch deleted |
+| 4.3 | L3 | `grove --debug remove wt-test-from-workspace` | Exit 0, directory gone, branch deleted |
 
 ### Phase 5: `grove prune` (all locations)
 
-Prune is interactive (charmbracelet/huh TUI). Each run needs a prunable worktree. We create one fresh before each prune test, push it, then delete the remote branch to trigger the "upstream gone" reason.
+Prune uses a charmbracelet/huh TUI that requires a real TTY. **All prune commands must be run inside a tmux pane** — they will fail with `could not open a new TTY` if invoked from a non-interactive context.
 
-**Before each prune test:**
+Each run needs a prunable worktree. We create one fresh before each prune test, push it, then delete the remote branch to trigger the "upstream gone" reason.
+
+**tmux pane setup:**
 ```
-grove create "prune test <N>"
+PANE_ID=$(tmux split-window -h -l 50% -t "$TMUX_PANE" -P -F '#{pane_id}')
+```
+
+**Before each prune test** (setup can run non-interactively):
+```
+grove --debug create "prune test <N>"
 cd wt-prune-test-<N> && git push -u origin feature/prune-test-<N>
 git push origin --delete feature/prune-test-<N>
 ```
 
+**The `grove prune` command itself must be sent to the tmux pane:**
+```
+tmux send-keys -t "$PANE_ID" "cd <location> && /tmp/grove-test --debug prune" Enter
+```
+Then read the pane buffer with `tmux capture-pane -t "$PANE_ID" -p` to verify output, and send `Enter` keystrokes to interact with the TUI (accept selection → confirm removal).
+
 | # | Location | Command | Success criteria |
 |---|----------|---------|-----------------|
 | 5.1 | L1 | Create + make stale `wt-prune-test-one` | Worktree exists, upstream deleted |
-| 5.2 | L1 | `grove prune` | TUI launches, shows `wt-prune-test-one` as "upstream gone", accept all → removed |
+| 5.2 | L1 | `grove --debug prune` (in tmux pane) | TUI launches, shows `wt-prune-test-one` as "upstream gone", accept all → removed |
 | 5.3 | L2 | Create + make stale `wt-prune-test-two` | Worktree exists, upstream deleted |
-| 5.4 | L2 | `grove prune` | TUI launches, shows `wt-prune-test-two`, accept all → removed |
+| 5.4 | L2 | `grove --debug prune` (in tmux pane) | TUI launches, shows `wt-prune-test-two`, accept all → removed |
 | 5.5 | L3 | Create + make stale `wt-prune-test-three` | Worktree exists, upstream deleted |
-| 5.6 | L3 | `grove prune` | TUI launches, shows `wt-prune-test-three`, accept all → removed |
+| 5.6 | L3 | `grove --debug prune` (in tmux pane) | TUI launches, shows `wt-prune-test-three`, accept all → removed |
 
 **Note:** Pre-existing stale worktrees are cleaned up before this phase (see Pre-Phase-5 Cleanup). Each prune run should show only our test worktree. TUI interaction: Enter to accept the pre-selected item → Enter to confirm removal.
 
@@ -123,9 +150,9 @@ git push origin --delete feature/prune-test-<N>
 
 ## Pre-Phase-5 Cleanup
 
-Before prune testing, remove any pre-existing stale worktrees so prune only shows our test ones:
+Before prune testing, remove any pre-existing stale worktrees so prune only shows our test ones. These must also run in a tmux pane (TUI requirement):
 
-1. Run `grove prune` from L1 (known working) to clear existing stale worktrees
+1. Run `grove prune` from L1 (in tmux pane) to clear existing stale worktrees
 2. Verify `grove prune` now reports "Nothing to prune."
 
 ---
@@ -141,10 +168,11 @@ Before prune testing, remove any pre-existing stale worktrees so prune only show
 ## Execution Approach
 
 - Build the binary once, invoke via `/tmp/grove-test` from each location
-- Use a tmux pane for interactive commands (prune)
-- Run commands sequentially, recording exit code and abbreviated output for each
+- **Prune commands require a tmux pane** (charmbracelet/huh TUI needs a real TTY)
+- Run commands sequentially, recording exit code for each
+- **When a command fails, capture and record the complete stdout and stderr output.** Do not truncate or summarize — the full output is essential for diagnosing the failure.
 - For L3 tests: these will initially fail (proving the bug), then pass after the fix
-- The test sequence runs in ~5 minutes end-to-end
+- **Always pass `--debug`** on every grove command to get full `DEBU`-level log output (git commands executed, cache hits, etc.). Capture stderr alongside stdout (`2>&1`).
 
 ## Full Test Matrix (27 cells)
 

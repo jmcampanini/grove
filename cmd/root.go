@@ -22,6 +22,7 @@ Common workflows:
 
 func init() {
 	rootCmd.Version = Version
+	rootCmd.PersistentFlags().Bool("debug", false, "Enable debug logging")
 
 	rootCmd.AddGroup(
 		&cobra.Group{ID: "worktree", Title: "Worktree Commands:"},
@@ -31,6 +32,12 @@ func init() {
 	rootCmd.SetHelpCommandGroupID("config")
 	rootCmd.SetCompletionCommandGroupID("config")
 	configureLogStyles()
+
+	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
+		if debug, _ := cmd.Flags().GetBool("debug"); debug {
+			log.SetLevel(log.DebugLevel)
+		}
+	}
 }
 
 func configureLogStyles() {
