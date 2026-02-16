@@ -12,6 +12,7 @@ type Config struct {
 	LocalBranch LocalBranchConfig `toml:"local_branch"`
 	PullRequest PullRequestConfig `toml:"pull_request"`
 	Slugify     SlugifyConfig     `toml:"slugify"`
+	Workspace   WorkspaceConfig   `toml:"workspace"`
 }
 
 // Validate checks that all config values are valid.
@@ -34,6 +35,9 @@ func (c Config) Validate() error {
 	}
 	if c.Slugify.MaxLength > 0 && c.Slugify.HashLength > c.Slugify.MaxLength-2 {
 		return errors.New("slugify.hash_length must be at least 2 less than slugify.max_length")
+	}
+	if len(c.Workspace.PrimaryBranches) == 0 {
+		return errors.New("workspace.primary_branches cannot be empty")
 	}
 	return nil
 }
@@ -74,4 +78,9 @@ type LocalBranchConfig struct {
 	StripBranchPrefix []string `toml:"strip_branch_prefix"`
 
 	WorktreePrefix string `toml:"worktree_prefix"` // e.g., "wt-"
+}
+
+// WorkspaceConfig configures workspace root detection.
+type WorkspaceConfig struct {
+	PrimaryBranches []string `toml:"primary_branches"`
 }

@@ -36,6 +36,9 @@ func TestDefaultConfig(t *testing.T) {
 	assert.Equal(t, "{{.BranchName}}", cfg.PullRequest.BranchTemplate)
 	assert.Equal(t, "pr-", cfg.PullRequest.WorktreePrefix)
 
+	// Workspace defaults
+	assert.Equal(t, []string{"main", "develop", "master"}, cfg.Workspace.PrimaryBranches)
+
 	// Default config should be valid
 	assert.NoError(t, cfg.Validate())
 }
@@ -150,6 +153,21 @@ func TestConfig_Validate(t *testing.T) {
 			},
 			wantErr: "slugify.hash_length must be at least 2 less than slugify.max_length",
 		},
+		// Workspace
+		{
+			name: "empty primary branches",
+			modify: func(c *Config) {
+				c.Workspace.PrimaryBranches = []string{}
+			},
+			wantErr: "workspace.primary_branches cannot be empty",
+		},
+		{
+			name: "nil primary branches",
+			modify: func(c *Config) {
+				c.Workspace.PrimaryBranches = nil
+			},
+			wantErr: "workspace.primary_branches cannot be empty",
+		},
 	}
 
 	for _, tt := range tests {
@@ -244,6 +262,37 @@ func TestConfigPaths(t *testing.T) {
 			},
 		},
 		{
+			name:         "cwd is workspace root (parent of gitRoot)",
+			cwd:          "/Users/jim/code/org/project",
+			worktreeRoot: "/Users/jim/code/org/project/main",
+			gitRoot:      "/Users/jim/code/org/project/main",
+			homeDir:      "/Users/jim",
+			wantContains: []string{
+				"/Users/jim/code/org/project/grove.toml",
+				"/Users/jim/code/org/project/main/grove.toml",
+			},
+			wantOrder: []string{
+				"/Users/jim/grove.toml",                       // home
+				"/Users/jim/code/grove.toml",                  // ancestor
+				"/Users/jim/code/org/grove.toml",              // ancestor
+				"/Users/jim/code/org/project/main/grove.toml", // gitRoot = worktreeRoot
+				"/Users/jim/code/org/project/grove.toml",      // cwd (highest)
+			},
+		},
+		{
+			name:         "cwd equals homeDir",
+			cwd:          "/Users/jim",
+			worktreeRoot: "/Users/jim/project/main",
+			gitRoot:      "/Users/jim/project/main",
+			homeDir:      "/Users/jim",
+			wantOrder: []string{
+				"/Users/jim/grove.toml",              // home (lowest ancestor)
+				"/Users/jim/project/grove.toml",      // ancestor
+				"/Users/jim/project/main/grove.toml", // gitRoot = worktreeRoot
+				// cwd == homeDir, so deduped — does NOT appear again at highest
+			},
+		},
+		{
 			name:         "cwd differs from worktree root",
 			cwd:          "/Users/jim/project/src/subdir",
 			worktreeRoot: "/Users/jim/project",
@@ -289,6 +338,65 @@ func TestConfigPaths(t *testing.T) {
 				assert.False(t, seen[p], "duplicate path: %s", p)
 				seen[p] = true
 			}
+		})
+	}
+}
+
+func TestBootstrapConfigPaths(t *testing.T) {
+	tests := []struct {
+		name      string
+		cwd       string
+		homeDir   string
+		xdgConfig string
+		want      []string
+	}{
+		{
+			name:    "XDG, ancestors, and CWD included",
+			cwd:     "/Users/jim/code/org/project",
+			homeDir: "/Users/jim",
+			want: []string{
+				"/Users/jim/.config/grove/grove.toml",
+				"/Users/jim/grove.toml",
+				"/Users/jim/code/grove.toml",
+				"/Users/jim/code/org/grove.toml",
+				"/Users/jim/code/org/project/grove.toml",
+			},
+		},
+		{
+			name:      "custom XDG_CONFIG_HOME with ancestors",
+			cwd:       "/Users/jim/project",
+			homeDir:   "/Users/jim",
+			xdgConfig: "/custom/xdg",
+			want: []string{
+				"/custom/xdg/grove/grove.toml",
+				"/Users/jim/grove.toml",
+				"/Users/jim/project/grove.toml",
+			},
+		},
+		{
+			name:    "empty homeDir",
+			cwd:     "/Users/jim/project",
+			homeDir: "",
+			want: []string{
+				"/Users/jim/project/grove.toml",
+			},
+		},
+		{
+			name:    "empty CWD",
+			cwd:     "",
+			homeDir: "/Users/jim",
+			want: []string{
+				"/Users/jim/.config/grove/grove.toml",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("XDG_CONFIG_HOME", tt.xdgConfig)
+
+			paths := BootstrapConfigPaths(tt.cwd, tt.homeDir)
+			assert.Equal(t, tt.want, paths)
 		})
 	}
 }
@@ -374,6 +482,15 @@ lowercase = false
 				assert.Equal(t, 6, cfg.Slugify.HashLength)
 				assert.False(t, cfg.Slugify.Lowercase)
 				assert.True(t, cfg.Slugify.CollapseDashes)
+			},
+		},
+		{
+			name: "workspace config",
+			content: `[workspace]
+primary_branches = ["trunk", "main"]
+`,
+			check: func(t *testing.T, cfg Config) {
+				assert.Equal(t, []string{"trunk", "main"}, cfg.Workspace.PrimaryBranches)
 			},
 		},
 		{

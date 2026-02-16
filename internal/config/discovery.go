@@ -42,11 +42,15 @@ func ConfigPaths(cwd, worktreeRoot, gitRoot, homeDir string) []string {
 	}
 
 	if gitRoot != "" && homeDir != "" {
-		// Collect ancestors from gitRoot's parent up to home
+		// Collect ancestors from gitRoot's parent up to home.
+		// Skip cwd so it appears only via addPath(cwd) below (highest priority),
+		// but always include homeDir since it's the walk boundary.
 		var ancestors []string
 		current := filepath.Dir(gitRoot)
 		for current != "" && len(current) >= len(homeDir) {
-			ancestors = append(ancestors, current)
+			if current != cwd || current == homeDir {
+				ancestors = append(ancestors, current)
+			}
 			if current == homeDir {
 				break
 			}
@@ -68,4 +72,14 @@ func ConfigPaths(cwd, worktreeRoot, gitRoot, homeDir string) []string {
 	addPath(cwd)
 
 	return paths
+}
+
+// BootstrapConfigPaths returns config paths that don't require git context.
+// This is used during workspace root detection, before git context is available.
+//
+// Order (lowest to highest priority):
+//  1. File in XDG config directory (~/.config/grove/grove.toml)
+//  2. Files in each directory from home down to cwd (inclusive)
+func BootstrapConfigPaths(cwd, homeDir string) []string {
+	return ConfigPaths(cwd, "", cwd, homeDir)
 }

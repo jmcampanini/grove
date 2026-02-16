@@ -4,6 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+	"time"
+
+	"github.com/charmbracelet/log"
 
 	"github.com/jmcampanini/grove-cli/internal/cache"
 	"github.com/jmcampanini/grove-cli/internal/config"
@@ -34,7 +38,7 @@ func (rt *commandRuntime) newCachedGitHubClient() (github.GitHub, error) {
 }
 
 func loadCommandRuntime() (*commandRuntime, error) {
-	cwd, err := os.Getwd()
+	originalCwd, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current directory: %w", err)
 	}
@@ -44,14 +48,34 @@ func loadCommandRuntime() (*commandRuntime, error) {
 		return nil, fmt.Errorf("failed to get user home directory: %w", err)
 	}
 
-	initGit := git.New(false, cwd, config.DefaultConfig().Git.Timeout)
+	defaultTimeout := config.DefaultConfig().Git.Timeout
+	gitDir := originalCwd
+	initGit := git.New(false, gitDir, defaultTimeout)
 
 	worktreeRoot, err := initGit.GetWorktreeRoot()
 	if err != nil {
 		return nil, fmt.Errorf("git error: %w", err)
 	}
+
 	if worktreeRoot == "" {
-		return nil, errNotGitRepo
+		log.Debug("not in a git repository, attempting workspace root detection", "cwd", originalCwd)
+
+		bootstrapPaths := config.BootstrapConfigPaths(originalCwd, homeDir)
+		bootstrapResult, err := config.NewDefaultLoader().Load(bootstrapPaths)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load bootstrap config: %w", err)
+		}
+		log.Debug("bootstrap config loaded", "paths", bootstrapPaths, "sources", bootstrapResult.SourcePaths)
+
+		worktreeRoot, err = resolveWorkspaceRoot(originalCwd, bootstrapResult.Config.Workspace.PrimaryBranches, defaultTimeout)
+		if err != nil {
+			log.Debug("workspace root detection failed", "err", err)
+			return nil, errNotGitRepo
+		}
+
+		gitDir = worktreeRoot
+		initGit = git.New(false, gitDir, defaultTimeout)
+		log.Debug("anchored to worktree from workspace root", "anchor", gitDir, "originalCwd", originalCwd)
 	}
 
 	mainWorktreePath, err := initGit.GetMainWorktreePath()
@@ -59,7 +83,7 @@ func loadCommandRuntime() (*commandRuntime, error) {
 		return nil, fmt.Errorf("failed to get main worktree path: %w", err)
 	}
 
-	configPaths := config.ConfigPaths(cwd, worktreeRoot, mainWorktreePath, homeDir)
+	configPaths := config.ConfigPaths(originalCwd, worktreeRoot, mainWorktreePath, homeDir)
 	loadResult, err := config.NewDefaultLoader().Load(configPaths)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
@@ -67,8 +91,47 @@ func loadCommandRuntime() (*commandRuntime, error) {
 
 	return &commandRuntime{
 		cfg:              loadResult.Config,
-		cwd:              cwd,
-		gitClient:        git.New(false, cwd, loadResult.Config.Git.Timeout),
+		cwd:              gitDir,
+		gitClient:        git.New(false, gitDir, loadResult.Config.Git.Timeout),
 		mainWorktreePath: mainWorktreePath,
 	}, nil
+}
+
+// resolveWorkspaceRoot probes immediate children of cwd for a valid git worktree.
+// Returns the worktree root of the first child directory that has a .git marker and is a valid git repo.
+func resolveWorkspaceRoot(cwd string, primaryBranches []string, timeout time.Duration) (string, error) {
+	if len(primaryBranches) == 0 {
+		return "", errors.New("no primary branches configured")
+	}
+
+	log.Debug("probing for primary worktree", "candidates", primaryBranches)
+
+	for _, name := range primaryBranches {
+		candidate := filepath.Join(cwd, name)
+		if !hasGitMarker(candidate) {
+			continue
+		}
+
+		testGit := git.New(false, candidate, timeout)
+		testRoot, err := testGit.GetWorktreeRoot()
+		if err != nil {
+			log.Debug("candidate git error", "dir", candidate, "err", err)
+			continue
+		}
+		if testRoot == "" {
+			log.Debug("candidate has .git marker but is not a valid repo", "dir", candidate)
+			continue
+		}
+
+		log.Debug("found valid worktree", "dir", candidate)
+		return testRoot, nil
+	}
+
+	return "", errors.New("no valid worktree found in workspace root")
+}
+
+// hasGitMarker checks if a directory contains a .git file or directory.
+func hasGitMarker(dir string) bool {
+	_, err := os.Stat(filepath.Join(dir, ".git"))
+	return err == nil
 }
