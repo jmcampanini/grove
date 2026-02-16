@@ -262,6 +262,37 @@ func TestConfigPaths(t *testing.T) {
 			},
 		},
 		{
+			name:         "cwd is workspace root (parent of gitRoot)",
+			cwd:          "/Users/jim/code/org/project",
+			worktreeRoot: "/Users/jim/code/org/project/main",
+			gitRoot:      "/Users/jim/code/org/project/main",
+			homeDir:      "/Users/jim",
+			wantContains: []string{
+				"/Users/jim/code/org/project/grove.toml",
+				"/Users/jim/code/org/project/main/grove.toml",
+			},
+			wantOrder: []string{
+				"/Users/jim/grove.toml",                       // home
+				"/Users/jim/code/grove.toml",                  // ancestor
+				"/Users/jim/code/org/grove.toml",              // ancestor
+				"/Users/jim/code/org/project/main/grove.toml", // gitRoot = worktreeRoot
+				"/Users/jim/code/org/project/grove.toml",      // cwd (highest)
+			},
+		},
+		{
+			name:         "cwd equals homeDir",
+			cwd:          "/Users/jim",
+			worktreeRoot: "/Users/jim/project/main",
+			gitRoot:      "/Users/jim/project/main",
+			homeDir:      "/Users/jim",
+			wantOrder: []string{
+				"/Users/jim/grove.toml",              // home (lowest ancestor)
+				"/Users/jim/project/grove.toml",      // ancestor
+				"/Users/jim/project/main/grove.toml", // gitRoot = worktreeRoot
+				// cwd == homeDir, so deduped — does NOT appear again at highest
+			},
+		},
+		{
 			name:         "cwd differs from worktree root",
 			cwd:          "/Users/jim/project/src/subdir",
 			worktreeRoot: "/Users/jim/project",

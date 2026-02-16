@@ -42,11 +42,15 @@ func ConfigPaths(cwd, worktreeRoot, gitRoot, homeDir string) []string {
 	}
 
 	if gitRoot != "" && homeDir != "" {
-		// Collect ancestors from gitRoot's parent up to home
+		// Collect ancestors from gitRoot's parent up to home.
+		// Skip cwd so it appears only via addPath(cwd) below (highest priority),
+		// but always include homeDir since it's the walk boundary.
 		var ancestors []string
 		current := filepath.Dir(gitRoot)
 		for current != "" && len(current) >= len(homeDir) {
-			ancestors = append(ancestors, current)
+			if current != cwd || current == homeDir {
+				ancestors = append(ancestors, current)
+			}
 			if current == homeDir {
 				break
 			}
