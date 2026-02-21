@@ -24,6 +24,29 @@ A workspace is a directory containing only git repo roots (the main repo and it'
 3. The workspace only contains git repository or worktrees roots as subdirectories
 
 
+Installation
+------------
+
+### Homebrew (macOS)
+
+```sh
+brew tap jmcampanini/grove-cli https://github.com/jmcampanini/grove-cli
+brew install --HEAD jmcampanini/grove-cli/grove
+```
+
+To upgrade to the latest commit:
+
+```sh
+brew upgrade --fetch-HEAD grove
+```
+
+### From source
+
+```sh
+make install
+```
+
+
 Development
 -----------
 
