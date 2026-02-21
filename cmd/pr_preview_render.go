@@ -562,7 +562,7 @@ func renderFileList(files []github.PullRequestFile, fileComments map[string]int,
 
 	remaining := totalChanged - len(displayFiles) - len(haPaths)
 	if remaining > 0 {
-		sb.WriteString(fmt.Sprintf("  … and %d more\n", remaining))
+		fmt.Fprintf(&sb, "  … and %d more\n", remaining)
 	}
 
 	return strings.TrimRight(sb.String(), "\n")
@@ -664,9 +664,9 @@ func renderTimeline(pr github.PullRequest, timeline []github.TimelineEvent) stri
 			icon = timelineEventIcon(e.Type, e.Details)
 			msg = timelineEventMessage(e)
 		}
-		sb.WriteString(fmt.Sprintf("  %s  %s %s\n", timeStyle.Render(relativeTime(e.CreatedAt)), icon, msg))
+		fmt.Fprintf(&sb, "  %s  %s %s\n", timeStyle.Render(relativeTime(e.CreatedAt)), icon, msg)
 		if i < len(collapsed)-1 {
-			sb.WriteString(fmt.Sprintf("  %s  %s\n", strings.Repeat(" ", 16), lineStyle.Render("│")))
+			fmt.Fprintf(&sb, "  %s  %s\n", strings.Repeat(" ", 16), lineStyle.Render("│"))
 		}
 	}
 	return strings.TrimRight(sb.String(), "\n")
