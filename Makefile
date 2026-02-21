@@ -2,8 +2,7 @@ BINARY_NAME := grove
 BUILD_DIR := build
 INSTALL_DIR := $(HOME)/.local/bin
 
-# TODO: use git describe --tags --dirty --always when tags are available
-VERSION := $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
+VERSION := $(shell git describe --tags --dirty --always 2>/dev/null || date -u '+%Y-%m-%dT%H:%M:%SZ')
 LDFLAGS := -ldflags "-X github.com/jmcampanini/grove-cli/cmd.Version=$(VERSION)"
 
 # Shell completion directories
