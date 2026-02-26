@@ -1270,6 +1270,52 @@ func TestSquashMergeReconstruction_Integration(t *testing.T) {
 	assert.Contains(t, diffOutput, "another.go")
 }
 
+func TestMergeCommitReconstruction_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	repo := newTestRepo(t)
+	repo.commit("initial commit")
+
+	repo.createBranch("feature")
+	repo.checkout("feature")
+	repo.commitFile("alpha.go", "package main\n\nfunc alpha() {}\n", "add alpha")
+	repo.commitFile("beta.go", "package main\n\nfunc beta() {}\n", "add beta")
+	repo.checkout("main")
+
+	repo.mergeNoFF("feature")
+	mergeCommitSHA := repo.fullSHA("HEAD")
+	repo.deleteBranch("feature")
+
+	count, err := repo.Git.GetCommitParentCount(mergeCommitSHA)
+	require.NoError(t, err)
+	assert.Equal(t, 2, count)
+
+	baseRef := mergeCommitSHA + "^1"
+	worktreePath := filepath.Join(t.TempDir(), "reconstructed-merge")
+	err = repo.Git.CreateWorktreeForNewBranchFromRef("reconstructed-merge-branch", worktreePath, baseRef)
+	require.NoError(t, err)
+
+	resolved := resolvePath(t, worktreePath)
+	err = repo.Git.MergeSquashRef(resolved, mergeCommitSHA)
+	require.NoError(t, err)
+
+	err = repo.Git.CommitAll(resolved, "Reconstructed merge PR")
+	require.NoError(t, err)
+
+	_, err = os.Stat(filepath.Join(resolved, "alpha.go"))
+	assert.NoError(t, err)
+	_, err = os.Stat(filepath.Join(resolved, "beta.go"))
+	assert.NoError(t, err)
+
+	wtGit := New(false, resolved, testTimeout).(*GitCli)
+	diffOutput, err := wtGit.executeGitCommand("diff", "--stat", "HEAD^1", "HEAD")
+	require.NoError(t, err)
+	assert.Contains(t, diffOutput, "alpha.go")
+	assert.Contains(t, diffOutput, "beta.go")
+}
+
 // =============================================================================
 // CommitAll tests
 // =============================================================================

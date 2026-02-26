@@ -164,15 +164,6 @@ func reconstructFromMergeCommit(stdout, stderr io.Writer, ctx *prCheckoutContext
 		return fmt.Errorf("failed to fetch merge commit: %w", err)
 	}
 
-	parentCount, err := ctx.gitClient.GetCommitParentCount(prInfo.MergeCommitSHA)
-	if err != nil {
-		return fmt.Errorf("failed to get merge commit parent count: %w", err)
-	}
-
-	if parentCount >= 2 {
-		return fmt.Errorf("PR #%d was merged with a merge commit; reconstruction for merge commits is not yet supported", prInfo.Number)
-	}
-
 	workspacePath, err := ctx.gitClient.GetWorkspacePath()
 	if err != nil {
 		return fmt.Errorf("failed to get workspace path: %w", err)

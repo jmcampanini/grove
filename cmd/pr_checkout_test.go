@@ -500,9 +500,6 @@ func TestCheckoutPRWorktree_SquashReconstruction(t *testing.T) {
 			assert.Equal(t, "abc123", ref)
 			return nil
 		},
-		getCommitParentCountFn: func(sha string) (int, error) {
-			return 1, nil
-		},
 		createWorktreeForNewBranchFromRefFn: func(newBranchName, worktreeAbsPath, baseRef string) error {
 			assert.Equal(t, "recreated-16-feature/fast-init", newBranchName)
 			assert.Equal(t, "/workspace/pr-recreated-16-feature-fast-init", worktreeAbsPath)
@@ -539,6 +536,63 @@ func TestCheckoutPRWorktree_SquashReconstruction(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Contains(t, stdout.String(), "/workspace/pr-recreated-16-feature-fast-init")
+	assert.Contains(t, stderr.String(), "Branch deleted from remote, recreating from merge commit...")
+}
+
+func TestCheckoutPRWorktree_MergeCommitReconstruction(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	gitMock := &mockGit{
+		listWorktreesFn: func() ([]git.Worktree, error) {
+			return []git.Worktree{}, nil
+		},
+		branchExistsFn: func(branchName string, caseInsensitive bool) (bool, error) {
+			return false, nil
+		},
+		fetchRemoteBranchFn: func(remote, remoteRef, localRef string) error {
+			return assert.AnError
+		},
+		fetchRefFn: func(remote, ref string) error {
+			assert.Equal(t, "origin", remote)
+			assert.Equal(t, "merge123", ref)
+			return nil
+		},
+		createWorktreeForNewBranchFromRefFn: func(newBranchName, worktreeAbsPath, baseRef string) error {
+			assert.Equal(t, "recreated-42-feature/two-parents", newBranchName)
+			assert.Equal(t, "/workspace/pr-recreated-42-feature-two-parents", worktreeAbsPath)
+			assert.Equal(t, "merge123^1", baseRef)
+			return nil
+		},
+		mergeSquashRefFn: func(worktreeAbsPath, ref string) error {
+			assert.Equal(t, "/workspace/pr-recreated-42-feature-two-parents", worktreeAbsPath)
+			assert.Equal(t, "merge123", ref)
+			return nil
+		},
+		commitAllFn: func(worktreeAbsPath, message string) error {
+			assert.Equal(t, "/workspace/pr-recreated-42-feature-two-parents", worktreeAbsPath)
+			assert.Equal(t, "PR #42: Two parent merge", message)
+			return nil
+		},
+	}
+
+	ctx := &prCheckoutContext{
+		cfg:       defaultTestConfig(),
+		ghClient:  &mockGitHub{},
+		gitClient: gitMock,
+	}
+
+	prInfo := github.PullRequest{
+		BranchName:     "feature/two-parents",
+		MergeCommitSHA: "merge123",
+		Number:         42,
+		State:          github.PRStateMerged,
+		Title:          "Two parent merge",
+	}
+
+	err := checkoutPRWorktree(&stdout, &stderr, ctx, prInfo)
+	require.NoError(t, err)
+
+	assert.Contains(t, stdout.String(), "/workspace/pr-recreated-42-feature-two-parents")
 	assert.Contains(t, stderr.String(), "Branch deleted from remote, recreating from merge commit...")
 }
 
