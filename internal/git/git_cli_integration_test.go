@@ -1,6 +1,7 @@
 package git
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1216,7 +1217,7 @@ func TestGetCommitParentCount_Integration_SquashMerge(t *testing.T) {
 }
 
 // =============================================================================
-// Squash merge reconstruction simulation
+// PR reconstruction simulation tests
 // =============================================================================
 
 func TestSquashMergeReconstruction_Integration(t *testing.T) {
@@ -1314,6 +1315,103 @@ func TestMergeCommitReconstruction_Integration(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, diffOutput, "alpha.go")
 	assert.Contains(t, diffOutput, "beta.go")
+}
+
+func TestRebaseMergeReconstruction_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	repo := newTestRepo(t)
+	repo.commit("initial commit")
+	baseSHA := repo.fullSHA("HEAD")
+
+	repo.createBranch("feature")
+	repo.checkout("feature")
+	repo.commitFile("r1.go", "package main\n\nfunc r1() {}\n", "add r1")
+	repo.commitFile("r2.go", "package main\n\nfunc r2() {}\n", "add r2")
+	repo.commitFile("r3.go", "package main\n\nfunc r3() {}\n", "add r3")
+	featureTip := repo.fullSHA("HEAD")
+	repo.checkout("main")
+
+	// Simulate rebase merge: cherry-pick feature commits onto main
+	repo.cherryPickRange(baseSHA, featureTip)
+	lastRebasedSHA := repo.fullSHA("HEAD")
+	repo.deleteBranch("feature")
+
+	count, err := repo.Git.GetCommitParentCount(lastRebasedSHA)
+	require.NoError(t, err)
+	assert.Equal(t, 1, count)
+
+	files, adds, _, err := repo.Git.GetDiffStats(lastRebasedSHA+"^1", lastRebasedSHA)
+	require.NoError(t, err)
+	assert.Equal(t, 1, files)
+	assert.Equal(t, 3, adds)
+
+	baseRef := fmt.Sprintf("%s~%d", lastRebasedSHA, 3)
+	worktreePath := filepath.Join(t.TempDir(), "reconstructed-rebase")
+	err = repo.Git.CreateWorktreeForNewBranchFromRef("reconstructed-rebase-branch", worktreePath, baseRef)
+	require.NoError(t, err)
+
+	resolved := resolvePath(t, worktreePath)
+	err = repo.Git.MergeSquashRef(resolved, lastRebasedSHA)
+	require.NoError(t, err)
+
+	err = repo.Git.CommitAll(resolved, "Reconstructed rebase PR")
+	require.NoError(t, err)
+
+	expectedFiles := []string{"r1.go", "r2.go", "r3.go"}
+	for _, f := range expectedFiles {
+		_, err = os.Stat(filepath.Join(resolved, f))
+		assert.NoError(t, err, "expected %s to exist", f)
+	}
+
+	wtGit := New(false, resolved, testTimeout).(*GitCli)
+	diffOutput, err := wtGit.executeGitCommand("diff", "--stat", "HEAD^1", "HEAD")
+	require.NoError(t, err)
+	for _, f := range expectedFiles {
+		assert.Contains(t, diffOutput, f)
+	}
+}
+
+// =============================================================================
+// GetDiffStats tests
+// =============================================================================
+
+func TestGetDiffStats_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	repo := newTestRepo(t)
+	repo.commit("initial commit")
+	baseSHA := repo.fullSHA("HEAD")
+
+	repo.commitFile("a.go", "package a\n", "add a")
+	repo.commitFile("b.go", "package b\n\nfunc B() {}\n", "add b")
+	headSHA := repo.fullSHA("HEAD")
+
+	files, adds, dels, err := repo.Git.GetDiffStats(baseSHA, headSHA)
+	require.NoError(t, err)
+	assert.Equal(t, 2, files)
+	assert.Equal(t, 4, adds)
+	assert.Equal(t, 0, dels)
+}
+
+func TestGetDiffStats_Integration_NoDiff(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	repo := newTestRepo(t)
+	repo.commit("initial commit")
+	sha := repo.fullSHA("HEAD")
+
+	files, adds, dels, err := repo.Git.GetDiffStats(sha, sha)
+	require.NoError(t, err)
+	assert.Equal(t, 0, files)
+	assert.Equal(t, 0, adds)
+	assert.Equal(t, 0, dels)
 }
 
 // =============================================================================

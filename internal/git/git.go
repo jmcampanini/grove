@@ -169,6 +169,9 @@ type Git interface {
 	// Returns the value of git config remote.pushDefault if set, otherwise returns the fallback parameter.
 	GetDefaultRemote(fallback string) (string, error)
 
+	// GetDiffStats returns the number of files changed, insertions, and deletions between two refs.
+	GetDiffStats(base, head string) (filesChanged, additions, deletions int, err error)
+
 	// GetRepoDefaultBranch returns the default branch name by querying the remote's HEAD reference.
 	// Returns the branch name (e.g., "main") if the remote HEAD is configured.
 	// Returns ("", nil) if the remote exists but the remote HEAD is not set.

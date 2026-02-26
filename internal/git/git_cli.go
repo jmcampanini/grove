@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -41,7 +42,7 @@ func (g *GitCli) executeGitCommand(args ...string) (string, error) {
 
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = g.workingDir
-	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "LC_ALL=C")
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -114,6 +115,36 @@ func (g *GitCli) GetCommitParentCount(sha string) (int, error) {
 		}
 	}
 	return count, nil
+}
+
+func (g *GitCli) GetDiffStats(base, head string) (filesChanged, additions, deletions int, err error) {
+	output, err := g.executeGitCommand("diff", "--shortstat", base, head)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("failed to get diff stats for %s..%s: %w", base, head, err)
+	}
+	if output == "" {
+		return 0, 0, 0, nil
+	}
+	for _, part := range strings.Split(output, ",") {
+		part = strings.TrimSpace(part)
+		fields := strings.Fields(part)
+		if len(fields) < 2 {
+			continue
+		}
+		n, parseErr := strconv.Atoi(fields[0])
+		if parseErr != nil {
+			continue
+		}
+		switch {
+		case strings.Contains(part, "file"):
+			filesChanged = n
+		case strings.Contains(part, "insertion"):
+			additions = n
+		case strings.Contains(part, "deletion"):
+			deletions = n
+		}
+	}
+	return filesChanged, additions, deletions, nil
 }
 
 func (g *GitCli) MergeSquashRef(worktreeAbsPath, ref string) error {

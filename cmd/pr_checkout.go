@@ -185,7 +185,10 @@ func reconstructFromMergeCommit(stdout, stderr io.Writer, ctx *prCheckoutContext
 		return err
 	}
 
-	baseRef := prInfo.MergeCommitSHA + "^1"
+	baseRef, err := detectBaseRef(ctx, prInfo)
+	if err != nil {
+		return fmt.Errorf("failed to detect merge strategy: %w", err)
+	}
 
 	if err := ctx.gitClient.CreateWorktreeForNewBranchFromRef(recreatedBranch, wtPath, baseRef); err != nil {
 		return fmt.Errorf("failed to create worktree: %w", err)
@@ -202,4 +205,38 @@ func reconstructFromMergeCommit(stdout, stderr io.Writer, ctx *prCheckoutContext
 
 	_, err = fmt.Fprintln(stdout, wtPath)
 	return err
+}
+
+func detectBaseRef(ctx *prCheckoutContext, prInfo github.PullRequest) (string, error) {
+	parentCount, err := ctx.gitClient.GetCommitParentCount(prInfo.MergeCommitSHA)
+	if err != nil {
+		return "", fmt.Errorf("failed to get commit parent count: %w", err)
+	}
+
+	firstParent := prInfo.MergeCommitSHA + "^1"
+
+	// Merge commits (2+ parents): first parent is the base branch tip
+	if parentCount >= 2 {
+		return firstParent, nil
+	}
+
+	// Single-parent commit with only 1 PR commit: must be squash
+	if prInfo.CommitCount <= 1 {
+		return firstParent, nil
+	}
+
+	// Ambiguous: single-parent with multiple PR commits could be squash or rebase.
+	// Compare the merge commit's diff against the PR's total stats to disambiguate.
+	files, adds, dels, err := ctx.gitClient.GetDiffStats(firstParent, prInfo.MergeCommitSHA)
+	if err != nil {
+		return "", fmt.Errorf("failed to get diff stats: %w", err)
+	}
+
+	statsMatch := files == prInfo.FilesChanged && adds == prInfo.LinesAdded && dels == prInfo.LinesDeleted
+	if statsMatch {
+		return firstParent, nil
+	}
+
+	// Rebase: merge commit SHA is the last rebased commit; walk back to find the base.
+	return fmt.Sprintf("%s~%d", prInfo.MergeCommitSHA, prInfo.CommitCount), nil
 }

@@ -58,6 +58,7 @@ type mockGit struct {
 	getCommitSubjectFn                  func() (string, error)
 	getCurrentBranchFn                  func() (string, error)
 	getDefaultRemoteFn                  func(fallback string) (string, error)
+	getDiffStatsFn                      func(base, head string) (int, int, int, error)
 	getMainWorktreePathFn               func() (string, error)
 	getRepoDefaultBranchFn              func(remoteName string) (string, error)
 	getWorkspacePathFn                  func() (string, error)
@@ -163,6 +164,13 @@ func (m *mockGit) GetDefaultRemote(fallback string) (string, error) {
 		return m.getDefaultRemoteFn(fallback)
 	}
 	return fallback, nil
+}
+
+func (m *mockGit) GetDiffStats(base, head string) (int, int, int, error) {
+	if m.getDiffStatsFn != nil {
+		return m.getDiffStatsFn(base, head)
+	}
+	return 0, 0, 0, nil
 }
 
 func (m *mockGit) GetMainWorktreePath() (string, error) {
@@ -500,6 +508,9 @@ func TestCheckoutPRWorktree_SquashReconstruction(t *testing.T) {
 			assert.Equal(t, "abc123", ref)
 			return nil
 		},
+		getCommitParentCountFn: func(sha string) (int, error) {
+			return 1, nil
+		},
 		createWorktreeForNewBranchFromRefFn: func(newBranchName, worktreeAbsPath, baseRef string) error {
 			assert.Equal(t, "recreated-16-feature/fast-init", newBranchName)
 			assert.Equal(t, "/workspace/pr-recreated-16-feature-fast-init", worktreeAbsPath)
@@ -557,6 +568,9 @@ func TestCheckoutPRWorktree_MergeCommitReconstruction(t *testing.T) {
 			assert.Equal(t, "merge123", ref)
 			return nil
 		},
+		getCommitParentCountFn: func(sha string) (int, error) {
+			return 2, nil
+		},
 		createWorktreeForNewBranchFromRefFn: func(newBranchName, worktreeAbsPath, baseRef string) error {
 			assert.Equal(t, "recreated-42-feature/two-parents", newBranchName)
 			assert.Equal(t, "/workspace/pr-recreated-42-feature-two-parents", worktreeAbsPath)
@@ -594,6 +608,183 @@ func TestCheckoutPRWorktree_MergeCommitReconstruction(t *testing.T) {
 
 	assert.Contains(t, stdout.String(), "/workspace/pr-recreated-42-feature-two-parents")
 	assert.Contains(t, stderr.String(), "Branch deleted from remote, recreating from merge commit...")
+}
+
+func TestCheckoutPRWorktree_AmbiguousReconstruction(t *testing.T) {
+	tests := []struct {
+		name       string
+		prInfo     github.PullRequest
+		diffStats  [3]int // files, adds, dels
+		wantBranch string
+		wantBase   string
+		wantStdout string
+	}{
+		{
+			name: "rebase detected via stats mismatch",
+			prInfo: github.PullRequest{
+				BranchName:     "feature/rebase-test",
+				CommitCount:    3,
+				FilesChanged:   3,
+				LinesAdded:     9,
+				LinesDeleted:   0,
+				MergeCommitSHA: "rebase789",
+				Number:         29,
+				State:          github.PRStateMerged,
+				Title:          "Rebase test",
+			},
+			diffStats:  [3]int{1, 3, 0},
+			wantBranch: "recreated-29-feature/rebase-test",
+			wantBase:   "rebase789~3",
+			wantStdout: "/workspace/pr-recreated-29-feature-rebase-test",
+		},
+		{
+			name: "multi-commit squash detected via stats match",
+			prInfo: github.PullRequest{
+				BranchName:     "feature/squash-multi",
+				CommitCount:    3,
+				FilesChanged:   3,
+				LinesAdded:     9,
+				LinesDeleted:   0,
+				MergeCommitSHA: "squash456",
+				Number:         30,
+				State:          github.PRStateMerged,
+				Title:          "Squash multi",
+			},
+			diffStats:  [3]int{3, 9, 0},
+			wantBranch: "recreated-30-feature/squash-multi",
+			wantBase:   "squash456^1",
+			wantStdout: "/workspace/pr-recreated-30-feature-squash-multi",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+
+			gitMock := &mockGit{
+				listWorktreesFn: func() ([]git.Worktree, error) {
+					return []git.Worktree{}, nil
+				},
+				branchExistsFn: func(branchName string, caseInsensitive bool) (bool, error) {
+					return false, nil
+				},
+				fetchRemoteBranchFn: func(remote, remoteRef, localRef string) error {
+					return assert.AnError
+				},
+				fetchRefFn: func(remote, ref string) error {
+					return nil
+				},
+				getCommitParentCountFn: func(sha string) (int, error) {
+					return 1, nil
+				},
+				getDiffStatsFn: func(base, head string) (int, int, int, error) {
+					return tt.diffStats[0], tt.diffStats[1], tt.diffStats[2], nil
+				},
+				createWorktreeForNewBranchFromRefFn: func(newBranchName, worktreeAbsPath, baseRef string) error {
+					assert.Equal(t, tt.wantBranch, newBranchName)
+					assert.Equal(t, tt.wantBase, baseRef)
+					return nil
+				},
+				mergeSquashRefFn: func(worktreeAbsPath, ref string) error {
+					return nil
+				},
+				commitAllFn: func(worktreeAbsPath, message string) error {
+					return nil
+				},
+			}
+
+			ctx := &prCheckoutContext{
+				cfg:       defaultTestConfig(),
+				ghClient:  &mockGitHub{},
+				gitClient: gitMock,
+			}
+
+			err := checkoutPRWorktree(&stdout, &stderr, ctx, tt.prInfo)
+			require.NoError(t, err)
+
+			assert.Contains(t, stdout.String(), tt.wantStdout)
+		})
+	}
+}
+
+func TestDetectBaseRef(t *testing.T) {
+	tests := []struct {
+		name        string
+		prInfo      github.PullRequest
+		parentCount int
+		diffFiles   int
+		diffAdds    int
+		diffDels    int
+		wantRef     string
+	}{
+		{
+			name: "merge commit (2 parents)",
+			prInfo: github.PullRequest{
+				MergeCommitSHA: "abc123",
+				CommitCount:    3,
+			},
+			parentCount: 2,
+			wantRef:     "abc123^1",
+		},
+		{
+			name: "single commit squash",
+			prInfo: github.PullRequest{
+				MergeCommitSHA: "abc123",
+				CommitCount:    1,
+			},
+			parentCount: 1,
+			wantRef:     "abc123^1",
+		},
+		{
+			name: "multi-commit squash (stats match)",
+			prInfo: github.PullRequest{
+				MergeCommitSHA: "abc123",
+				CommitCount:    3,
+				FilesChanged:   5,
+				LinesAdded:     100,
+				LinesDeleted:   20,
+			},
+			parentCount: 1,
+			diffFiles:   5,
+			diffAdds:    100,
+			diffDels:    20,
+			wantRef:     "abc123^1",
+		},
+		{
+			name: "rebase merge (stats mismatch)",
+			prInfo: github.PullRequest{
+				MergeCommitSHA: "abc123",
+				CommitCount:    3,
+				FilesChanged:   5,
+				LinesAdded:     100,
+				LinesDeleted:   20,
+			},
+			parentCount: 1,
+			diffFiles:   2,
+			diffAdds:    30,
+			diffDels:    5,
+			wantRef:     "abc123~3",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := &prCheckoutContext{
+				gitClient: &mockGit{
+					getCommitParentCountFn: func(sha string) (int, error) {
+						return tt.parentCount, nil
+					},
+					getDiffStatsFn: func(base, head string) (int, int, int, error) {
+						return tt.diffFiles, tt.diffAdds, tt.diffDels, nil
+					},
+				},
+			}
+
+			ref, err := detectBaseRef(ctx, tt.prInfo)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantRef, ref)
+		})
+	}
 }
 
 func TestCheckoutPRWorktree_FetchFailsNoReconstruction(t *testing.T) {

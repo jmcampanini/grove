@@ -240,6 +240,12 @@ func (r *testRepo) mergeSquash(branch string) {
 	runGit(r.t, r.rootDir, "commit", "-m", "Squash merge "+branch)
 }
 
+// cherryPickRange cherry-picks a range of commits (base..head) onto the current branch.
+func (r *testRepo) cherryPickRange(base, head string) {
+	r.t.Helper()
+	runGit(r.t, r.rootDir, "cherry-pick", base+".."+head)
+}
+
 // deleteBranch deletes a local branch.
 func (r *testRepo) deleteBranch(name string) {
 	r.t.Helper()
