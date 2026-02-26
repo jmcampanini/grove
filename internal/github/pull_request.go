@@ -151,6 +151,7 @@ type PullRequest struct {
 	Body              string
 	BranchName        string
 	Comments          int
+	CommitCount       int
 	CreatedAt         time.Time
 	Files             []PullRequestFile
 	FilesChanged      int
@@ -158,6 +159,7 @@ type PullRequest struct {
 	Labels            []Label
 	LinesAdded        int
 	LinesDeleted      int
+	MergeCommitSHA    string
 	Number            int
 	Reviews           []Review
 	State             PRState
@@ -203,7 +205,7 @@ func ParseRepoFromURL(prURL string) (owner, repo string, err error) {
 	return parts[0], parts[1], nil
 }
 
-const prJsonFields = "additions,author,baseRefName,body,changedFiles,comments,createdAt,deletions,headRefName,isCrossRepository,isDraft,labels,number,reviews,state,statusCheckRollup,title,updatedAt,url"
+const prJsonFields = "additions,author,baseRefName,body,changedFiles,comments,commits,createdAt,deletions,headRefName,isCrossRepository,isDraft,labels,mergeCommit,number,reviews,state,statusCheckRollup,title,updatedAt,url"
 
 func (pr *PullRequest) UnmarshalJSON(data []byte) error {
 	type rawReview struct {
@@ -232,17 +234,21 @@ func (pr *PullRequest) UnmarshalJSON(data []byte) error {
 			Login string `json:"login"`
 			Name  string `json:"name"`
 		} `json:"author"`
-		BaseRefName       string                      `json:"baseRefName"`
-		Body              string                      `json:"body"`
-		ChangedFiles      int                         `json:"changedFiles"`
-		Comments          []json.RawMessage           `json:"comments"`
-		CreatedAt         time.Time                   `json:"createdAt"`
-		Deletions         int                         `json:"deletions"`
-		Files             []PullRequestFile           `json:"files"`
-		HeadRefName       string                      `json:"headRefName"`
-		IsCrossRepository bool                        `json:"isCrossRepository"`
-		IsDraft           bool                        `json:"isDraft"`
-		Labels            []Label                     `json:"labels"`
+		BaseRefName       string            `json:"baseRefName"`
+		Body              string            `json:"body"`
+		ChangedFiles      int               `json:"changedFiles"`
+		Comments          []json.RawMessage `json:"comments"`
+		Commits           []json.RawMessage `json:"commits"`
+		CreatedAt         time.Time         `json:"createdAt"`
+		Deletions         int               `json:"deletions"`
+		Files             []PullRequestFile `json:"files"`
+		HeadRefName       string            `json:"headRefName"`
+		IsCrossRepository bool              `json:"isCrossRepository"`
+		IsDraft           bool              `json:"isDraft"`
+		Labels            []Label           `json:"labels"`
+		MergeCommit       *struct {
+			Oid string `json:"oid"`
+		} `json:"mergeCommit"`
 		Number            int                         `json:"number"`
 		Reviews           []rawReview                 `json:"reviews"`
 		State             string                      `json:"state"`
@@ -262,6 +268,7 @@ func (pr *PullRequest) UnmarshalJSON(data []byte) error {
 	pr.Body = raw.Body
 	pr.BranchName = raw.HeadRefName
 	pr.Comments = len(raw.Comments)
+	pr.CommitCount = len(raw.Commits)
 	pr.CreatedAt = raw.CreatedAt
 	pr.Files = raw.Files
 	pr.FilesChanged = raw.ChangedFiles
@@ -269,6 +276,9 @@ func (pr *PullRequest) UnmarshalJSON(data []byte) error {
 	pr.Labels = raw.Labels
 	pr.LinesAdded = raw.Additions
 	pr.LinesDeleted = raw.Deletions
+	if raw.MergeCommit != nil {
+		pr.MergeCommitSHA = raw.MergeCommit.Oid
+	}
 	pr.Number = raw.Number
 	pr.Title = raw.Title
 	pr.UpdatedAt = raw.UpdatedAt

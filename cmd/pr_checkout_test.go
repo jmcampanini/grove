@@ -46,14 +46,17 @@ func (m *mockGitHub) ListPullRequests(query github.PRQuery, limit int) ([]github
 
 type mockGit struct {
 	branchExistsFn                      func(branchName string, caseInsensitive bool) (bool, error)
+	commitAllFn                         func(worktreeAbsPath, message string) error
 	createWorktreeForExistingBranchFn   func(branchName, worktreeAbsPath string) error
 	createWorktreeForNewBranchFn        func(newBranchName, worktreeAbsPath string) error
 	createWorktreeForNewBranchFromRefFn func(newBranchName, worktreeAbsPath, baseRef string) error
 	deleteBranchFn                      func(name string, force bool) error
+	fetchRefFn                          func(remote, ref string) error
 	fetchRemoteBranchFn                 func(remote, remoteRef, localRef string) error
 	fetchRemoteFn                       func(remoteName string) (string, error)
-	getCurrentBranchFn                  func() (string, error)
+	getCommitParentCountFn              func(sha string) (int, error)
 	getCommitSubjectFn                  func() (string, error)
+	getCurrentBranchFn                  func() (string, error)
 	getDefaultRemoteFn                  func(fallback string) (string, error)
 	getMainWorktreePathFn               func() (string, error)
 	getRepoDefaultBranchFn              func(remoteName string) (string, error)
@@ -65,6 +68,7 @@ type mockGit struct {
 	listRemotesFn                       func() ([]string, error)
 	listTagsFn                          func() ([]git.Tag, error)
 	listWorktreesFn                     func() ([]git.Worktree, error)
+	mergeSquashRefFn                    func(worktreeAbsPath, ref string) error
 	pruneWorktreesFn                    func() error
 	removeWorktreeFn                    func(absPath string, force bool) error
 	syncTagsFn                          func(remoteName string) error
@@ -75,6 +79,13 @@ func (m *mockGit) BranchExists(branchName string, caseInsensitive bool) (bool, e
 		return m.branchExistsFn(branchName, caseInsensitive)
 	}
 	return false, nil
+}
+
+func (m *mockGit) CommitAll(worktreeAbsPath, message string) error {
+	if m.commitAllFn != nil {
+		return m.commitAllFn(worktreeAbsPath, message)
+	}
+	return nil
 }
 
 func (m *mockGit) DeleteBranch(name string, force bool) error {
@@ -105,6 +116,13 @@ func (m *mockGit) CreateWorktreeForNewBranchFromRef(newBranchName, worktreeAbsPa
 	return nil
 }
 
+func (m *mockGit) FetchRef(remote, ref string) error {
+	if m.fetchRefFn != nil {
+		return m.fetchRefFn(remote, ref)
+	}
+	return nil
+}
+
 func (m *mockGit) FetchRemoteBranch(remote, remoteRef, localRef string) error {
 	if m.fetchRemoteBranchFn != nil {
 		return m.fetchRemoteBranchFn(remote, remoteRef, localRef)
@@ -119,11 +137,11 @@ func (m *mockGit) FetchRemote(remoteName string) (string, error) {
 	return "", nil
 }
 
-func (m *mockGit) GetCurrentBranch() (string, error) {
-	if m.getCurrentBranchFn != nil {
-		return m.getCurrentBranchFn()
+func (m *mockGit) GetCommitParentCount(sha string) (int, error) {
+	if m.getCommitParentCountFn != nil {
+		return m.getCommitParentCountFn(sha)
 	}
-	return "main", nil
+	return 1, nil
 }
 
 func (m *mockGit) GetCommitSubject() (string, error) {
@@ -131,6 +149,13 @@ func (m *mockGit) GetCommitSubject() (string, error) {
 		return m.getCommitSubjectFn()
 	}
 	return "", nil
+}
+
+func (m *mockGit) GetCurrentBranch() (string, error) {
+	if m.getCurrentBranchFn != nil {
+		return m.getCurrentBranchFn()
+	}
+	return "main", nil
 }
 
 func (m *mockGit) GetDefaultRemote(fallback string) (string, error) {
@@ -208,6 +233,13 @@ func (m *mockGit) IsWorktreeDirty(absPath string) (bool, error) {
 		return m.isWorktreeDirtyFn(absPath)
 	}
 	return false, nil
+}
+
+func (m *mockGit) MergeSquashRef(worktreeAbsPath, ref string) error {
+	if m.mergeSquashRefFn != nil {
+		return m.mergeSquashRefFn(worktreeAbsPath, ref)
+	}
+	return nil
 }
 
 func (m *mockGit) PruneWorktrees() error {
@@ -448,6 +480,220 @@ func TestCheckoutPRWorktree(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCheckoutPRWorktree_SquashReconstruction(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	gitMock := &mockGit{
+		listWorktreesFn: func() ([]git.Worktree, error) {
+			return []git.Worktree{}, nil
+		},
+		branchExistsFn: func(branchName string, caseInsensitive bool) (bool, error) {
+			return false, nil
+		},
+		fetchRemoteBranchFn: func(remote, remoteRef, localRef string) error {
+			return assert.AnError
+		},
+		fetchRefFn: func(remote, ref string) error {
+			assert.Equal(t, "origin", remote)
+			assert.Equal(t, "abc123", ref)
+			return nil
+		},
+		getCommitParentCountFn: func(sha string) (int, error) {
+			return 1, nil
+		},
+		createWorktreeForNewBranchFromRefFn: func(newBranchName, worktreeAbsPath, baseRef string) error {
+			assert.Equal(t, "recreated-16-feature/fast-init", newBranchName)
+			assert.Equal(t, "/workspace/pr-recreated-16-feature-fast-init", worktreeAbsPath)
+			assert.Equal(t, "abc123^1", baseRef)
+			return nil
+		},
+		mergeSquashRefFn: func(worktreeAbsPath, ref string) error {
+			assert.Equal(t, "/workspace/pr-recreated-16-feature-fast-init", worktreeAbsPath)
+			assert.Equal(t, "abc123", ref)
+			return nil
+		},
+		commitAllFn: func(worktreeAbsPath, message string) error {
+			assert.Equal(t, "/workspace/pr-recreated-16-feature-fast-init", worktreeAbsPath)
+			assert.Equal(t, "PR #16: Fast init", message)
+			return nil
+		},
+	}
+
+	ctx := &prCheckoutContext{
+		cfg:       defaultTestConfig(),
+		ghClient:  &mockGitHub{},
+		gitClient: gitMock,
+	}
+
+	prInfo := github.PullRequest{
+		BranchName:     "feature/fast-init",
+		MergeCommitSHA: "abc123",
+		Number:         16,
+		State:          github.PRStateMerged,
+		Title:          "Fast init",
+	}
+
+	err := checkoutPRWorktree(&stdout, &stderr, ctx, prInfo)
+	require.NoError(t, err)
+
+	assert.Contains(t, stdout.String(), "/workspace/pr-recreated-16-feature-fast-init")
+	assert.Contains(t, stderr.String(), "Branch deleted from remote, recreating from merge commit...")
+}
+
+func TestCheckoutPRWorktree_FetchFailsNoReconstruction(t *testing.T) {
+	tests := []struct {
+		name   string
+		cfg    config.Config
+		prInfo github.PullRequest
+	}{
+		{
+			name: "not merged",
+			cfg:  defaultTestConfig(),
+			prInfo: github.PullRequest{
+				BranchName: "feature/test",
+				Number:     99,
+				State:      github.PRStateOpen,
+				Title:      "Test PR",
+			},
+		},
+		{
+			name: "auto recreate disabled",
+			cfg: func() config.Config {
+				cfg := defaultTestConfig()
+				cfg.PullRequest.AutoRecreate = false
+				return cfg
+			}(),
+			prInfo: github.PullRequest{
+				BranchName:     "feature/test",
+				MergeCommitSHA: "abc123",
+				Number:         99,
+				State:          github.PRStateMerged,
+				Title:          "Test PR",
+			},
+		},
+		{
+			name: "no merge commit SHA",
+			cfg:  defaultTestConfig(),
+			prInfo: github.PullRequest{
+				BranchName: "feature/test",
+				Number:     99,
+				State:      github.PRStateMerged,
+				Title:      "Test PR",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+
+			gitMock := &mockGit{
+				listWorktreesFn: func() ([]git.Worktree, error) {
+					return []git.Worktree{}, nil
+				},
+				branchExistsFn: func(branchName string, caseInsensitive bool) (bool, error) {
+					return false, nil
+				},
+				fetchRemoteBranchFn: func(remote, remoteRef, localRef string) error {
+					return assert.AnError
+				},
+			}
+
+			ctx := &prCheckoutContext{
+				cfg:       tt.cfg,
+				ghClient:  &mockGitHub{},
+				gitClient: gitMock,
+			}
+
+			err := checkoutPRWorktree(&stdout, &stderr, ctx, tt.prInfo)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "failed to fetch remote branch")
+		})
+	}
+}
+
+func TestCheckoutPRWorktree_ReconstructionBranchAlreadyExists(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	var createdWorktreeForBranch string
+	gitMock := &mockGit{
+		listWorktreesFn: func() ([]git.Worktree, error) {
+			return []git.Worktree{}, nil
+		},
+		branchExistsFn: func(branchName string, caseInsensitive bool) (bool, error) {
+			if branchName == "recreated-16-feature/fast-init" {
+				return true, nil
+			}
+			return false, nil
+		},
+		fetchRemoteBranchFn: func(remote, remoteRef, localRef string) error {
+			return assert.AnError
+		},
+		fetchRefFn: func(remote, ref string) error {
+			return nil
+		},
+		getCommitParentCountFn: func(sha string) (int, error) {
+			return 1, nil
+		},
+		createWorktreeForExistingBranchFn: func(branchName, worktreeAbsPath string) error {
+			createdWorktreeForBranch = branchName
+			return nil
+		},
+	}
+
+	ctx := &prCheckoutContext{
+		cfg:       defaultTestConfig(),
+		ghClient:  &mockGitHub{},
+		gitClient: gitMock,
+	}
+
+	prInfo := github.PullRequest{
+		BranchName:     "feature/fast-init",
+		MergeCommitSHA: "abc123",
+		Number:         16,
+		State:          github.PRStateMerged,
+		Title:          "Fast init",
+	}
+
+	err := checkoutPRWorktree(&stdout, &stderr, ctx, prInfo)
+	require.NoError(t, err)
+
+	assert.Equal(t, "recreated-16-feature/fast-init", createdWorktreeForBranch)
+	assert.Contains(t, stdout.String(), "/workspace/pr-recreated-16-feature-fast-init")
+}
+
+func TestCheckoutPRWorktree_ExistingRecreatedWorktree(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	gitMock := &mockGit{
+		listWorktreesFn: func() ([]git.Worktree, error) {
+			return []git.Worktree{
+				createTestWorktree("/workspace/pr-recreated-16-feature-fast-init", "recreated-16-feature/fast-init"),
+			}, nil
+		},
+	}
+
+	ctx := &prCheckoutContext{
+		cfg:       defaultTestConfig(),
+		ghClient:  &mockGitHub{},
+		gitClient: gitMock,
+	}
+
+	prInfo := github.PullRequest{
+		BranchName:     "feature/fast-init",
+		MergeCommitSHA: "abc123",
+		Number:         16,
+		State:          github.PRStateMerged,
+		Title:          "Fast init",
+	}
+
+	err := checkoutPRWorktree(&stdout, &stderr, ctx, prInfo)
+	require.NoError(t, err)
+
+	assert.Contains(t, stdout.String(), "/workspace/pr-recreated-16-feature-fast-init")
+	assert.Contains(t, stderr.String(), "Worktree already exists")
 }
 
 func TestCheckoutPRWorktreeDirectBranchMatch(t *testing.T) {

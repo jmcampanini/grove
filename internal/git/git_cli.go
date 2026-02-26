@@ -86,6 +86,42 @@ func (g *GitCli) executeMutatingGitCommandWithOutput(errContext string, args ...
 	return output, nil
 }
 
+func (g *GitCli) CommitAll(worktreeAbsPath, message string) error {
+	g.log.Info("Committing all changes", "path", worktreeAbsPath, "message", message)
+	args := []string{"-C", worktreeAbsPath, "commit", "--no-gpg-sign", "-am", message}
+	return g.executeMutatingGitCommand("failed to commit all changes", args...)
+}
+
+func (g *GitCli) FetchRef(remote, ref string) error {
+	g.log.Info("Fetching ref", "remote", remote, "ref", ref)
+	args := []string{"fetch", remote, ref}
+	return g.executeMutatingGitCommand("failed to fetch ref", args...)
+}
+
+func (g *GitCli) GetCommitParentCount(sha string) (int, error) {
+	output, err := g.executeGitCommand("cat-file", "-p", sha)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get commit info for %s: %w", sha, err)
+	}
+
+	count := 0
+	for _, line := range strings.Split(output, "\n") {
+		if line == "" {
+			break
+		}
+		if strings.HasPrefix(line, "parent ") {
+			count++
+		}
+	}
+	return count, nil
+}
+
+func (g *GitCli) MergeSquashRef(worktreeAbsPath, ref string) error {
+	g.log.Info("Squash merging ref", "path", worktreeAbsPath, "ref", ref)
+	args := []string{"-C", worktreeAbsPath, "merge", "--squash", ref}
+	return g.executeMutatingGitCommand("failed to squash merge ref", args...)
+}
+
 func (g *GitCli) GetMainWorktreePath() (string, error) {
 	commonDir, err := g.executeGitCommand("rev-parse", "--git-common-dir")
 	if err != nil {

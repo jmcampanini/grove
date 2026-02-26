@@ -132,6 +132,17 @@ func (b RemoteBranch) FullName() string { return b.RemoteName + "/" + b.Name }
 
 type Git interface {
 
+	// CommitAll stages all changes and creates a commit in the given worktree.
+	// Will mutate the current git state.
+	CommitAll(worktreeAbsPath, message string) error
+
+	// FetchRef fetches a single ref from a remote without creating a local branch.
+	// Will mutate the current git state.
+	FetchRef(remote, ref string) error
+
+	// GetCommitParentCount returns the number of parent commits for the given SHA.
+	GetCommitParentCount(sha string) (int, error)
+
 	// GetCurrentBranch returns the current branch name.
 	// Returns "HEAD" if in detached HEAD state.
 	GetCurrentBranch() (string, error)
@@ -231,6 +242,11 @@ type Git interface {
 	// IsWorktreeDirty returns true if the worktree at absPath has uncommitted changes
 	// (modified, staged, or untracked files).
 	IsWorktreeDirty(absPath string) (bool, error)
+
+	// MergeSquashRef applies a squash merge of the given ref into the worktree.
+	// The changes are staged but not committed.
+	// Will mutate the current git state.
+	MergeSquashRef(worktreeAbsPath, ref string) error
 
 	// PruneWorktrees removes stale worktree metadata for worktrees whose directories
 	// no longer exist on disk.

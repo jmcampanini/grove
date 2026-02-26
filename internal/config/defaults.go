@@ -17,8 +17,10 @@ func DefaultConfig() Config {
 			WorktreePrefix:    "wt-",
 		},
 		PullRequest: PullRequestConfig{
-			BranchTemplate: "{{.BranchName}}",
-			WorktreePrefix: "pr-",
+			AutoRecreate:            true,
+			BranchTemplate:          "{{.BranchName}}",
+			RecreatedBranchTemplate: "recreated-{{.Number}}-{{.BranchName}}",
+			WorktreePrefix:          "pr-",
 		},
 		Slugify: SlugifyConfig{
 			CollapseDashes:     true,

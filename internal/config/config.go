@@ -54,8 +54,10 @@ type GitHubConfig struct {
 
 // PullRequestConfig configures pull request worktree naming.
 type PullRequestConfig struct {
-	BranchTemplate string `toml:"branch_template"` // Template for local branch name (e.g., "{{.BranchName}}")
-	WorktreePrefix string `toml:"worktree_prefix"` // Prefix for PR worktree directories (e.g., "pr-")
+	AutoRecreate            bool   `toml:"auto_recreate"`             // Recreate deleted branches from merge commits
+	BranchTemplate          string `toml:"branch_template"`           // Template for local branch name (e.g., "{{.BranchName}}")
+	RecreatedBranchTemplate string `toml:"recreated_branch_template"` // Template for recreated branch name (e.g., "recreated-{{.Number}}-{{.BranchName}}")
+	WorktreePrefix          string `toml:"worktree_prefix"`           // Prefix for PR worktree directories (e.g., "pr-")
 }
 
 // SlugifyConfig configures slug generation.

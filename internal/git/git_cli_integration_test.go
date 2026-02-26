@@ -1145,6 +1145,193 @@ func TestDeleteBranch_Integration_Force(t *testing.T) {
 }
 
 // =============================================================================
+// GetCommitParentCount tests
+// =============================================================================
+
+func TestGetCommitParentCount_Integration_SingleParent(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	repo := newTestRepo(t)
+	repo.commit("initial commit")
+	sha := repo.fullSHA("HEAD")
+
+	count, err := repo.Git.GetCommitParentCount(sha)
+	require.NoError(t, err)
+	assert.Equal(t, 0, count) // initial commit has no parent
+}
+
+func TestGetCommitParentCount_Integration_NormalCommit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	repo := newTestRepo(t)
+	repo.commit("initial commit")
+	repo.commit("second commit")
+	sha := repo.fullSHA("HEAD")
+
+	count, err := repo.Git.GetCommitParentCount(sha)
+	require.NoError(t, err)
+	assert.Equal(t, 1, count)
+}
+
+func TestGetCommitParentCount_Integration_MergeCommit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	repo := newTestRepo(t)
+	repo.commit("initial commit")
+	repo.createBranch("feature")
+	repo.checkout("feature")
+	repo.commitFile("feature.txt", "feature work\n", "feature commit")
+	repo.checkout("main")
+	runGit(t, repo.path(), "merge", "--no-ff", "feature", "-m", "Merge feature")
+	sha := repo.fullSHA("HEAD")
+
+	count, err := repo.Git.GetCommitParentCount(sha)
+	require.NoError(t, err)
+	assert.Equal(t, 2, count)
+}
+
+func TestGetCommitParentCount_Integration_SquashMerge(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	repo := newTestRepo(t)
+	repo.commit("initial commit")
+	repo.createBranch("feature")
+	repo.checkout("feature")
+	repo.commitFile("feature.txt", "feature work\n", "feature commit")
+	repo.checkout("main")
+	repo.mergeSquash("feature")
+	sha := repo.fullSHA("HEAD")
+
+	count, err := repo.Git.GetCommitParentCount(sha)
+	require.NoError(t, err)
+	assert.Equal(t, 1, count)
+}
+
+// =============================================================================
+// Squash merge reconstruction simulation
+// =============================================================================
+
+func TestSquashMergeReconstruction_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	repo := newTestRepo(t)
+	repo.commit("initial commit")
+
+	// Create a feature branch with commits
+	repo.createBranch("feature")
+	repo.checkout("feature")
+	repo.commitFile("new_file.go", "package main\n\nfunc hello() {}\n", "add hello")
+	repo.commitFile("another.go", "package main\n\nfunc world() {}\n", "add world")
+	repo.checkout("main")
+
+	// Squash merge and delete the feature branch
+	repo.mergeSquash("feature")
+	mergeCommitSHA := repo.fullSHA("HEAD")
+	repo.deleteBranch("feature")
+
+	// Verify parent count
+	count, err := repo.Git.GetCommitParentCount(mergeCommitSHA)
+	require.NoError(t, err)
+	assert.Equal(t, 1, count)
+
+	// Reconstruct: create worktree from parent, apply squash merge
+	baseRef := mergeCommitSHA + "^1"
+	worktreePath := filepath.Join(t.TempDir(), "reconstructed")
+	err = repo.Git.CreateWorktreeForNewBranchFromRef("reconstructed-branch", worktreePath, baseRef)
+	require.NoError(t, err)
+
+	err = repo.Git.MergeSquashRef(resolvePath(t, worktreePath), mergeCommitSHA)
+	require.NoError(t, err)
+
+	err = repo.Git.CommitAll(resolvePath(t, worktreePath), "Reconstructed PR")
+	require.NoError(t, err)
+
+	// Verify the reconstructed worktree has the expected files
+	_, err = os.Stat(filepath.Join(resolvePath(t, worktreePath), "new_file.go"))
+	assert.NoError(t, err)
+	_, err = os.Stat(filepath.Join(resolvePath(t, worktreePath), "another.go"))
+	assert.NoError(t, err)
+
+	// Verify the diff matches: reconstructed HEAD vs its parent should show our changes
+	wtGit := New(false, resolvePath(t, worktreePath), testTimeout).(*GitCli)
+	diffOutput, err := wtGit.executeGitCommand("diff", "--stat", "HEAD^1", "HEAD")
+	require.NoError(t, err)
+	assert.Contains(t, diffOutput, "new_file.go")
+	assert.Contains(t, diffOutput, "another.go")
+}
+
+// =============================================================================
+// CommitAll tests
+// =============================================================================
+
+func TestCommitAll_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	repo := newTestRepo(t)
+	repo.commit("initial commit")
+	repo.createBranch("feature")
+
+	worktreePath := filepath.Join(t.TempDir(), "wt-commit-all")
+	repo.createWorktree(worktreePath, "feature")
+
+	resolved := resolvePath(t, worktreePath)
+	appendToFile(t, filepath.Join(resolved, "new.txt"), "new content\n")
+	runGit(t, resolved, "add", "-A")
+
+	err := repo.Git.CommitAll(resolved, "test commit all")
+	require.NoError(t, err)
+
+	wtGit := New(false, resolved, testTimeout).(*GitCli)
+	subject, err := wtGit.GetCommitSubject()
+	require.NoError(t, err)
+	assert.Equal(t, "test commit all", subject)
+}
+
+// =============================================================================
+// MergeSquashRef tests
+// =============================================================================
+
+func TestMergeSquashRef_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	repo := newTestRepo(t)
+	repo.commit("initial commit")
+	repo.createBranch("feature")
+	repo.checkout("feature")
+	repo.commitFile("squash_test.txt", "squash content\n", "feature commit")
+	featureSHA := repo.fullSHA("HEAD")
+	repo.checkout("main")
+
+	worktreePath := filepath.Join(t.TempDir(), "wt-squash")
+	repo.createBranch("squash-test")
+	repo.createWorktree(worktreePath, "squash-test")
+
+	resolved := resolvePath(t, worktreePath)
+	err := repo.Git.MergeSquashRef(resolved, featureSHA)
+	require.NoError(t, err)
+
+	_, err = os.Stat(filepath.Join(resolved, "squash_test.txt"))
+	assert.NoError(t, err)
+
+	err = repo.Git.CommitAll(resolved, "squash applied")
+	require.NoError(t, err)
+}
+
+// =============================================================================
 // IsWorktreeDirty tests
 // =============================================================================
 

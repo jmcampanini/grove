@@ -25,8 +25,9 @@ func defaultSlugifyConfig() config.SlugifyConfig {
 
 func defaultPRConfig() config.PullRequestConfig {
 	return config.PullRequestConfig{
-		BranchTemplate: "{{.BranchName}}",
-		WorktreePrefix: "pr-",
+		BranchTemplate:          "{{.BranchName}}",
+		RecreatedBranchTemplate: "recreated-{{.Number}}-{{.BranchName}}",
+		WorktreePrefix:          "pr-",
 	}
 }
 
@@ -130,6 +131,16 @@ func TestMatcher_FindWorktreeForPR(t *testing.T) {
 				createCommitWorktree("/workspace/detached"),
 			},
 			wantMatchIndex: -1,
+		},
+		{
+			name:  "recreated branch name match",
+			prCfg: defaultPRConfig(),
+			pr:    createPR(16, "feature/fast-init"),
+			worktrees: []git.Worktree{
+				createWorktree("/workspace/main", "main"),
+				createWorktree("/workspace/pr-recreated-16-feature-fast-init", "recreated-16-feature/fast-init"),
+			},
+			wantMatchIndex: 1,
 		},
 		{
 			name:  "matches first matching worktree",

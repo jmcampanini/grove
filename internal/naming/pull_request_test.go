@@ -237,6 +237,57 @@ func TestPullRequestNamer_GenerateWorktreeName(t *testing.T) {
 	}
 }
 
+func TestPullRequestNamer_GenerateRecreatedBranchName(t *testing.T) {
+	tests := []struct {
+		name                    string
+		recreatedBranchTemplate string
+		prData                  PullRequestTemplateData
+		want                    string
+	}{
+		{
+			name:                    "default template",
+			recreatedBranchTemplate: "recreated-{{.Number}}-{{.BranchName}}",
+			prData:                  PullRequestTemplateData{BranchName: "feature/fast-init", Number: 16},
+			want:                    "recreated-16-feature/fast-init",
+		},
+		{
+			name:                    "number only template",
+			recreatedBranchTemplate: "recreated/{{.Number}}",
+			prData:                  PullRequestTemplateData{BranchName: "feature/test", Number: 42},
+			want:                    "recreated/42",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			prCfg := config.PullRequestConfig{
+				BranchTemplate:          "{{.BranchName}}",
+				RecreatedBranchTemplate: tt.recreatedBranchTemplate,
+				WorktreePrefix:          "pr-",
+			}
+			namer, err := NewPullRequestNamer(prCfg, defaultSlugifyConfig())
+			require.NoError(t, err)
+
+			got, err := namer.GenerateRecreatedBranchName(tt.prData)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestPullRequestNamer_GenerateRecreatedBranchName_NoTemplate(t *testing.T) {
+	prCfg := config.PullRequestConfig{
+		BranchTemplate: "{{.BranchName}}",
+		WorktreePrefix: "pr-",
+	}
+	namer, err := NewPullRequestNamer(prCfg, defaultSlugifyConfig())
+	require.NoError(t, err)
+
+	_, err = namer.GenerateRecreatedBranchName(PullRequestTemplateData{BranchName: "test", Number: 1})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no recreated branch template configured")
+}
+
 func TestIsValidBranchName(t *testing.T) {
 	tests := []struct {
 		name       string

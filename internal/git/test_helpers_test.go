@@ -207,6 +207,39 @@ func worktreePaths(worktrees []Worktree) []string {
 	return paths
 }
 
+// commitFile creates or appends to a specific file and commits it.
+func (r *testRepo) commitFile(filename, content, message string) string {
+	r.t.Helper()
+	filePath := filepath.Join(r.rootDir, filename)
+	dir := filepath.Dir(filePath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		r.t.Fatalf("failed to create directory %s: %v", dir, err)
+	}
+	appendToFile(r.t, filePath, content)
+	runGit(r.t, r.rootDir, "add", "-A")
+	runGit(r.t, r.rootDir, "commit", "-m", message)
+	return r.shortSHA("HEAD")
+}
+
+// fullSHA returns the full SHA for a ref.
+func (r *testRepo) fullSHA(ref string) string {
+	r.t.Helper()
+	return strings.TrimSpace(runGit(r.t, r.rootDir, "rev-parse", ref))
+}
+
+// mergeSquash performs a squash merge of the given branch.
+func (r *testRepo) mergeSquash(branch string) {
+	r.t.Helper()
+	runGit(r.t, r.rootDir, "merge", "--squash", branch)
+	runGit(r.t, r.rootDir, "commit", "-m", "Squash merge "+branch)
+}
+
+// deleteBranch deletes a local branch.
+func (r *testRepo) deleteBranch(name string) {
+	r.t.Helper()
+	runGit(r.t, r.rootDir, "branch", "-D", name)
+}
+
 // resolvePath resolves symlinks in a path (useful for macOS /var -> /private/var).
 func resolvePath(t *testing.T, path string) string {
 	t.Helper()

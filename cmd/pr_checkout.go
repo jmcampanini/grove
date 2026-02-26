@@ -116,6 +116,10 @@ func checkoutPRWorktree(stdout, stderr io.Writer, ctx *prCheckoutContext, prInfo
 		return fmt.Errorf("worktree path %s already exists (not a PR worktree or different branch)", wtPath)
 	}
 
+	return ensureBranchAndCreateWorktree(stdout, stderr, ctx, namer, prInfo, localBranch, wtPath)
+}
+
+func ensureBranchAndCreateWorktree(stdout, stderr io.Writer, ctx *prCheckoutContext, namer *naming.PullRequestNamer, prInfo github.PullRequest, localBranch, wtPath string) error {
 	branchExists, err := ctx.gitClient.BranchExists(localBranch, false)
 	if err != nil {
 		return fmt.Errorf("failed to check branch existence: %w", err)
@@ -126,13 +130,83 @@ func checkoutPRWorktree(stdout, stderr io.Writer, ctx *prCheckoutContext, prInfo
 		if err != nil {
 			return fmt.Errorf("failed to determine remote: %w", err)
 		}
-		if err := ctx.gitClient.FetchRemoteBranch(remote, prInfo.BranchName, localBranch); err != nil {
-			return fmt.Errorf("failed to fetch remote branch: %w", err)
+		fetchErr := ctx.gitClient.FetchRemoteBranch(remote, prInfo.BranchName, localBranch)
+		if fetchErr != nil {
+			if prInfo.State == github.PRStateMerged && prInfo.MergeCommitSHA != "" && ctx.cfg.PullRequest.AutoRecreate {
+				return reconstructFromMergeCommit(stdout, stderr, ctx, namer, prInfo, remote)
+			}
+			return fmt.Errorf("failed to fetch remote branch: %w", fetchErr)
 		}
 	}
 
 	if err := ctx.gitClient.CreateWorktreeForExistingBranch(localBranch, wtPath); err != nil {
 		return fmt.Errorf("failed to create worktree: %w", err)
+	}
+
+	_, err = fmt.Fprintln(stdout, wtPath)
+	return err
+}
+
+func reconstructFromMergeCommit(stdout, stderr io.Writer, ctx *prCheckoutContext, namer *naming.PullRequestNamer, prInfo github.PullRequest, remote string) error {
+	prData := naming.PullRequestTemplateData{
+		BranchName: prInfo.BranchName,
+		Number:     prInfo.Number,
+	}
+
+	recreatedBranch, err := namer.GenerateRecreatedBranchName(prData)
+	if err != nil {
+		return fmt.Errorf("failed to generate recreated branch name: %w", err)
+	}
+
+	_, _ = fmt.Fprintf(stderr, "Branch deleted from remote, recreating from merge commit...\n")
+
+	if err := ctx.gitClient.FetchRef(remote, prInfo.MergeCommitSHA); err != nil {
+		return fmt.Errorf("failed to fetch merge commit: %w", err)
+	}
+
+	parentCount, err := ctx.gitClient.GetCommitParentCount(prInfo.MergeCommitSHA)
+	if err != nil {
+		return fmt.Errorf("failed to get merge commit parent count: %w", err)
+	}
+
+	if parentCount >= 2 {
+		return fmt.Errorf("PR #%d was merged with a merge commit; reconstruction for merge commits is not yet supported", prInfo.Number)
+	}
+
+	workspacePath, err := ctx.gitClient.GetWorkspacePath()
+	if err != nil {
+		return fmt.Errorf("failed to get workspace path: %w", err)
+	}
+
+	worktreeName := namer.GenerateWorktreeName(recreatedBranch)
+	wtPath := filepath.Join(workspacePath, worktreeName)
+
+	branchExists, err := ctx.gitClient.BranchExists(recreatedBranch, false)
+	if err != nil {
+		return fmt.Errorf("failed to check branch existence: %w", err)
+	}
+
+	if branchExists {
+		if err := ctx.gitClient.CreateWorktreeForExistingBranch(recreatedBranch, wtPath); err != nil {
+			return fmt.Errorf("failed to create worktree: %w", err)
+		}
+		_, err = fmt.Fprintln(stdout, wtPath)
+		return err
+	}
+
+	baseRef := prInfo.MergeCommitSHA + "^1"
+
+	if err := ctx.gitClient.CreateWorktreeForNewBranchFromRef(recreatedBranch, wtPath, baseRef); err != nil {
+		return fmt.Errorf("failed to create worktree: %w", err)
+	}
+
+	if err := ctx.gitClient.MergeSquashRef(wtPath, prInfo.MergeCommitSHA); err != nil {
+		return fmt.Errorf("failed to apply merge commit changes: %w", err)
+	}
+
+	commitMsg := fmt.Sprintf("PR #%d: %s", prInfo.Number, prInfo.Title)
+	if err := ctx.gitClient.CommitAll(wtPath, commitMsg); err != nil {
+		return fmt.Errorf("failed to commit reconstructed changes: %w", err)
 	}
 
 	_, err = fmt.Fprintln(stdout, wtPath)

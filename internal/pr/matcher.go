@@ -61,6 +61,11 @@ func (m *Matcher) FindWorktreeForPR(pr github.PullRequest, worktrees []git.Workt
 		expectedBranch = ""
 	}
 
+	recreatedBranch, err := m.namer.GenerateRecreatedBranchName(prData)
+	if err != nil {
+		recreatedBranch = ""
+	}
+
 	// Search worktrees for matching branch
 	for i := range worktrees {
 		if branch, ok := worktrees[i].Ref.FullBranch(); ok {
@@ -70,6 +75,10 @@ func (m *Matcher) FindWorktreeForPR(pr github.PullRequest, worktrees []git.Workt
 			}
 			// Match 2: PR's remote branch name directly (manual worktrees)
 			if branch.Name == pr.BranchName {
+				return &worktrees[i]
+			}
+			// Match 3: Recreated branch name (reconstructed from merge commit)
+			if recreatedBranch != "" && branch.Name == recreatedBranch {
 				return &worktrees[i]
 			}
 		}

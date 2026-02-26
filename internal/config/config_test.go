@@ -33,7 +33,9 @@ func TestDefaultConfig(t *testing.T) {
 	assert.Equal(t, "wt-", cfg.LocalBranch.WorktreePrefix)
 
 	// PullRequest defaults
+	assert.True(t, cfg.PullRequest.AutoRecreate)
 	assert.Equal(t, "{{.BranchName}}", cfg.PullRequest.BranchTemplate)
+	assert.Equal(t, "recreated-{{.Number}}-{{.BranchName}}", cfg.PullRequest.RecreatedBranchTemplate)
 	assert.Equal(t, "pr-", cfg.PullRequest.WorktreePrefix)
 
 	// Workspace defaults
