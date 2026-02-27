@@ -537,6 +537,7 @@ func TestCheckoutPRWorktree_SquashReconstruction(t *testing.T) {
 
 	prInfo := github.PullRequest{
 		BranchName:     "feature/fast-init",
+		CommitCount:    1,
 		MergeCommitSHA: "abc123",
 		Number:         16,
 		State:          github.PRStateMerged,
@@ -598,6 +599,7 @@ func TestCheckoutPRWorktree_MergeCommitReconstruction(t *testing.T) {
 
 	prInfo := github.PullRequest{
 		BranchName:     "feature/two-parents",
+		CommitCount:    3,
 		MergeCommitSHA: "merge123",
 		Number:         42,
 		State:          github.PRStateMerged,
@@ -718,6 +720,7 @@ func TestDetectBaseRef(t *testing.T) {
 		diffAdds      int
 		diffDels      int
 		wantRef       string
+		wantErr       string
 	}{
 		{
 			name: "merge commit (2 parents)",
@@ -736,6 +739,15 @@ func TestDetectBaseRef(t *testing.T) {
 			},
 			parentCountFn: func(string) (int, error) { return 1, nil },
 			wantRef:       "abc123^1",
+		},
+		{
+			name: "zero commit count returns error",
+			prInfo: github.PullRequest{
+				MergeCommitSHA: "abc123",
+				CommitCount:    0,
+			},
+			parentCountFn: func(string) (int, error) { return 1, nil },
+			wantErr:       "no commit count data",
 		},
 		{
 			name: "multi-commit squash (stats match)",
@@ -801,6 +813,10 @@ func TestDetectBaseRef(t *testing.T) {
 			}
 
 			ref, err := detectBaseRef(ctx, tt.prInfo)
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
 			require.NoError(t, err)
 			assert.Equal(t, tt.wantRef, ref)
 		})

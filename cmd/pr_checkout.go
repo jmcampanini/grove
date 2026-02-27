@@ -221,8 +221,12 @@ func detectBaseRef(ctx *prCheckoutContext, prInfo github.PullRequest) (string, e
 		return firstParent, nil
 	}
 
+	if prInfo.CommitCount == 0 {
+		return "", fmt.Errorf("PR has no commit count data; cannot determine merge strategy")
+	}
+
 	// Single-parent commit with only 1 PR commit: must be squash
-	if prInfo.CommitCount <= 1 {
+	if prInfo.CommitCount == 1 {
 		return firstParent, nil
 	}
 
