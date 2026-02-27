@@ -132,7 +132,7 @@ func (b RemoteBranch) FullName() string { return b.RemoteName + "/" + b.Name }
 
 type Git interface {
 
-	// CommitAll stages all changes and creates a commit in the given worktree.
+	// CommitAll stages tracked modified files and creates a commit in the given worktree.
 	// Will mutate the current git state.
 	CommitAll(worktreeAbsPath, message string) error
 

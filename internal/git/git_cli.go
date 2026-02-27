@@ -144,6 +144,9 @@ func (g *GitCli) GetDiffStats(base, head string) (filesChanged, additions, delet
 			deletions = n
 		}
 	}
+	if filesChanged == 0 && additions == 0 && deletions == 0 {
+		return 0, 0, 0, fmt.Errorf("failed to parse diff stats from output: %q", output)
+	}
 	return filesChanged, additions, deletions, nil
 }
 
