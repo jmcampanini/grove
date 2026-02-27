@@ -59,7 +59,7 @@ type mockGit struct {
 	getCommitSubjectFn                  func() (string, error)
 	getCurrentBranchFn                  func() (string, error)
 	getDefaultRemoteFn                  func(fallback string) (string, error)
-	getDiffStatsFn                      func(base, head string) (int, int, int, error)
+	getDiffStatsFn                      func(base, head string) (git.DiffStats, error)
 	getMainWorktreePathFn               func() (string, error)
 	getRepoDefaultBranchFn              func(remoteName string) (string, error)
 	getWorkspacePathFn                  func() (string, error)
@@ -167,11 +167,11 @@ func (m *mockGit) GetDefaultRemote(fallback string) (string, error) {
 	return fallback, nil
 }
 
-func (m *mockGit) GetDiffStats(base, head string) (int, int, int, error) {
+func (m *mockGit) GetDiffStats(base, head string) (git.DiffStats, error) {
 	if m.getDiffStatsFn != nil {
 		return m.getDiffStatsFn(base, head)
 	}
-	return 0, 0, 0, nil
+	return git.DiffStats{}, nil
 }
 
 func (m *mockGit) GetMainWorktreePath() (string, error) {
@@ -619,7 +619,7 @@ func TestCheckoutPRWorktree_AmbiguousReconstruction(t *testing.T) {
 	tests := []struct {
 		name       string
 		prInfo     github.PullRequest
-		diffStats  [3]int // files, adds, dels
+		diffStats  git.DiffStats
 		wantBranch string
 		wantBase   string
 		wantStdout string
@@ -637,7 +637,7 @@ func TestCheckoutPRWorktree_AmbiguousReconstruction(t *testing.T) {
 				State:          github.PRStateMerged,
 				Title:          "Rebase test",
 			},
-			diffStats:  [3]int{1, 3, 0},
+			diffStats:  git.DiffStats{Additions: 3, FilesChanged: 1},
 			wantBranch: "recreated-29-feature/rebase-test",
 			wantBase:   "rebase789~3",
 			wantStdout: "/workspace/pr-recreated-29-feature-rebase-test",
@@ -655,7 +655,7 @@ func TestCheckoutPRWorktree_AmbiguousReconstruction(t *testing.T) {
 				State:          github.PRStateMerged,
 				Title:          "Squash multi",
 			},
-			diffStats:  [3]int{3, 9, 0},
+			diffStats:  git.DiffStats{Additions: 9, FilesChanged: 3},
 			wantBranch: "recreated-30-feature/squash-multi",
 			wantBase:   "squash456^1",
 			wantStdout: "/workspace/pr-recreated-30-feature-squash-multi",
@@ -682,8 +682,8 @@ func TestCheckoutPRWorktree_AmbiguousReconstruction(t *testing.T) {
 				getCommitParentCountFn: func(sha string) (int, error) {
 					return 1, nil
 				},
-				getDiffStatsFn: func(base, head string) (int, int, int, error) {
-					return tt.diffStats[0], tt.diffStats[1], tt.diffStats[2], nil
+				getDiffStatsFn: func(base, head string) (git.DiffStats, error) {
+					return tt.diffStats, nil
 				},
 				createWorktreeForNewBranchFromRefFn: func(newBranchName, worktreeAbsPath, baseRef string) error {
 					assert.Equal(t, tt.wantBranch, newBranchName)
@@ -717,7 +717,7 @@ func TestDetectBaseRef(t *testing.T) {
 		name          string
 		prInfo        github.PullRequest
 		parentCountFn func(sha string) (int, error)
-		diffStatsFn   func(base, head string) (int, int, int, error)
+		diffStatsFn   func(base, head string) (git.DiffStats, error)
 		wantRef       string
 		wantErr       string
 	}{
@@ -758,8 +758,10 @@ func TestDetectBaseRef(t *testing.T) {
 				LinesDeleted:   20,
 			},
 			parentCountFn: func(string) (int, error) { return 1, nil },
-			diffStatsFn:   func(string, string) (int, int, int, error) { return 5, 100, 20, nil },
-			wantRef:       "abc123^1",
+			diffStatsFn: func(string, string) (git.DiffStats, error) {
+				return git.DiffStats{Additions: 100, Deletions: 20, FilesChanged: 5}, nil
+			},
+			wantRef: "abc123^1",
 		},
 		{
 			name: "rebase merge (stats mismatch, linear chain)",
@@ -771,8 +773,10 @@ func TestDetectBaseRef(t *testing.T) {
 				LinesDeleted:   20,
 			},
 			parentCountFn: func(string) (int, error) { return 1, nil },
-			diffStatsFn:   func(string, string) (int, int, int, error) { return 2, 30, 5, nil },
-			wantRef:       "abc123~3",
+			diffStatsFn: func(string, string) (git.DiffStats, error) {
+				return git.DiffStats{Additions: 30, Deletions: 5, FilesChanged: 2}, nil
+			},
+			wantRef: "abc123~3",
 		},
 		{
 			name: "stats mismatch but non-linear chain falls back to squash",
@@ -789,8 +793,10 @@ func TestDetectBaseRef(t *testing.T) {
 				}
 				return 1, nil
 			},
-			diffStatsFn: func(string, string) (int, int, int, error) { return 2, 30, 5, nil },
-			wantRef:     "abc123^1",
+			diffStatsFn: func(string, string) (git.DiffStats, error) {
+				return git.DiffStats{Additions: 30, Deletions: 5, FilesChanged: 2}, nil
+			},
+			wantRef: "abc123^1",
 		},
 		{
 			name: "GetCommitParentCount fails",
@@ -813,8 +819,8 @@ func TestDetectBaseRef(t *testing.T) {
 				LinesDeleted:   20,
 			},
 			parentCountFn: func(string) (int, error) { return 1, nil },
-			diffStatsFn: func(string, string) (int, int, int, error) {
-				return 0, 0, 0, fmt.Errorf("bad revision")
+			diffStatsFn: func(string, string) (git.DiffStats, error) {
+				return git.DiffStats{}, fmt.Errorf("bad revision")
 			},
 			wantErr: "failed to get diff stats",
 		},
@@ -1103,6 +1109,41 @@ func TestCheckoutPRWorktree_ReconstructionErrors(t *testing.T) {
 			assert.Contains(t, err.Error(), tt.wantErr)
 		})
 	}
+}
+
+func TestCheckoutPRWorktree_ClosedPRSkipsReconstruction(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	gitMock := &mockGit{
+		listWorktreesFn: func() ([]git.Worktree, error) {
+			return []git.Worktree{}, nil
+		},
+		branchExistsFn: func(string, bool) (bool, error) {
+			return false, nil
+		},
+		fetchRemoteBranchFn: func(string, string, string) error {
+			return fmt.Errorf("branch not found")
+		},
+	}
+
+	ctx := &prCheckoutContext{
+		cfg:       defaultTestConfig(),
+		ghClient:  &mockGitHub{},
+		gitClient: gitMock,
+	}
+
+	prInfo := github.PullRequest{
+		BranchName:     "feature/abandoned",
+		MergeCommitSHA: "abc123",
+		Number:         99,
+		State:          github.PRStateClosed,
+		Title:          "Abandoned PR",
+	}
+
+	err := checkoutPRWorktree(&stdout, &stderr, ctx, prInfo)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to fetch remote branch")
+	assert.NotContains(t, stderr.String(), "reconstruction")
 }
 
 func TestCheckoutPRWorktreeDirectBranchMatch(t *testing.T) {

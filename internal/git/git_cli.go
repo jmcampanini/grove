@@ -124,14 +124,15 @@ func (g *GitCli) GetCommitParentCount(sha string) (int, error) {
 	return count, nil
 }
 
-func (g *GitCli) GetDiffStats(base, head string) (filesChanged, additions, deletions int, err error) {
+func (g *GitCli) GetDiffStats(base, head string) (DiffStats, error) {
 	output, err := g.executeGitCommand("diff", "--shortstat", base, head)
 	if err != nil {
-		return 0, 0, 0, fmt.Errorf("failed to get diff stats for %s..%s: %w", base, head, err)
+		return DiffStats{}, fmt.Errorf("failed to get diff stats for %s..%s: %w", base, head, err)
 	}
 	if output == "" {
-		return 0, 0, 0, nil
+		return DiffStats{}, nil
 	}
+	var stats DiffStats
 	for _, part := range strings.Split(output, ",") {
 		part = strings.TrimSpace(part)
 		fields := strings.Fields(part)
@@ -144,17 +145,17 @@ func (g *GitCli) GetDiffStats(base, head string) (filesChanged, additions, delet
 		}
 		switch {
 		case strings.Contains(part, "file"):
-			filesChanged = n
+			stats.FilesChanged = n
 		case strings.Contains(part, "insertion"):
-			additions = n
+			stats.Additions = n
 		case strings.Contains(part, "deletion"):
-			deletions = n
+			stats.Deletions = n
 		}
 	}
-	if filesChanged == 0 && additions == 0 && deletions == 0 {
-		return 0, 0, 0, fmt.Errorf("failed to parse diff stats from output: %q", output)
+	if stats.FilesChanged == 0 && stats.Additions == 0 && stats.Deletions == 0 {
+		return DiffStats{}, fmt.Errorf("failed to parse diff stats from output: %q", output)
 	}
-	return filesChanged, additions, deletions, nil
+	return stats, nil
 }
 
 func (g *GitCli) MergeSquashRef(worktreeAbsPath, ref string) error {

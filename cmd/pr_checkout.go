@@ -240,35 +240,32 @@ func detectBaseRef(ctx *prCheckoutContext, prInfo github.PullRequest) (string, e
 
 	// Ambiguous: single-parent with multiple PR commits could be squash or rebase.
 	// Compare the merge commit's diff against the PR's total stats to disambiguate.
-	files, adds, dels, err := ctx.gitClient.GetDiffStats(firstParent, prInfo.MergeCommitSHA)
+	stats, err := ctx.gitClient.GetDiffStats(firstParent, prInfo.MergeCommitSHA)
 	if err != nil {
 		return "", fmt.Errorf("failed to get diff stats: %w", err)
 	}
 
-	statsMatch := files == prInfo.FilesChanged && adds == prInfo.LinesAdded && dels == prInfo.LinesDeleted
+	statsMatch := stats.FilesChanged == prInfo.FilesChanged && stats.Additions == prInfo.LinesAdded && stats.Deletions == prInfo.LinesDeleted
 	if statsMatch {
 		return firstParent, nil
 	}
 
 	// Stats diverged — verify this is actually a rebase by checking that
 	// the merge SHA sits atop a linear chain of exactly CommitCount single-parent commits.
-	isLinearChain := true
-	for i := 0; i < prInfo.CommitCount; i++ {
-		ref := fmt.Sprintf("%s~%d", prInfo.MergeCommitSHA, i)
-		pc, err := ctx.gitClient.GetCommitParentCount(ref)
-		if err != nil {
-			isLinearChain = false
-			break
-		}
-		if pc != 1 {
-			isLinearChain = false
-			break
-		}
-	}
-	if !isLinearChain {
+	if !isLinearChain(ctx, prInfo.MergeCommitSHA, prInfo.CommitCount) {
 		return firstParent, nil
 	}
 
-	// Confirmed linear rebase chain; walk back to find the base.
 	return fmt.Sprintf("%s~%d", prInfo.MergeCommitSHA, prInfo.CommitCount), nil
+}
+
+func isLinearChain(ctx *prCheckoutContext, sha string, count int) bool {
+	for i := 0; i < count; i++ {
+		ref := fmt.Sprintf("%s~%d", sha, i)
+		pc, err := ctx.gitClient.GetCommitParentCount(ref)
+		if err != nil || pc != 1 {
+			return false
+		}
+	}
+	return true
 }

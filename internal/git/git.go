@@ -2,6 +2,12 @@ package git
 
 import "time"
 
+type DiffStats struct {
+	Additions    int
+	Deletions    int
+	FilesChanged int
+}
+
 type WorktreeRefType int
 
 const (
@@ -169,8 +175,8 @@ type Git interface {
 	// Returns the value of git config remote.pushDefault if set, otherwise returns the fallback parameter.
 	GetDefaultRemote(fallback string) (string, error)
 
-	// GetDiffStats returns the number of files changed, insertions, and deletions between two refs.
-	GetDiffStats(base, head string) (filesChanged, additions, deletions int, err error)
+	// GetDiffStats returns diff statistics between two refs.
+	GetDiffStats(base, head string) (DiffStats, error)
 
 	// GetRepoDefaultBranch returns the default branch name by querying the remote's HEAD reference.
 	// Returns the branch name (e.g., "main") if the remote HEAD is configured.

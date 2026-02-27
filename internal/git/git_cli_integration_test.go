@@ -1149,7 +1149,7 @@ func TestDeleteBranch_Integration_Force(t *testing.T) {
 // GetCommitParentCount tests
 // =============================================================================
 
-func TestGetCommitParentCount_Integration_SingleParent(t *testing.T) {
+func TestGetCommitParentCount_Integration_InitialCommit(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
@@ -1343,10 +1343,10 @@ func TestRebaseMergeReconstruction_Integration(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, count)
 
-	files, adds, _, err := repo.Git.GetDiffStats(lastRebasedSHA+"^1", lastRebasedSHA)
+	stats, err := repo.Git.GetDiffStats(lastRebasedSHA+"^1", lastRebasedSHA)
 	require.NoError(t, err)
-	assert.Equal(t, 1, files)
-	assert.Equal(t, 3, adds)
+	assert.Equal(t, 1, stats.FilesChanged)
+	assert.Equal(t, 3, stats.Additions)
 
 	baseRef := fmt.Sprintf("%s~%d", lastRebasedSHA, 3)
 	worktreePath := filepath.Join(t.TempDir(), "reconstructed-rebase")
@@ -1391,11 +1391,11 @@ func TestGetDiffStats_Integration(t *testing.T) {
 	repo.commitFile("b.go", "package b\n\nfunc B() {}\n", "add b")
 	headSHA := repo.fullSHA("HEAD")
 
-	files, adds, dels, err := repo.Git.GetDiffStats(baseSHA, headSHA)
+	stats, err := repo.Git.GetDiffStats(baseSHA, headSHA)
 	require.NoError(t, err)
-	assert.Equal(t, 2, files)
-	assert.Equal(t, 4, adds)
-	assert.Equal(t, 0, dels)
+	assert.Equal(t, 2, stats.FilesChanged)
+	assert.Equal(t, 4, stats.Additions)
+	assert.Equal(t, 0, stats.Deletions)
 }
 
 func TestGetDiffStats_Integration_NoDiff(t *testing.T) {
@@ -1407,11 +1407,11 @@ func TestGetDiffStats_Integration_NoDiff(t *testing.T) {
 	repo.commit("initial commit")
 	sha := repo.fullSHA("HEAD")
 
-	files, adds, dels, err := repo.Git.GetDiffStats(sha, sha)
+	stats, err := repo.Git.GetDiffStats(sha, sha)
 	require.NoError(t, err)
-	assert.Equal(t, 0, files)
-	assert.Equal(t, 0, adds)
-	assert.Equal(t, 0, dels)
+	assert.Equal(t, 0, stats.FilesChanged)
+	assert.Equal(t, 0, stats.Additions)
+	assert.Equal(t, 0, stats.Deletions)
 }
 
 // =============================================================================
