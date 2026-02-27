@@ -238,6 +238,25 @@ func detectBaseRef(ctx *prCheckoutContext, prInfo github.PullRequest) (string, e
 		return firstParent, nil
 	}
 
-	// Rebase: merge commit SHA is the last rebased commit; walk back to find the base.
+	// Stats diverged — verify this is actually a rebase by checking that
+	// the merge SHA sits atop a linear chain of exactly CommitCount single-parent commits.
+	isLinearChain := true
+	for i := 0; i < prInfo.CommitCount; i++ {
+		ref := fmt.Sprintf("%s~%d", prInfo.MergeCommitSHA, i)
+		pc, err := ctx.gitClient.GetCommitParentCount(ref)
+		if err != nil {
+			isLinearChain = false
+			break
+		}
+		if pc != 1 {
+			isLinearChain = false
+			break
+		}
+	}
+	if !isLinearChain {
+		return firstParent, nil
+	}
+
+	// Confirmed linear rebase chain; walk back to find the base.
 	return fmt.Sprintf("%s~%d", prInfo.MergeCommitSHA, prInfo.CommitCount), nil
 }

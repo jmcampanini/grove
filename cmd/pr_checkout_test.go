@@ -711,13 +711,13 @@ func TestCheckoutPRWorktree_AmbiguousReconstruction(t *testing.T) {
 
 func TestDetectBaseRef(t *testing.T) {
 	tests := []struct {
-		name        string
-		prInfo      github.PullRequest
-		parentCount int
-		diffFiles   int
-		diffAdds    int
-		diffDels    int
-		wantRef     string
+		name          string
+		prInfo        github.PullRequest
+		parentCountFn func(sha string) (int, error)
+		diffFiles     int
+		diffAdds      int
+		diffDels      int
+		wantRef       string
 	}{
 		{
 			name: "merge commit (2 parents)",
@@ -725,8 +725,8 @@ func TestDetectBaseRef(t *testing.T) {
 				MergeCommitSHA: "abc123",
 				CommitCount:    3,
 			},
-			parentCount: 2,
-			wantRef:     "abc123^1",
+			parentCountFn: func(string) (int, error) { return 2, nil },
+			wantRef:       "abc123^1",
 		},
 		{
 			name: "single commit squash",
@@ -734,8 +734,8 @@ func TestDetectBaseRef(t *testing.T) {
 				MergeCommitSHA: "abc123",
 				CommitCount:    1,
 			},
-			parentCount: 1,
-			wantRef:     "abc123^1",
+			parentCountFn: func(string) (int, error) { return 1, nil },
+			wantRef:       "abc123^1",
 		},
 		{
 			name: "multi-commit squash (stats match)",
@@ -746,14 +746,14 @@ func TestDetectBaseRef(t *testing.T) {
 				LinesAdded:     100,
 				LinesDeleted:   20,
 			},
-			parentCount: 1,
-			diffFiles:   5,
-			diffAdds:    100,
-			diffDels:    20,
-			wantRef:     "abc123^1",
+			parentCountFn: func(string) (int, error) { return 1, nil },
+			diffFiles:     5,
+			diffAdds:      100,
+			diffDels:      20,
+			wantRef:       "abc123^1",
 		},
 		{
-			name: "rebase merge (stats mismatch)",
+			name: "rebase merge (stats mismatch, linear chain)",
 			prInfo: github.PullRequest{
 				MergeCommitSHA: "abc123",
 				CommitCount:    3,
@@ -761,11 +761,31 @@ func TestDetectBaseRef(t *testing.T) {
 				LinesAdded:     100,
 				LinesDeleted:   20,
 			},
-			parentCount: 1,
-			diffFiles:   2,
-			diffAdds:    30,
-			diffDels:    5,
-			wantRef:     "abc123~3",
+			parentCountFn: func(string) (int, error) { return 1, nil },
+			diffFiles:     2,
+			diffAdds:      30,
+			diffDels:      5,
+			wantRef:       "abc123~3",
+		},
+		{
+			name: "stats mismatch but non-linear chain falls back to squash",
+			prInfo: github.PullRequest{
+				MergeCommitSHA: "abc123",
+				CommitCount:    3,
+				FilesChanged:   5,
+				LinesAdded:     100,
+				LinesDeleted:   20,
+			},
+			parentCountFn: func(sha string) (int, error) {
+				if sha == "abc123~1" {
+					return 2, nil
+				}
+				return 1, nil
+			},
+			diffFiles: 2,
+			diffAdds:  30,
+			diffDels:  5,
+			wantRef:   "abc123^1",
 		},
 	}
 
@@ -773,9 +793,7 @@ func TestDetectBaseRef(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := &prCheckoutContext{
 				gitClient: &mockGit{
-					getCommitParentCountFn: func(sha string) (int, error) {
-						return tt.parentCount, nil
-					},
+					getCommitParentCountFn: tt.parentCountFn,
 					getDiffStatsFn: func(base, head string) (int, int, int, error) {
 						return tt.diffFiles, tt.diffAdds, tt.diffDels, nil
 					},
