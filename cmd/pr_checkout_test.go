@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -716,9 +717,7 @@ func TestDetectBaseRef(t *testing.T) {
 		name          string
 		prInfo        github.PullRequest
 		parentCountFn func(sha string) (int, error)
-		diffFiles     int
-		diffAdds      int
-		diffDels      int
+		diffStatsFn   func(base, head string) (int, int, int, error)
 		wantRef       string
 		wantErr       string
 	}{
@@ -759,9 +758,7 @@ func TestDetectBaseRef(t *testing.T) {
 				LinesDeleted:   20,
 			},
 			parentCountFn: func(string) (int, error) { return 1, nil },
-			diffFiles:     5,
-			diffAdds:      100,
-			diffDels:      20,
+			diffStatsFn:   func(string, string) (int, int, int, error) { return 5, 100, 20, nil },
 			wantRef:       "abc123^1",
 		},
 		{
@@ -774,9 +771,7 @@ func TestDetectBaseRef(t *testing.T) {
 				LinesDeleted:   20,
 			},
 			parentCountFn: func(string) (int, error) { return 1, nil },
-			diffFiles:     2,
-			diffAdds:      30,
-			diffDels:      5,
+			diffStatsFn:   func(string, string) (int, int, int, error) { return 2, 30, 5, nil },
 			wantRef:       "abc123~3",
 		},
 		{
@@ -794,10 +789,34 @@ func TestDetectBaseRef(t *testing.T) {
 				}
 				return 1, nil
 			},
-			diffFiles: 2,
-			diffAdds:  30,
-			diffDels:  5,
-			wantRef:   "abc123^1",
+			diffStatsFn: func(string, string) (int, int, int, error) { return 2, 30, 5, nil },
+			wantRef:     "abc123^1",
+		},
+		{
+			name: "GetCommitParentCount fails",
+			prInfo: github.PullRequest{
+				MergeCommitSHA: "abc123",
+				CommitCount:    3,
+			},
+			parentCountFn: func(string) (int, error) {
+				return 0, fmt.Errorf("object not found")
+			},
+			wantErr: "failed to get commit parent count",
+		},
+		{
+			name: "GetDiffStats fails",
+			prInfo: github.PullRequest{
+				MergeCommitSHA: "abc123",
+				CommitCount:    3,
+				FilesChanged:   5,
+				LinesAdded:     100,
+				LinesDeleted:   20,
+			},
+			parentCountFn: func(string) (int, error) { return 1, nil },
+			diffStatsFn: func(string, string) (int, int, int, error) {
+				return 0, 0, 0, fmt.Errorf("bad revision")
+			},
+			wantErr: "failed to get diff stats",
 		},
 	}
 
@@ -806,9 +825,7 @@ func TestDetectBaseRef(t *testing.T) {
 			ctx := &prCheckoutContext{
 				gitClient: &mockGit{
 					getCommitParentCountFn: tt.parentCountFn,
-					getDiffStatsFn: func(base, head string) (int, int, int, error) {
-						return tt.diffFiles, tt.diffAdds, tt.diffDels, nil
-					},
+					getDiffStatsFn:         tt.diffStatsFn,
 				},
 			}
 
@@ -975,6 +992,117 @@ func TestCheckoutPRWorktree_ExistingRecreatedWorktree(t *testing.T) {
 
 	assert.Contains(t, stdout.String(), "/workspace/pr-recreated-16-feature-fast-init")
 	assert.Contains(t, stderr.String(), "Worktree already exists")
+}
+
+func TestCheckoutPRWorktree_ReconstructionErrors(t *testing.T) {
+	basePR := github.PullRequest{
+		BranchName:     "feature/fast-init",
+		CommitCount:    1,
+		MergeCommitSHA: "abc123",
+		Number:         16,
+		State:          github.PRStateMerged,
+		Title:          "Fast init",
+	}
+
+	baseMock := func() *mockGit {
+		return &mockGit{
+			listWorktreesFn: func() ([]git.Worktree, error) {
+				return []git.Worktree{}, nil
+			},
+			branchExistsFn: func(string, bool) (bool, error) {
+				return false, nil
+			},
+			fetchRemoteBranchFn: func(string, string, string) error {
+				return assert.AnError
+			},
+			fetchRefFn: func(string, string) error {
+				return nil
+			},
+			getCommitParentCountFn: func(string) (int, error) {
+				return 1, nil
+			},
+			createWorktreeForNewBranchFromRefFn: func(string, string, string) error {
+				return nil
+			},
+			mergeSquashRefFn: func(string, string) error {
+				return nil
+			},
+			commitAllFn: func(string, string) error {
+				return nil
+			},
+		}
+	}
+
+	tests := []struct {
+		name      string
+		mockSetup func(*mockGit)
+		wantErr   string
+	}{
+		{
+			name: "FetchRef fails",
+			mockSetup: func(m *mockGit) {
+				m.fetchRefFn = func(string, string) error {
+					return fmt.Errorf("network timeout")
+				}
+			},
+			wantErr: "failed to fetch merge commit",
+		},
+		{
+			name: "CreateWorktreeForNewBranchFromRef fails",
+			mockSetup: func(m *mockGit) {
+				m.createWorktreeForNewBranchFromRefFn = func(string, string, string) error {
+					return fmt.Errorf("path exists")
+				}
+			},
+			wantErr: "failed to create worktree",
+		},
+		{
+			name: "MergeSquashRef fails triggers cleanup",
+			mockSetup: func(m *mockGit) {
+				m.mergeSquashRefFn = func(string, string) error {
+					return fmt.Errorf("merge conflict")
+				}
+			},
+			wantErr: "failed to apply merge commit changes",
+		},
+		{
+			name: "CommitAll fails triggers cleanup",
+			mockSetup: func(m *mockGit) {
+				m.commitAllFn = func(string, string) error {
+					return fmt.Errorf("nothing to commit")
+				}
+			},
+			wantErr: "failed to commit reconstructed changes",
+		},
+		{
+			name: "GetCommitParentCount fails",
+			mockSetup: func(m *mockGit) {
+				m.getCommitParentCountFn = func(string) (int, error) {
+					return 0, fmt.Errorf("not a commit")
+				}
+			},
+			wantErr: "failed to detect merge strategy",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+
+			gitMock := baseMock()
+			tt.mockSetup(gitMock)
+
+			ctx := &prCheckoutContext{
+				cfg:       defaultTestConfig(),
+				ghClient:  &mockGitHub{},
+				gitClient: gitMock,
+			}
+
+			err := checkoutPRWorktree(&stdout, &stderr, ctx, basePR)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.wantErr)
+		})
+	}
 }
 
 func TestCheckoutPRWorktreeDirectBranchMatch(t *testing.T) {
