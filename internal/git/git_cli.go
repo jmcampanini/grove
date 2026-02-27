@@ -105,14 +105,21 @@ func (g *GitCli) GetCommitParentCount(sha string) (int, error) {
 		return 0, fmt.Errorf("failed to get commit info for %s: %w", sha, err)
 	}
 
+	isCommit := false
 	count := 0
 	for _, line := range strings.Split(output, "\n") {
 		if line == "" {
 			break
 		}
+		if strings.HasPrefix(line, "tree ") {
+			isCommit = true
+		}
 		if strings.HasPrefix(line, "parent ") {
 			count++
 		}
+	}
+	if !isCommit {
+		return 0, fmt.Errorf("object %s is not a commit", sha)
 	}
 	return count, nil
 }
