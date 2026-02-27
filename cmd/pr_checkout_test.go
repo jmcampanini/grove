@@ -547,7 +547,8 @@ func TestCheckoutPRWorktree_SquashReconstruction(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Contains(t, stdout.String(), "/workspace/pr-recreated-16-feature-fast-init")
-	assert.Contains(t, stderr.String(), "Branch deleted from remote, recreating from merge commit...")
+	assert.Contains(t, stderr.String(), "Fetch failed")
+	assert.Contains(t, stderr.String(), "Recreating branch from merge commit...")
 }
 
 func TestCheckoutPRWorktree_MergeCommitReconstruction(t *testing.T) {
@@ -607,7 +608,8 @@ func TestCheckoutPRWorktree_MergeCommitReconstruction(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Contains(t, stdout.String(), "/workspace/pr-recreated-42-feature-two-parents")
-	assert.Contains(t, stderr.String(), "Branch deleted from remote, recreating from merge commit...")
+	assert.Contains(t, stderr.String(), "Fetch failed")
+	assert.Contains(t, stderr.String(), "Recreating branch from merge commit...")
 }
 
 func TestCheckoutPRWorktree_AmbiguousReconstruction(t *testing.T) {

@@ -133,6 +133,7 @@ func ensureBranchAndCreateWorktree(stdout, stderr io.Writer, ctx *prCheckoutCont
 		fetchErr := ctx.gitClient.FetchRemoteBranch(remote, prInfo.BranchName, localBranch)
 		if fetchErr != nil {
 			if prInfo.State == github.PRStateMerged && prInfo.MergeCommitSHA != "" && ctx.cfg.PullRequest.AutoRecreate {
+				_, _ = fmt.Fprintf(stderr, "Fetch failed (%v), attempting reconstruction from merge commit...\n", fetchErr)
 				return reconstructFromMergeCommit(stdout, stderr, ctx, namer, prInfo, remote)
 			}
 			return fmt.Errorf("failed to fetch remote branch: %w", fetchErr)
@@ -158,7 +159,7 @@ func reconstructFromMergeCommit(stdout, stderr io.Writer, ctx *prCheckoutContext
 		return fmt.Errorf("failed to generate recreated branch name: %w", err)
 	}
 
-	_, _ = fmt.Fprintf(stderr, "Branch deleted from remote, recreating from merge commit...\n")
+	_, _ = fmt.Fprintf(stderr, "Recreating branch from merge commit...\n")
 
 	if err := ctx.gitClient.FetchRef(remote, prInfo.MergeCommitSHA); err != nil {
 		return fmt.Errorf("failed to fetch merge commit: %w", err)
