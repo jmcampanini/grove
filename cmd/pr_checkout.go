@@ -195,12 +195,20 @@ func reconstructFromMergeCommit(stdout, stderr io.Writer, ctx *prCheckoutContext
 		return fmt.Errorf("failed to create worktree: %w", err)
 	}
 
+	cleanup := func() {
+		_, _ = fmt.Fprintf(stderr, "Cleaning up partial reconstruction...\n")
+		_ = ctx.gitClient.RemoveWorktree(wtPath, true)
+		_ = ctx.gitClient.DeleteBranch(recreatedBranch, true)
+	}
+
 	if err := ctx.gitClient.MergeSquashRef(wtPath, prInfo.MergeCommitSHA); err != nil {
+		cleanup()
 		return fmt.Errorf("failed to apply merge commit changes: %w", err)
 	}
 
 	commitMsg := fmt.Sprintf("PR #%d: %s", prInfo.Number, prInfo.Title)
 	if err := ctx.gitClient.CommitAll(wtPath, commitMsg); err != nil {
+		cleanup()
 		return fmt.Errorf("failed to commit reconstructed changes: %w", err)
 	}
 
