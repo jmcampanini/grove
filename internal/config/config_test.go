@@ -33,7 +33,6 @@ func TestDefaultConfig(t *testing.T) {
 	assert.Equal(t, "wt-", cfg.LocalBranch.WorktreePrefix)
 
 	// PullRequest defaults
-	assert.True(t, cfg.PullRequest.AutoRecreate)
 	assert.Equal(t, "{{.BranchName}}", cfg.PullRequest.BranchTemplate)
 	assert.Equal(t, "recreated-{{.Number}}-{{.BranchName}}", cfg.PullRequest.RecreatedBranchTemplate)
 	assert.Equal(t, "pr-", cfg.PullRequest.WorktreePrefix)
@@ -95,20 +94,11 @@ func TestConfig_Validate(t *testing.T) {
 			wantErr: "pull_request.worktree_prefix cannot be empty",
 		},
 		{
-			name: "auto_recreate with empty recreated_branch_template",
+			name: "empty recreated_branch_template",
 			modify: func(c *Config) {
-				c.PullRequest.AutoRecreate = true
 				c.PullRequest.RecreatedBranchTemplate = ""
 			},
-			wantErr: "pull_request.recreated_branch_template cannot be empty when auto_recreate is enabled",
-		},
-		{
-			name: "auto_recreate disabled with empty recreated_branch_template is valid",
-			modify: func(c *Config) {
-				c.PullRequest.AutoRecreate = false
-				c.PullRequest.RecreatedBranchTemplate = ""
-			},
-			wantErr: "",
+			wantErr: "pull_request.recreated_branch_template cannot be empty",
 		},
 		// Slugify
 		{

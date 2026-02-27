@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -8,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/charmbracelet/huh"
 	"github.com/jmcampanini/grove-cli/internal/config"
 	"github.com/jmcampanini/grove-cli/internal/git"
 	"github.com/jmcampanini/grove-cli/internal/github"
@@ -29,6 +31,7 @@ To start new local work (not from a PR), use 'grove create' instead.`,
 }
 
 func init() {
+	prCheckoutCmd.Flags().BoolP("yes", "y", false, "Skip confirmation prompt for reconstruction")
 	prCmd.AddCommand(prCheckoutCmd)
 }
 
@@ -43,10 +46,13 @@ func runPRCheckout(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	yes, _ := cmd.Flags().GetBool("yes")
+
 	ctx := &prCheckoutContext{
-		cfg:       rt.cfg,
-		ghClient:  rt.newUncachedGitHubClient(),
-		gitClient: rt.gitClient,
+		cfg:         rt.cfg,
+		ghClient:    rt.newUncachedGitHubClient(),
+		gitClient:   rt.gitClient,
+		skipConfirm: yes,
 	}
 
 	prInfo, err := ctx.ghClient.GetPullRequest(prNum)
@@ -66,9 +72,11 @@ func runPRCheckout(cmd *cobra.Command, args []string) error {
 }
 
 type prCheckoutContext struct {
-	cfg       config.Config
-	ghClient  github.GitHub
-	gitClient git.Git
+	cfg         config.Config
+	confirmFn   func(title string) (bool, error)
+	ghClient    github.GitHub
+	gitClient   git.Git
+	skipConfirm bool
 }
 
 func checkoutPRWorktree(stdout, stderr io.Writer, ctx *prCheckoutContext, prInfo github.PullRequest) error {
@@ -132,9 +140,8 @@ func ensureBranchAndCreateWorktree(stdout, stderr io.Writer, ctx *prCheckoutCont
 		}
 		fetchErr := ctx.gitClient.FetchRemoteBranch(remote, prInfo.BranchName, localBranch)
 		if fetchErr != nil {
-			if prInfo.State == github.PRStateMerged && prInfo.MergeCommitSHA != "" && ctx.cfg.PullRequest.AutoRecreate {
-				_, _ = fmt.Fprintf(stderr, "Fetch failed (%v), attempting reconstruction from merge commit...\n", fetchErr)
-				return reconstructFromMergeCommit(stdout, stderr, ctx, namer, prInfo, remote)
+			if prInfo.State == github.PRStateMerged && prInfo.MergeCommitSHA != "" {
+				return promptAndReconstruct(stdout, stderr, ctx, namer, prInfo, remote)
 			}
 			return fmt.Errorf("failed to fetch remote branch: %w", fetchErr)
 		}
@@ -148,6 +155,49 @@ func ensureBranchAndCreateWorktree(stdout, stderr io.Writer, ctx *prCheckoutCont
 	return err
 }
 
+func promptAndReconstruct(stdout, stderr io.Writer, ctx *prCheckoutContext, namer *naming.PullRequestNamer, prInfo github.PullRequest, remote string) error {
+	if !ctx.skipConfirm {
+		title := fmt.Sprintf(
+			"PR #%d is merged and the branch has been deleted.\n\n"+
+				"Grove can reconstruct a local branch by replaying the squash merge commit\n"+
+				"onto its parent. This only produces correct results for squash-merged PRs.\n\n"+
+				"Reconstruct branch?",
+			prInfo.Number,
+		)
+
+		confirmed, err := confirmReconstruction(ctx, title)
+		if err != nil {
+			if errors.Is(err, huh.ErrUserAborted) {
+				return nil
+			}
+			return err
+		}
+		if !confirmed {
+			return nil
+		}
+	}
+
+	return reconstructFromMergeCommit(stdout, stderr, ctx, namer, prInfo, remote)
+}
+
+func confirmReconstruction(ctx *prCheckoutContext, title string) (bool, error) {
+	if ctx.confirmFn != nil {
+		return ctx.confirmFn(title)
+	}
+
+	var confirmed bool
+	err := huh.NewForm(
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title(title).
+				Affirmative("Yes").
+				Negative("No").
+				Value(&confirmed),
+		),
+	).Run()
+	return confirmed, err
+}
+
 func reconstructFromMergeCommit(stdout, stderr io.Writer, ctx *prCheckoutContext, namer *naming.PullRequestNamer, prInfo github.PullRequest, remote string) error {
 	prData := naming.PullRequestTemplateData{
 		BranchName: prInfo.BranchName,
@@ -159,7 +209,7 @@ func reconstructFromMergeCommit(stdout, stderr io.Writer, ctx *prCheckoutContext
 		return fmt.Errorf("failed to generate recreated branch name: %w", err)
 	}
 
-	_, _ = fmt.Fprintf(stderr, "Recreating branch from merge commit...\n")
+	_, _ = fmt.Fprintf(stderr, "Reconstructing branch from squash merge commit...\n")
 
 	if err := ctx.gitClient.FetchRef(remote, prInfo.MergeCommitSHA); err != nil {
 		return fmt.Errorf("failed to fetch merge commit: %w", err)
@@ -186,10 +236,7 @@ func reconstructFromMergeCommit(stdout, stderr io.Writer, ctx *prCheckoutContext
 		return err
 	}
 
-	baseRef, err := detectBaseRef(ctx, prInfo)
-	if err != nil {
-		return fmt.Errorf("failed to detect merge strategy: %w", err)
-	}
+	baseRef := prInfo.MergeCommitSHA + "^1"
 
 	if err := ctx.gitClient.CreateWorktreeForNewBranchFromRef(recreatedBranch, wtPath, baseRef); err != nil {
 		return fmt.Errorf("failed to create worktree: %w", err)
@@ -214,58 +261,4 @@ func reconstructFromMergeCommit(stdout, stderr io.Writer, ctx *prCheckoutContext
 
 	_, err = fmt.Fprintln(stdout, wtPath)
 	return err
-}
-
-func detectBaseRef(ctx *prCheckoutContext, prInfo github.PullRequest) (string, error) {
-	parentCount, err := ctx.gitClient.GetCommitParentCount(prInfo.MergeCommitSHA)
-	if err != nil {
-		return "", fmt.Errorf("failed to get commit parent count: %w", err)
-	}
-
-	firstParent := prInfo.MergeCommitSHA + "^1"
-
-	// Merge commits (2+ parents): first parent is the base branch tip
-	if parentCount >= 2 {
-		return firstParent, nil
-	}
-
-	if prInfo.CommitCount == 0 {
-		return "", fmt.Errorf("PR has no commit count data; cannot determine merge strategy")
-	}
-
-	// Single-parent commit with only 1 PR commit: must be squash
-	if prInfo.CommitCount == 1 {
-		return firstParent, nil
-	}
-
-	// Ambiguous: single-parent with multiple PR commits could be squash or rebase.
-	// Compare the merge commit's diff against the PR's total stats to disambiguate.
-	stats, err := ctx.gitClient.GetDiffStats(firstParent, prInfo.MergeCommitSHA)
-	if err != nil {
-		return "", fmt.Errorf("failed to get diff stats: %w", err)
-	}
-
-	statsMatch := stats.FilesChanged == prInfo.FilesChanged && stats.Additions == prInfo.LinesAdded && stats.Deletions == prInfo.LinesDeleted
-	if statsMatch {
-		return firstParent, nil
-	}
-
-	// Stats diverged — verify this is actually a rebase by checking that
-	// the merge SHA sits atop a linear chain of exactly CommitCount single-parent commits.
-	if !isLinearChain(ctx, prInfo.MergeCommitSHA, prInfo.CommitCount) {
-		return firstParent, nil
-	}
-
-	return fmt.Sprintf("%s~%d", prInfo.MergeCommitSHA, prInfo.CommitCount), nil
-}
-
-func isLinearChain(ctx *prCheckoutContext, sha string, count int) bool {
-	for i := 0; i < count; i++ {
-		ref := fmt.Sprintf("%s~%d", sha, i)
-		pc, err := ctx.gitClient.GetCommitParentCount(ref)
-		if err != nil || pc != 1 {
-			return false
-		}
-	}
-	return true
 }

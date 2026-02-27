@@ -24,8 +24,8 @@ func (c Config) Validate() error {
 	if c.GitHub.PreviewCacheTTL < 0 {
 		return errors.New("github.preview_cache_ttl cannot be negative")
 	}
-	if c.PullRequest.AutoRecreate && c.PullRequest.RecreatedBranchTemplate == "" {
-		return errors.New("pull_request.recreated_branch_template cannot be empty when auto_recreate is enabled")
+	if c.PullRequest.RecreatedBranchTemplate == "" {
+		return errors.New("pull_request.recreated_branch_template cannot be empty")
 	}
 	if c.PullRequest.WorktreePrefix == "" {
 		return errors.New("pull_request.worktree_prefix cannot be empty")
@@ -57,7 +57,6 @@ type GitHubConfig struct {
 
 // PullRequestConfig configures pull request worktree naming and merged-PR branch reconstruction.
 type PullRequestConfig struct {
-	AutoRecreate            bool   `toml:"auto_recreate"`             // Recreate deleted branches from merge commits
 	BranchTemplate          string `toml:"branch_template"`           // Template for local branch name (e.g., "{{.BranchName}}")
 	RecreatedBranchTemplate string `toml:"recreated_branch_template"` // Template for recreated branch name (e.g., "recreated-{{.Number}}-{{.BranchName}}")
 	WorktreePrefix          string `toml:"worktree_prefix"`           // Prefix for PR worktree directories (e.g., "pr-")

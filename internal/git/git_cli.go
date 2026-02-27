@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -97,65 +96,6 @@ func (g *GitCli) FetchRef(remote, ref string) error {
 	g.log.Info("Fetching ref", "remote", remote, "ref", ref)
 	args := []string{"fetch", remote, ref}
 	return g.executeMutatingGitCommand("failed to fetch ref", args...)
-}
-
-func (g *GitCli) GetCommitParentCount(sha string) (int, error) {
-	output, err := g.executeGitCommand("cat-file", "-p", sha)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get commit info for %s: %w", sha, err)
-	}
-
-	isCommit := false
-	count := 0
-	for _, line := range strings.Split(output, "\n") {
-		if line == "" {
-			break
-		}
-		if strings.HasPrefix(line, "tree ") {
-			isCommit = true
-		}
-		if strings.HasPrefix(line, "parent ") {
-			count++
-		}
-	}
-	if !isCommit {
-		return 0, fmt.Errorf("object %s is not a commit", sha)
-	}
-	return count, nil
-}
-
-func (g *GitCli) GetDiffStats(base, head string) (DiffStats, error) {
-	output, err := g.executeGitCommand("diff", "--shortstat", base, head)
-	if err != nil {
-		return DiffStats{}, fmt.Errorf("failed to get diff stats for %s..%s: %w", base, head, err)
-	}
-	if output == "" {
-		return DiffStats{}, nil
-	}
-	var stats DiffStats
-	for _, part := range strings.Split(output, ",") {
-		part = strings.TrimSpace(part)
-		fields := strings.Fields(part)
-		if len(fields) < 2 {
-			continue
-		}
-		n, parseErr := strconv.Atoi(fields[0])
-		if parseErr != nil {
-			continue
-		}
-		switch {
-		case strings.Contains(part, "file"):
-			stats.FilesChanged = n
-		case strings.Contains(part, "insertion"):
-			stats.Additions = n
-		case strings.Contains(part, "deletion"):
-			stats.Deletions = n
-		}
-	}
-	if stats.FilesChanged == 0 && stats.Additions == 0 && stats.Deletions == 0 {
-		return DiffStats{}, fmt.Errorf("failed to parse diff stats from output: %q", output)
-	}
-	return stats, nil
 }
 
 func (g *GitCli) MergeSquashRef(worktreeAbsPath, ref string) error {

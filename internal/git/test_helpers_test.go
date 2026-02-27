@@ -227,23 +227,11 @@ func (r *testRepo) fullSHA(ref string) string {
 	return strings.TrimSpace(runGit(r.t, r.rootDir, "rev-parse", ref))
 }
 
-// mergeNoFF performs a --no-ff merge of the given branch (creates a 2-parent merge commit).
-func (r *testRepo) mergeNoFF(branch string) {
-	r.t.Helper()
-	runGit(r.t, r.rootDir, "merge", "--no-ff", "-m", "Merge "+branch, branch)
-}
-
 // mergeSquash performs a squash merge of the given branch.
 func (r *testRepo) mergeSquash(branch string) {
 	r.t.Helper()
 	runGit(r.t, r.rootDir, "merge", "--squash", branch)
 	runGit(r.t, r.rootDir, "commit", "-m", "Squash merge "+branch)
-}
-
-// cherryPickRange cherry-picks a range of commits (base..head) onto the current branch.
-func (r *testRepo) cherryPickRange(base, head string) {
-	r.t.Helper()
-	runGit(r.t, r.rootDir, "cherry-pick", base+".."+head)
 }
 
 // deleteBranch deletes a local branch.

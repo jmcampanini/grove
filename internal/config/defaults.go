@@ -17,7 +17,6 @@ func DefaultConfig() Config {
 			WorktreePrefix:    "wt-",
 		},
 		PullRequest: PullRequestConfig{
-			AutoRecreate:            true,
 			BranchTemplate:          "{{.BranchName}}",
 			RecreatedBranchTemplate: "recreated-{{.Number}}-{{.BranchName}}",
 			WorktreePrefix:          "pr-",

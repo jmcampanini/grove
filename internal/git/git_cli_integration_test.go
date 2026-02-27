@@ -1,7 +1,6 @@
 package git
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1146,77 +1145,6 @@ func TestDeleteBranch_Integration_Force(t *testing.T) {
 }
 
 // =============================================================================
-// GetCommitParentCount tests
-// =============================================================================
-
-func TestGetCommitParentCount_Integration_InitialCommit(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
-	repo := newTestRepo(t)
-	repo.commit("initial commit")
-	sha := repo.fullSHA("HEAD")
-
-	count, err := repo.Git.GetCommitParentCount(sha)
-	require.NoError(t, err)
-	assert.Equal(t, 0, count) // initial commit has no parent
-}
-
-func TestGetCommitParentCount_Integration_NormalCommit(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
-	repo := newTestRepo(t)
-	repo.commit("initial commit")
-	repo.commit("second commit")
-	sha := repo.fullSHA("HEAD")
-
-	count, err := repo.Git.GetCommitParentCount(sha)
-	require.NoError(t, err)
-	assert.Equal(t, 1, count)
-}
-
-func TestGetCommitParentCount_Integration_MergeCommit(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
-	repo := newTestRepo(t)
-	repo.commit("initial commit")
-	repo.createBranch("feature")
-	repo.checkout("feature")
-	repo.commitFile("feature.txt", "feature work\n", "feature commit")
-	repo.checkout("main")
-	runGit(t, repo.path(), "merge", "--no-ff", "feature", "-m", "Merge feature")
-	sha := repo.fullSHA("HEAD")
-
-	count, err := repo.Git.GetCommitParentCount(sha)
-	require.NoError(t, err)
-	assert.Equal(t, 2, count)
-}
-
-func TestGetCommitParentCount_Integration_SquashMerge(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
-	repo := newTestRepo(t)
-	repo.commit("initial commit")
-	repo.createBranch("feature")
-	repo.checkout("feature")
-	repo.commitFile("feature.txt", "feature work\n", "feature commit")
-	repo.checkout("main")
-	repo.mergeSquash("feature")
-	sha := repo.fullSHA("HEAD")
-
-	count, err := repo.Git.GetCommitParentCount(sha)
-	require.NoError(t, err)
-	assert.Equal(t, 1, count)
-}
-
-// =============================================================================
 // PR reconstruction simulation tests
 // =============================================================================
 
@@ -1240,15 +1168,10 @@ func TestSquashMergeReconstruction_Integration(t *testing.T) {
 	mergeCommitSHA := repo.fullSHA("HEAD")
 	repo.deleteBranch("feature")
 
-	// Verify parent count
-	count, err := repo.Git.GetCommitParentCount(mergeCommitSHA)
-	require.NoError(t, err)
-	assert.Equal(t, 1, count)
-
 	// Reconstruct: create worktree from parent, apply squash merge
 	baseRef := mergeCommitSHA + "^1"
 	worktreePath := filepath.Join(t.TempDir(), "reconstructed")
-	err = repo.Git.CreateWorktreeForNewBranchFromRef("reconstructed-branch", worktreePath, baseRef)
+	err := repo.Git.CreateWorktreeForNewBranchFromRef("reconstructed-branch", worktreePath, baseRef)
 	require.NoError(t, err)
 
 	err = repo.Git.MergeSquashRef(resolvePath(t, worktreePath), mergeCommitSHA)
@@ -1269,149 +1192,6 @@ func TestSquashMergeReconstruction_Integration(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, diffOutput, "new_file.go")
 	assert.Contains(t, diffOutput, "another.go")
-}
-
-func TestMergeCommitReconstruction_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
-	repo := newTestRepo(t)
-	repo.commit("initial commit")
-
-	repo.createBranch("feature")
-	repo.checkout("feature")
-	repo.commitFile("alpha.go", "package main\n\nfunc alpha() {}\n", "add alpha")
-	repo.commitFile("beta.go", "package main\n\nfunc beta() {}\n", "add beta")
-	repo.checkout("main")
-
-	repo.mergeNoFF("feature")
-	mergeCommitSHA := repo.fullSHA("HEAD")
-	repo.deleteBranch("feature")
-
-	count, err := repo.Git.GetCommitParentCount(mergeCommitSHA)
-	require.NoError(t, err)
-	assert.Equal(t, 2, count)
-
-	baseRef := mergeCommitSHA + "^1"
-	worktreePath := filepath.Join(t.TempDir(), "reconstructed-merge")
-	err = repo.Git.CreateWorktreeForNewBranchFromRef("reconstructed-merge-branch", worktreePath, baseRef)
-	require.NoError(t, err)
-
-	resolved := resolvePath(t, worktreePath)
-	err = repo.Git.MergeSquashRef(resolved, mergeCommitSHA)
-	require.NoError(t, err)
-
-	err = repo.Git.CommitAll(resolved, "Reconstructed merge PR")
-	require.NoError(t, err)
-
-	_, err = os.Stat(filepath.Join(resolved, "alpha.go"))
-	assert.NoError(t, err)
-	_, err = os.Stat(filepath.Join(resolved, "beta.go"))
-	assert.NoError(t, err)
-
-	wtGit := New(false, resolved, testTimeout).(*GitCli)
-	diffOutput, err := wtGit.executeGitCommand("diff", "--stat", "HEAD^1", "HEAD")
-	require.NoError(t, err)
-	assert.Contains(t, diffOutput, "alpha.go")
-	assert.Contains(t, diffOutput, "beta.go")
-}
-
-func TestRebaseMergeReconstruction_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
-	repo := newTestRepo(t)
-	repo.commit("initial commit")
-	baseSHA := repo.fullSHA("HEAD")
-
-	repo.createBranch("feature")
-	repo.checkout("feature")
-	repo.commitFile("r1.go", "package main\n\nfunc r1() {}\n", "add r1")
-	repo.commitFile("r2.go", "package main\n\nfunc r2() {}\n", "add r2")
-	repo.commitFile("r3.go", "package main\n\nfunc r3() {}\n", "add r3")
-	featureTip := repo.fullSHA("HEAD")
-	repo.checkout("main")
-
-	// Simulate rebase merge: cherry-pick feature commits onto main
-	repo.cherryPickRange(baseSHA, featureTip)
-	lastRebasedSHA := repo.fullSHA("HEAD")
-	repo.deleteBranch("feature")
-
-	count, err := repo.Git.GetCommitParentCount(lastRebasedSHA)
-	require.NoError(t, err)
-	assert.Equal(t, 1, count)
-
-	stats, err := repo.Git.GetDiffStats(lastRebasedSHA+"^1", lastRebasedSHA)
-	require.NoError(t, err)
-	assert.Equal(t, 1, stats.FilesChanged)
-	assert.Equal(t, 3, stats.Additions)
-
-	baseRef := fmt.Sprintf("%s~%d", lastRebasedSHA, 3)
-	worktreePath := filepath.Join(t.TempDir(), "reconstructed-rebase")
-	err = repo.Git.CreateWorktreeForNewBranchFromRef("reconstructed-rebase-branch", worktreePath, baseRef)
-	require.NoError(t, err)
-
-	resolved := resolvePath(t, worktreePath)
-	err = repo.Git.MergeSquashRef(resolved, lastRebasedSHA)
-	require.NoError(t, err)
-
-	err = repo.Git.CommitAll(resolved, "Reconstructed rebase PR")
-	require.NoError(t, err)
-
-	expectedFiles := []string{"r1.go", "r2.go", "r3.go"}
-	for _, f := range expectedFiles {
-		_, err = os.Stat(filepath.Join(resolved, f))
-		assert.NoError(t, err, "expected %s to exist", f)
-	}
-
-	wtGit := New(false, resolved, testTimeout).(*GitCli)
-	diffOutput, err := wtGit.executeGitCommand("diff", "--stat", "HEAD^1", "HEAD")
-	require.NoError(t, err)
-	for _, f := range expectedFiles {
-		assert.Contains(t, diffOutput, f)
-	}
-}
-
-// =============================================================================
-// GetDiffStats tests
-// =============================================================================
-
-func TestGetDiffStats_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
-	repo := newTestRepo(t)
-	repo.commit("initial commit")
-	baseSHA := repo.fullSHA("HEAD")
-
-	repo.commitFile("a.go", "package a\n", "add a")
-	repo.commitFile("b.go", "package b\n\nfunc B() {}\n", "add b")
-	headSHA := repo.fullSHA("HEAD")
-
-	stats, err := repo.Git.GetDiffStats(baseSHA, headSHA)
-	require.NoError(t, err)
-	assert.Equal(t, 2, stats.FilesChanged)
-	assert.Equal(t, 4, stats.Additions)
-	assert.Equal(t, 0, stats.Deletions)
-}
-
-func TestGetDiffStats_Integration_NoDiff(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
-	repo := newTestRepo(t)
-	repo.commit("initial commit")
-	sha := repo.fullSHA("HEAD")
-
-	stats, err := repo.Git.GetDiffStats(sha, sha)
-	require.NoError(t, err)
-	assert.Equal(t, 0, stats.FilesChanged)
-	assert.Equal(t, 0, stats.Additions)
-	assert.Equal(t, 0, stats.Deletions)
 }
 
 // =============================================================================

@@ -55,11 +55,9 @@ type mockGit struct {
 	fetchRefFn                          func(remote, ref string) error
 	fetchRemoteBranchFn                 func(remote, remoteRef, localRef string) error
 	fetchRemoteFn                       func(remoteName string) (string, error)
-	getCommitParentCountFn              func(sha string) (int, error)
 	getCommitSubjectFn                  func() (string, error)
 	getCurrentBranchFn                  func() (string, error)
 	getDefaultRemoteFn                  func(fallback string) (string, error)
-	getDiffStatsFn                      func(base, head string) (git.DiffStats, error)
 	getMainWorktreePathFn               func() (string, error)
 	getRepoDefaultBranchFn              func(remoteName string) (string, error)
 	getWorkspacePathFn                  func() (string, error)
@@ -139,13 +137,6 @@ func (m *mockGit) FetchRemote(remoteName string) (string, error) {
 	return "", nil
 }
 
-func (m *mockGit) GetCommitParentCount(sha string) (int, error) {
-	if m.getCommitParentCountFn != nil {
-		return m.getCommitParentCountFn(sha)
-	}
-	return 1, nil
-}
-
 func (m *mockGit) GetCommitSubject() (string, error) {
 	if m.getCommitSubjectFn != nil {
 		return m.getCommitSubjectFn()
@@ -165,13 +156,6 @@ func (m *mockGit) GetDefaultRemote(fallback string) (string, error) {
 		return m.getDefaultRemoteFn(fallback)
 	}
 	return fallback, nil
-}
-
-func (m *mockGit) GetDiffStats(base, head string) (git.DiffStats, error) {
-	if m.getDiffStatsFn != nil {
-		return m.getDiffStatsFn(base, head)
-	}
-	return git.DiffStats{}, nil
 }
 
 func (m *mockGit) GetMainWorktreePath() (string, error) {
@@ -509,9 +493,6 @@ func TestCheckoutPRWorktree_SquashReconstruction(t *testing.T) {
 			assert.Equal(t, "abc123", ref)
 			return nil
 		},
-		getCommitParentCountFn: func(sha string) (int, error) {
-			return 1, nil
-		},
 		createWorktreeForNewBranchFromRefFn: func(newBranchName, worktreeAbsPath, baseRef string) error {
 			assert.Equal(t, "recreated-16-feature/fast-init", newBranchName)
 			assert.Equal(t, "/workspace/pr-recreated-16-feature-fast-init", worktreeAbsPath)
@@ -531,9 +512,10 @@ func TestCheckoutPRWorktree_SquashReconstruction(t *testing.T) {
 	}
 
 	ctx := &prCheckoutContext{
-		cfg:       defaultTestConfig(),
-		ghClient:  &mockGitHub{},
-		gitClient: gitMock,
+		cfg:         defaultTestConfig(),
+		ghClient:    &mockGitHub{},
+		gitClient:   gitMock,
+		skipConfirm: true,
 	}
 
 	prInfo := github.PullRequest{
@@ -549,301 +531,7 @@ func TestCheckoutPRWorktree_SquashReconstruction(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Contains(t, stdout.String(), "/workspace/pr-recreated-16-feature-fast-init")
-	assert.Contains(t, stderr.String(), "Fetch failed")
-	assert.Contains(t, stderr.String(), "Recreating branch from merge commit...")
-}
-
-func TestCheckoutPRWorktree_MergeCommitReconstruction(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-
-	gitMock := &mockGit{
-		listWorktreesFn: func() ([]git.Worktree, error) {
-			return []git.Worktree{}, nil
-		},
-		branchExistsFn: func(branchName string, caseInsensitive bool) (bool, error) {
-			return false, nil
-		},
-		fetchRemoteBranchFn: func(remote, remoteRef, localRef string) error {
-			return assert.AnError
-		},
-		fetchRefFn: func(remote, ref string) error {
-			assert.Equal(t, "origin", remote)
-			assert.Equal(t, "merge123", ref)
-			return nil
-		},
-		getCommitParentCountFn: func(sha string) (int, error) {
-			return 2, nil
-		},
-		createWorktreeForNewBranchFromRefFn: func(newBranchName, worktreeAbsPath, baseRef string) error {
-			assert.Equal(t, "recreated-42-feature/two-parents", newBranchName)
-			assert.Equal(t, "/workspace/pr-recreated-42-feature-two-parents", worktreeAbsPath)
-			assert.Equal(t, "merge123^1", baseRef)
-			return nil
-		},
-		mergeSquashRefFn: func(worktreeAbsPath, ref string) error {
-			assert.Equal(t, "/workspace/pr-recreated-42-feature-two-parents", worktreeAbsPath)
-			assert.Equal(t, "merge123", ref)
-			return nil
-		},
-		commitAllFn: func(worktreeAbsPath, message string) error {
-			assert.Equal(t, "/workspace/pr-recreated-42-feature-two-parents", worktreeAbsPath)
-			assert.Equal(t, "PR #42: Two parent merge", message)
-			return nil
-		},
-	}
-
-	ctx := &prCheckoutContext{
-		cfg:       defaultTestConfig(),
-		ghClient:  &mockGitHub{},
-		gitClient: gitMock,
-	}
-
-	prInfo := github.PullRequest{
-		BranchName:     "feature/two-parents",
-		CommitCount:    3,
-		MergeCommitSHA: "merge123",
-		Number:         42,
-		State:          github.PRStateMerged,
-		Title:          "Two parent merge",
-	}
-
-	err := checkoutPRWorktree(&stdout, &stderr, ctx, prInfo)
-	require.NoError(t, err)
-
-	assert.Contains(t, stdout.String(), "/workspace/pr-recreated-42-feature-two-parents")
-	assert.Contains(t, stderr.String(), "Fetch failed")
-	assert.Contains(t, stderr.String(), "Recreating branch from merge commit...")
-}
-
-func TestCheckoutPRWorktree_AmbiguousReconstruction(t *testing.T) {
-	tests := []struct {
-		name       string
-		prInfo     github.PullRequest
-		diffStats  git.DiffStats
-		wantBranch string
-		wantBase   string
-		wantStdout string
-	}{
-		{
-			name: "rebase detected via stats mismatch",
-			prInfo: github.PullRequest{
-				BranchName:     "feature/rebase-test",
-				CommitCount:    3,
-				FilesChanged:   3,
-				LinesAdded:     9,
-				LinesDeleted:   0,
-				MergeCommitSHA: "rebase789",
-				Number:         29,
-				State:          github.PRStateMerged,
-				Title:          "Rebase test",
-			},
-			diffStats:  git.DiffStats{Additions: 3, FilesChanged: 1},
-			wantBranch: "recreated-29-feature/rebase-test",
-			wantBase:   "rebase789~3",
-			wantStdout: "/workspace/pr-recreated-29-feature-rebase-test",
-		},
-		{
-			name: "multi-commit squash detected via stats match",
-			prInfo: github.PullRequest{
-				BranchName:     "feature/squash-multi",
-				CommitCount:    3,
-				FilesChanged:   3,
-				LinesAdded:     9,
-				LinesDeleted:   0,
-				MergeCommitSHA: "squash456",
-				Number:         30,
-				State:          github.PRStateMerged,
-				Title:          "Squash multi",
-			},
-			diffStats:  git.DiffStats{Additions: 9, FilesChanged: 3},
-			wantBranch: "recreated-30-feature/squash-multi",
-			wantBase:   "squash456^1",
-			wantStdout: "/workspace/pr-recreated-30-feature-squash-multi",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var stdout, stderr bytes.Buffer
-
-			gitMock := &mockGit{
-				listWorktreesFn: func() ([]git.Worktree, error) {
-					return []git.Worktree{}, nil
-				},
-				branchExistsFn: func(branchName string, caseInsensitive bool) (bool, error) {
-					return false, nil
-				},
-				fetchRemoteBranchFn: func(remote, remoteRef, localRef string) error {
-					return assert.AnError
-				},
-				fetchRefFn: func(remote, ref string) error {
-					return nil
-				},
-				getCommitParentCountFn: func(sha string) (int, error) {
-					return 1, nil
-				},
-				getDiffStatsFn: func(base, head string) (git.DiffStats, error) {
-					return tt.diffStats, nil
-				},
-				createWorktreeForNewBranchFromRefFn: func(newBranchName, worktreeAbsPath, baseRef string) error {
-					assert.Equal(t, tt.wantBranch, newBranchName)
-					assert.Equal(t, tt.wantBase, baseRef)
-					return nil
-				},
-				mergeSquashRefFn: func(worktreeAbsPath, ref string) error {
-					return nil
-				},
-				commitAllFn: func(worktreeAbsPath, message string) error {
-					return nil
-				},
-			}
-
-			ctx := &prCheckoutContext{
-				cfg:       defaultTestConfig(),
-				ghClient:  &mockGitHub{},
-				gitClient: gitMock,
-			}
-
-			err := checkoutPRWorktree(&stdout, &stderr, ctx, tt.prInfo)
-			require.NoError(t, err)
-
-			assert.Contains(t, stdout.String(), tt.wantStdout)
-		})
-	}
-}
-
-func TestDetectBaseRef(t *testing.T) {
-	tests := []struct {
-		name          string
-		prInfo        github.PullRequest
-		parentCountFn func(sha string) (int, error)
-		diffStatsFn   func(base, head string) (git.DiffStats, error)
-		wantRef       string
-		wantErr       string
-	}{
-		{
-			name: "merge commit (2 parents)",
-			prInfo: github.PullRequest{
-				MergeCommitSHA: "abc123",
-				CommitCount:    3,
-			},
-			parentCountFn: func(string) (int, error) { return 2, nil },
-			wantRef:       "abc123^1",
-		},
-		{
-			name: "single commit squash",
-			prInfo: github.PullRequest{
-				MergeCommitSHA: "abc123",
-				CommitCount:    1,
-			},
-			parentCountFn: func(string) (int, error) { return 1, nil },
-			wantRef:       "abc123^1",
-		},
-		{
-			name: "zero commit count returns error",
-			prInfo: github.PullRequest{
-				MergeCommitSHA: "abc123",
-				CommitCount:    0,
-			},
-			parentCountFn: func(string) (int, error) { return 1, nil },
-			wantErr:       "no commit count data",
-		},
-		{
-			name: "multi-commit squash (stats match)",
-			prInfo: github.PullRequest{
-				MergeCommitSHA: "abc123",
-				CommitCount:    3,
-				FilesChanged:   5,
-				LinesAdded:     100,
-				LinesDeleted:   20,
-			},
-			parentCountFn: func(string) (int, error) { return 1, nil },
-			diffStatsFn: func(string, string) (git.DiffStats, error) {
-				return git.DiffStats{Additions: 100, Deletions: 20, FilesChanged: 5}, nil
-			},
-			wantRef: "abc123^1",
-		},
-		{
-			name: "rebase merge (stats mismatch, linear chain)",
-			prInfo: github.PullRequest{
-				MergeCommitSHA: "abc123",
-				CommitCount:    3,
-				FilesChanged:   5,
-				LinesAdded:     100,
-				LinesDeleted:   20,
-			},
-			parentCountFn: func(string) (int, error) { return 1, nil },
-			diffStatsFn: func(string, string) (git.DiffStats, error) {
-				return git.DiffStats{Additions: 30, Deletions: 5, FilesChanged: 2}, nil
-			},
-			wantRef: "abc123~3",
-		},
-		{
-			name: "stats mismatch but non-linear chain falls back to squash",
-			prInfo: github.PullRequest{
-				MergeCommitSHA: "abc123",
-				CommitCount:    3,
-				FilesChanged:   5,
-				LinesAdded:     100,
-				LinesDeleted:   20,
-			},
-			parentCountFn: func(sha string) (int, error) {
-				if sha == "abc123~1" {
-					return 2, nil
-				}
-				return 1, nil
-			},
-			diffStatsFn: func(string, string) (git.DiffStats, error) {
-				return git.DiffStats{Additions: 30, Deletions: 5, FilesChanged: 2}, nil
-			},
-			wantRef: "abc123^1",
-		},
-		{
-			name: "GetCommitParentCount fails",
-			prInfo: github.PullRequest{
-				MergeCommitSHA: "abc123",
-				CommitCount:    3,
-			},
-			parentCountFn: func(string) (int, error) {
-				return 0, fmt.Errorf("object not found")
-			},
-			wantErr: "failed to get commit parent count",
-		},
-		{
-			name: "GetDiffStats fails",
-			prInfo: github.PullRequest{
-				MergeCommitSHA: "abc123",
-				CommitCount:    3,
-				FilesChanged:   5,
-				LinesAdded:     100,
-				LinesDeleted:   20,
-			},
-			parentCountFn: func(string) (int, error) { return 1, nil },
-			diffStatsFn: func(string, string) (git.DiffStats, error) {
-				return git.DiffStats{}, fmt.Errorf("bad revision")
-			},
-			wantErr: "failed to get diff stats",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctx := &prCheckoutContext{
-				gitClient: &mockGit{
-					getCommitParentCountFn: tt.parentCountFn,
-					getDiffStatsFn:         tt.diffStatsFn,
-				},
-			}
-
-			ref, err := detectBaseRef(ctx, tt.prInfo)
-			if tt.wantErr != "" {
-				require.ErrorContains(t, err, tt.wantErr)
-				return
-			}
-			require.NoError(t, err)
-			assert.Equal(t, tt.wantRef, ref)
-		})
-	}
+	assert.Contains(t, stderr.String(), "Reconstructing branch from squash merge commit...")
 }
 
 func TestCheckoutPRWorktree_FetchFailsNoReconstruction(t *testing.T) {
@@ -860,21 +548,6 @@ func TestCheckoutPRWorktree_FetchFailsNoReconstruction(t *testing.T) {
 				Number:     99,
 				State:      github.PRStateOpen,
 				Title:      "Test PR",
-			},
-		},
-		{
-			name: "auto recreate disabled",
-			cfg: func() config.Config {
-				cfg := defaultTestConfig()
-				cfg.PullRequest.AutoRecreate = false
-				return cfg
-			}(),
-			prInfo: github.PullRequest{
-				BranchName:     "feature/test",
-				MergeCommitSHA: "abc123",
-				Number:         99,
-				State:          github.PRStateMerged,
-				Title:          "Test PR",
 			},
 		},
 		{
@@ -938,9 +611,6 @@ func TestCheckoutPRWorktree_ReconstructionBranchAlreadyExists(t *testing.T) {
 		fetchRefFn: func(remote, ref string) error {
 			return nil
 		},
-		getCommitParentCountFn: func(sha string) (int, error) {
-			return 1, nil
-		},
 		createWorktreeForExistingBranchFn: func(branchName, worktreeAbsPath string) error {
 			createdWorktreeForBranch = branchName
 			return nil
@@ -948,9 +618,10 @@ func TestCheckoutPRWorktree_ReconstructionBranchAlreadyExists(t *testing.T) {
 	}
 
 	ctx := &prCheckoutContext{
-		cfg:       defaultTestConfig(),
-		ghClient:  &mockGitHub{},
-		gitClient: gitMock,
+		cfg:         defaultTestConfig(),
+		ghClient:    &mockGitHub{},
+		gitClient:   gitMock,
+		skipConfirm: true,
 	}
 
 	prInfo := github.PullRequest{
@@ -1024,9 +695,6 @@ func TestCheckoutPRWorktree_ReconstructionErrors(t *testing.T) {
 			fetchRefFn: func(string, string) error {
 				return nil
 			},
-			getCommitParentCountFn: func(string) (int, error) {
-				return 1, nil
-			},
 			createWorktreeForNewBranchFromRefFn: func(string, string, string) error {
 				return nil
 			},
@@ -1080,15 +748,6 @@ func TestCheckoutPRWorktree_ReconstructionErrors(t *testing.T) {
 			},
 			wantErr: "failed to commit reconstructed changes",
 		},
-		{
-			name: "GetCommitParentCount fails",
-			mockSetup: func(m *mockGit) {
-				m.getCommitParentCountFn = func(string) (int, error) {
-					return 0, fmt.Errorf("not a commit")
-				}
-			},
-			wantErr: "failed to detect merge strategy",
-		},
 	}
 
 	for _, tt := range tests {
@@ -1099,9 +758,10 @@ func TestCheckoutPRWorktree_ReconstructionErrors(t *testing.T) {
 			tt.mockSetup(gitMock)
 
 			ctx := &prCheckoutContext{
-				cfg:       defaultTestConfig(),
-				ghClient:  &mockGitHub{},
-				gitClient: gitMock,
+				cfg:         defaultTestConfig(),
+				ghClient:    &mockGitHub{},
+				gitClient:   gitMock,
+				skipConfirm: true,
 			}
 
 			err := checkoutPRWorktree(&stdout, &stderr, ctx, basePR)
@@ -1109,6 +769,43 @@ func TestCheckoutPRWorktree_ReconstructionErrors(t *testing.T) {
 			assert.Contains(t, err.Error(), tt.wantErr)
 		})
 	}
+}
+
+func TestCheckoutPRWorktree_PromptDeclined(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	gitMock := &mockGit{
+		listWorktreesFn: func() ([]git.Worktree, error) {
+			return []git.Worktree{}, nil
+		},
+		branchExistsFn: func(string, bool) (bool, error) {
+			return false, nil
+		},
+		fetchRemoteBranchFn: func(string, string, string) error {
+			return assert.AnError
+		},
+	}
+
+	ctx := &prCheckoutContext{
+		cfg: defaultTestConfig(),
+		confirmFn: func(string) (bool, error) {
+			return false, nil
+		},
+		ghClient:  &mockGitHub{},
+		gitClient: gitMock,
+	}
+
+	prInfo := github.PullRequest{
+		BranchName:     "feature/fast-init",
+		MergeCommitSHA: "abc123",
+		Number:         16,
+		State:          github.PRStateMerged,
+		Title:          "Fast init",
+	}
+
+	err := checkoutPRWorktree(&stdout, &stderr, ctx, prInfo)
+	require.NoError(t, err)
+	assert.Empty(t, stdout.String())
 }
 
 func TestCheckoutPRWorktree_ClosedPRSkipsReconstruction(t *testing.T) {
