@@ -126,7 +126,8 @@ func checkoutPRWorktree(stdout, stderr io.Writer, ctx *prCheckoutContext, prInfo
 		if err != nil {
 			return fmt.Errorf("failed to determine remote: %w", err)
 		}
-		if err := ctx.gitClient.FetchRemoteBranch(remote, prInfo.BranchName, localBranch); err != nil {
+		prRef := fmt.Sprintf("refs/pull/%d/head", prInfo.Number)
+		if err := ctx.gitClient.FetchRemoteBranch(remote, prRef, localBranch); err != nil {
 			return fmt.Errorf("failed to fetch remote branch: %w", err)
 		}
 	}
