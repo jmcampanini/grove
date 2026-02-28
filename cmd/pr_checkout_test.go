@@ -319,7 +319,7 @@ func TestCheckoutPRWorktree(t *testing.T) {
 				},
 				fetchRemoteBranchFn: func(remote, remoteRef, localRef string) error {
 					assert.Equal(t, "origin", remote)
-					assert.Equal(t, "feature/add-auth", remoteRef)
+					assert.Equal(t, "refs/pull/123/head", remoteRef)
 					assert.Equal(t, "feature/add-auth", localRef)
 					return nil
 				},
@@ -332,6 +332,37 @@ func TestCheckoutPRWorktree(t *testing.T) {
 			cfg:        defaultTestConfig(),
 			wantErr:    false,
 			wantStdout: "/workspace/pr-feature-add-auth",
+		},
+		{
+			name: "merged PR with deleted branch uses PR ref",
+			prInfo: github.PullRequest{
+				BranchName: "feature/old-branch",
+				Number:     789,
+				State:      github.PRStateMerged,
+				Title:      "Old merged PR",
+			},
+			gitMock: &mockGit{
+				listWorktreesFn: func() ([]git.Worktree, error) {
+					return []git.Worktree{}, nil
+				},
+				branchExistsFn: func(branchName string, caseInsensitive bool) (bool, error) {
+					return false, nil
+				},
+				fetchRemoteBranchFn: func(remote, remoteRef, localRef string) error {
+					assert.Equal(t, "origin", remote)
+					assert.Equal(t, "refs/pull/789/head", remoteRef)
+					assert.Equal(t, "feature/old-branch", localRef)
+					return nil
+				},
+				createWorktreeForExistingBranchFn: func(branchName, worktreeAbsPath string) error {
+					assert.Equal(t, "feature/old-branch", branchName)
+					assert.Equal(t, "/workspace/pr-feature-old-branch", worktreeAbsPath)
+					return nil
+				},
+			},
+			cfg:        defaultTestConfig(),
+			wantErr:    false,
+			wantStdout: "/workspace/pr-feature-old-branch",
 		},
 		{
 			name: "PR number template generates different branch name",
@@ -349,7 +380,7 @@ func TestCheckoutPRWorktree(t *testing.T) {
 					return false, nil
 				},
 				fetchRemoteBranchFn: func(remote, remoteRef, localRef string) error {
-					assert.Equal(t, "feature/test", remoteRef)
+					assert.Equal(t, "refs/pull/456/head", remoteRef)
 					assert.Equal(t, "pr/456", localRef)
 					return nil
 				},
