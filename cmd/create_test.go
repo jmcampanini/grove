@@ -173,29 +173,66 @@ func TestExecuteCreate(t *testing.T) {
 }
 
 func TestExecuteCreate_VerifiesGitArgs(t *testing.T) {
-	workspaceDir := t.TempDir()
-
-	var gotBranch, gotPath, gotBaseRef string
-	gitMock := &mockGit{
-		getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
-		createWorktreeForNewBranchFromRefFn: func(newBranchName, worktreeAbsPath, baseRef string) error {
-			gotBranch = newBranchName
-			gotPath = worktreeAbsPath
-			gotBaseRef = baseRef
-			return nil
+	tests := []struct {
+		name        string
+		baseRef     string
+		wantBaseRef string
+	}{
+		{
+			name:        "default HEAD when no --from",
+			baseRef:     "",
+			wantBaseRef: "",
+		},
+		{
+			name:        "--from with branch name",
+			baseRef:     "main",
+			wantBaseRef: "main",
+		},
+		{
+			name:        "--from with remote tracking branch",
+			baseRef:     "origin/develop",
+			wantBaseRef: "origin/develop",
+		},
+		{
+			name:        "--from with tag",
+			baseRef:     "v1.2.0",
+			wantBaseRef: "v1.2.0",
+		},
+		{
+			name:        "--from with commit SHA",
+			baseRef:     "abc1234",
+			wantBaseRef: "abc1234",
 		},
 	}
 
-	var stdout bytes.Buffer
-	ctx := &createContext{
-		cfg:       defaultTestConfig(),
-		gitClient: gitMock,
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			workspaceDir := t.TempDir()
+
+			var gotBranch, gotPath, gotBaseRef string
+			gitMock := &mockGit{
+				getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
+				createWorktreeForNewBranchFromRefFn: func(newBranchName, worktreeAbsPath, baseRef string) error {
+					gotBranch = newBranchName
+					gotPath = worktreeAbsPath
+					gotBaseRef = baseRef
+					return nil
+				},
+			}
+
+			var stdout bytes.Buffer
+			ctx := &createContext{
+				baseRef:   tt.baseRef,
+				cfg:       defaultTestConfig(),
+				gitClient: gitMock,
+			}
+
+			err := executeCreate(&stdout, ctx, "add logging support")
+			require.NoError(t, err)
+
+			assert.Equal(t, "feature/add-logging-support", gotBranch)
+			assert.Equal(t, filepath.Join(workspaceDir, "wt-add-logging-support"), gotPath)
+			assert.Equal(t, tt.wantBaseRef, gotBaseRef)
+		})
 	}
-
-	err := executeCreate(&stdout, ctx, "add logging support")
-	require.NoError(t, err)
-
-	assert.Equal(t, "feature/add-logging-support", gotBranch)
-	assert.Equal(t, filepath.Join(workspaceDir, "wt-add-logging-support"), gotPath)
-	assert.Equal(t, "", gotBaseRef)
 }

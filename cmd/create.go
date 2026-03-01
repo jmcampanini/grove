@@ -19,13 +19,18 @@ var createCmd = &cobra.Command{
 	Short: "Create a new branch and worktree from a descriptive phrase",
 	Long: `Create creates a new git branch and worktree from a descriptive phrase.
 
-The new branch is created from the current HEAD (the commit you're currently on).
+By default, the new branch is created from the current HEAD. Use --from to
+specify a different starting point (any git ref: branch, tag, or commit SHA).
+
 The phrase is converted to a branch name using the configured slugify rules
 and prefix. A worktree is then created with the configured worktree naming.
 
 Example:
   grove create "add user authentication"
   grove create "fix bug in login"
+  grove create "hotfix" --from main
+  grove create "backport" --from v1.2.0
+  grove create "experiment" --from origin/develop
 
 Note: The create command takes a single quoted string argument. The shell wrapper
 function (grc) can handle passing arbitrary phrases by quoting the arguments.
@@ -36,11 +41,13 @@ To check out an existing pull request, use 'grove pr checkout' instead.`,
 }
 
 func init() {
+	createCmd.Flags().String("from", "", "git ref (branch, tag, or commit) to create the new branch from (default: HEAD)")
 	createCmd.GroupID = "worktree"
 	rootCmd.AddCommand(createCmd)
 }
 
 type createContext struct {
+	baseRef   string
 	cfg       config.Config
 	gitClient git.Git
 }
@@ -48,12 +55,18 @@ type createContext struct {
 func runCreate(cmd *cobra.Command, args []string) error {
 	phrase := args[0]
 
+	fromRef, err := cmd.Flags().GetString("from")
+	if err != nil {
+		return err
+	}
+
 	rt, err := loadCommandRuntime()
 	if err != nil {
 		return err
 	}
 
 	ctx := &createContext{
+		baseRef:   fromRef,
 		cfg:       rt.cfg,
 		gitClient: rt.gitClient,
 	}
@@ -98,7 +111,7 @@ Examples:
 		return fmt.Errorf("worktree path %q already exists; to remove it: git worktree remove %s", worktreePath, worktreeName)
 	}
 
-	if err := ctx.gitClient.CreateWorktreeForNewBranchFromRef(branchName, worktreePath, ""); err != nil {
+	if err := ctx.gitClient.CreateWorktreeForNewBranchFromRef(branchName, worktreePath, ctx.baseRef); err != nil {
 		return fmt.Errorf("failed to create branch and worktree: %w", err)
 	}
 
