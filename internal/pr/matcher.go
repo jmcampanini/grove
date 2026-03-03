@@ -1,9 +1,7 @@
 package pr
 
 import (
-	"fmt"
-	"os"
-
+	clog "github.com/charmbracelet/log"
 	"github.com/jmcampanini/grove-cli/internal/git"
 	"github.com/jmcampanini/grove-cli/internal/github"
 	"github.com/jmcampanini/grove-cli/internal/naming"
@@ -21,12 +19,14 @@ func (m Match) HasWorktree() bool {
 
 // Matcher matches pull requests to existing worktrees.
 type Matcher struct {
+	log   *clog.Logger
 	namer *naming.PullRequestNamer
 }
 
 // NewMatcher creates a new Matcher with the given PullRequestNamer.
 func NewMatcher(namer *naming.PullRequestNamer) *Matcher {
 	return &Matcher{
+		log:   clog.Default().WithPrefix("pr"),
 		namer: namer,
 	}
 }
@@ -56,8 +56,7 @@ func (m *Matcher) FindWorktreeForPR(pr github.PullRequest, worktrees []git.Workt
 	}
 	expectedBranch, err := m.namer.GenerateBranchName(prData)
 	if err != nil {
-		// TODO: replace with structured debug logging when a logging framework is added
-		fmt.Fprintf(os.Stderr, "warning: branch name template failed, using direct match only: %v\n", err)
+		m.log.Debug("branch name template failed, using direct match only", "error", err, "number", pr.Number, "branch", pr.BranchName)
 		expectedBranch = ""
 	}
 

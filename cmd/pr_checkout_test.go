@@ -253,7 +253,6 @@ func TestCheckoutPRWorktree(t *testing.T) {
 		wantErr        bool
 		wantErrContain string
 		wantStdout     string
-		wantStderr     string
 	}{
 		{
 			name: "existing worktree returns path",
@@ -272,7 +271,6 @@ func TestCheckoutPRWorktree(t *testing.T) {
 			},
 			cfg:        defaultTestConfig(),
 			wantErr:    false,
-			wantStderr: "Worktree already exists",
 			wantStdout: "/workspace/pr-feature-add-auth",
 		},
 		{
@@ -451,7 +449,7 @@ func TestCheckoutPRWorktree(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var stdout, stderr bytes.Buffer
+			var stdout bytes.Buffer
 
 			ctx := &prCheckoutContext{
 				cfg:       tt.cfg,
@@ -459,7 +457,7 @@ func TestCheckoutPRWorktree(t *testing.T) {
 				gitClient: tt.gitMock,
 			}
 
-			err := checkoutPRWorktree(&stdout, &stderr, ctx, tt.prInfo)
+			err := checkoutPRWorktree(&stdout, ctx, tt.prInfo)
 
 			if tt.wantErr {
 				require.Error(t, err)
@@ -473,16 +471,12 @@ func TestCheckoutPRWorktree(t *testing.T) {
 			if tt.wantStdout != "" {
 				assert.Contains(t, strings.TrimSpace(stdout.String()), tt.wantStdout)
 			}
-
-			if tt.wantStderr != "" {
-				assert.Contains(t, stderr.String(), tt.wantStderr)
-			}
 		})
 	}
 }
 
 func TestCheckoutPRWorktreeDirectBranchMatch(t *testing.T) {
-	var stdout, stderr bytes.Buffer
+	var stdout bytes.Buffer
 
 	gitMock := &mockGit{
 		listWorktreesFn: func() ([]git.Worktree, error) {
@@ -505,9 +499,8 @@ func TestCheckoutPRWorktreeDirectBranchMatch(t *testing.T) {
 		Title:      "Add auth",
 	}
 
-	err := checkoutPRWorktree(&stdout, &stderr, ctx, prInfo)
+	err := checkoutPRWorktree(&stdout, ctx, prInfo)
 	require.NoError(t, err)
 
 	assert.Contains(t, stdout.String(), "/workspace/wt-feature-add-auth")
-	assert.Contains(t, stderr.String(), "Worktree already exists")
 }

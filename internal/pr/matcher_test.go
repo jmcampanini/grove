@@ -240,4 +240,6 @@ func TestNewMatcher(t *testing.T) {
 	matcher := NewMatcher(namer)
 	assert.NotNil(t, matcher)
 	assert.Equal(t, namer, matcher.namer)
+	assert.NotNil(t, matcher.log)
+	assert.Equal(t, "pr", matcher.log.GetPrefix())
 }

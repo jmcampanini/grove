@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"maps"
-	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -15,6 +14,7 @@ import (
 
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/log"
 	"github.com/jmcampanini/grove-cli/internal/github"
 	"github.com/muesli/termenv"
 )
@@ -582,15 +582,14 @@ func renderBody(body string, width int, colorMode string) string {
 	case "never":
 		opts = append(opts, glamour.WithColorProfile(termenv.Ascii))
 	}
-	// TODO: replace with structured debug logging when a logging framework is added
 	renderer, err := glamour.NewTermRenderer(opts...)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: markdown renderer init failed, using plain text: %v\n", err)
+		log.WithPrefix("pr").Debug("markdown renderer init failed, using plain text fallback", "error", err)
 		return wrapBody(body, width)
 	}
 	rendered, err := renderer.Render(body)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: markdown rendering failed, using plain text: %v\n", err)
+		log.WithPrefix("pr").Debug("markdown rendering failed, using plain text fallback", "error", err)
 		return wrapBody(body, width)
 	}
 	return strings.TrimSpace(rendered)
