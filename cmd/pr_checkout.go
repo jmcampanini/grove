@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/charmbracelet/log"
 	"github.com/jmcampanini/grove-cli/internal/config"
 	"github.com/jmcampanini/grove-cli/internal/git"
 	"github.com/jmcampanini/grove-cli/internal/github"
@@ -59,10 +60,10 @@ func runPRCheckout(cmd *cobra.Command, args []string) error {
 	}
 
 	if prInfo.State == github.PRStateMerged || prInfo.State == github.PRStateClosed {
-		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Note: PR #%d is %s\n", prInfo.Number, strings.ToLower(string(prInfo.State)))
+		log.WithPrefix("pr").Warn("checking out non-open pull request", "number", prInfo.Number, "state", strings.ToLower(string(prInfo.State)))
 	}
 
-	return checkoutPRWorktree(cmd.OutOrStdout(), cmd.ErrOrStderr(), ctx, prInfo)
+	return checkoutPRWorktree(cmd.OutOrStdout(), ctx, prInfo)
 }
 
 type prCheckoutContext struct {
@@ -71,7 +72,7 @@ type prCheckoutContext struct {
 	gitClient git.Git
 }
 
-func checkoutPRWorktree(stdout, stderr io.Writer, ctx *prCheckoutContext, prInfo github.PullRequest) error {
+func checkoutPRWorktree(stdout io.Writer, ctx *prCheckoutContext, prInfo github.PullRequest) error {
 	namer, err := naming.NewPullRequestNamer(ctx.cfg.PullRequest, ctx.cfg.Slugify)
 	if err != nil {
 		return fmt.Errorf("failed to create PR namer: %w", err)
@@ -100,7 +101,7 @@ func checkoutPRWorktree(stdout, stderr io.Writer, ctx *prCheckoutContext, prInfo
 	existingWorktree := matcher.FindWorktreeForPR(prInfo, worktrees)
 
 	if existingWorktree != nil {
-		_, _ = fmt.Fprintf(stderr, "Worktree already exists\n")
+		log.WithPrefix("pr").Warn("worktree already exists for pull request", "number", prInfo.Number, "path", existingWorktree.AbsolutePath)
 		_, err := fmt.Fprintln(stdout, existingWorktree.AbsolutePath)
 		return err
 	}

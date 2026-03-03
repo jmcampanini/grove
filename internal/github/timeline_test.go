@@ -1,9 +1,11 @@
 package github
 
 import (
+	"io"
 	"testing"
 	"time"
 
+	clog "github.com/charmbracelet/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -265,7 +267,7 @@ func TestParseActivityResponse(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			threads, events, err := parseActivityResponse(tt.input)
+			threads, events, err := parseActivityResponse(clog.New(io.Discard), tt.input)
 			if tt.wantErr {
 				require.Error(t, err)
 				return

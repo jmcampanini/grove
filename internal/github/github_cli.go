@@ -200,7 +200,7 @@ func (g *GitHubCli) GetPullRequestActivity(owner, repo string, prNum int) ([]Rev
 		return nil, nil, fmt.Errorf("failed to get activity for PR #%d: %w", prNum, err)
 	}
 
-	return parseActivityResponse(output)
+	return parseActivityResponse(g.log, output)
 }
 
 func (g *GitHubCli) GetPullRequestByBranch(branchName string) (*PullRequest, error) {
@@ -260,7 +260,7 @@ type graphQLThreadNode struct {
 	Path       string `json:"path"`
 }
 
-func parseActivityResponse(data string) ([]ReviewThread, []TimelineEvent, error) {
+func parseActivityResponse(log *clog.Logger, data string) ([]ReviewThread, []TimelineEvent, error) {
 	var result struct {
 		Data struct {
 			Repository struct {
@@ -286,7 +286,7 @@ func parseActivityResponse(data string) ([]ReviewThread, []TimelineEvent, error)
 	for _, raw := range result.Data.Repository.PullRequest.TimelineItems.Nodes {
 		event, err := parseTimelineNode(raw)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "warning: skipping timeline event: %v\n", err)
+			log.Debug("skipping timeline event", "error", err)
 			continue
 		}
 		if event != nil {
