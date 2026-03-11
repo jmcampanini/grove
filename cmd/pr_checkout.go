@@ -22,8 +22,6 @@ var prCheckoutCmd = &cobra.Command{
 	Short: "Check out a pull request into a local worktree",
 	Long: `Check out a pull request into a local worktree.
 
-Note: Only works with PRs from the same repository. Fork PRs are not yet supported.
-
 To start new local work (not from a PR), use 'grove create' instead.`,
 	Args: cobra.ExactArgs(1),
 	RunE: runPRCheckout,
@@ -53,10 +51,6 @@ func runPRCheckout(cmd *cobra.Command, args []string) error {
 	prInfo, err := ctx.ghClient.GetPullRequest(prNum)
 	if err != nil {
 		return fmt.Errorf("failed to get pull request: %w", err)
-	}
-
-	if prInfo.IsCrossRepository {
-		return fmt.Errorf("PR #%d is from a fork, which is not yet supported.\nTip: You can manually add the fork as a remote and create a worktree with 'git worktree add'", prInfo.Number)
 	}
 
 	if prInfo.State == github.PRStateMerged || prInfo.State == github.PRStateClosed {
