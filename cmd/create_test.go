@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jmcampanini/grove-cli/internal/git"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -16,11 +17,13 @@ func TestExecuteCreate(t *testing.T) {
 	tests := []struct {
 		name           string
 		phrase         string
+		reuse          bool
 		gitMock        func(workspaceDir string) *mockGit
 		setupFS        func(t *testing.T, workspaceDir string)
 		wantErr        bool
 		wantErrContain string
 		wantWorktree   string
+		wantOutput     string
 	}{
 		{
 			name:   "simple phrase",
@@ -136,6 +139,114 @@ func TestExecuteCreate(t *testing.T) {
 			wantErr:        true,
 			wantErrContain: "failed to create branch and worktree",
 		},
+		{
+			name:   "reuse with existing worktree",
+			phrase: "add logging support",
+			reuse:  true,
+			gitMock: func(workspaceDir string) *mockGit {
+				return &mockGit{
+					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
+					branchExistsFn: func(_ string, _ bool) (bool, error) {
+						return true, nil
+					},
+					listWorktreesFn: func() ([]git.Worktree, error) {
+						return []git.Worktree{
+							{
+								AbsolutePath: filepath.Join(workspaceDir, "wt-add-logging-support"),
+								Ref:          git.NewLocalBranch("feature/add-logging-support", "", "", false, 0, 0, git.Commit{}),
+							},
+						}, nil
+					},
+				}
+			},
+			wantOutput: "wt-add-logging-support",
+		},
+		{
+			name:   "reuse with nothing existing",
+			phrase: "add logging support",
+			reuse:  true,
+			gitMock: func(workspaceDir string) *mockGit {
+				return &mockGit{
+					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
+				}
+			},
+			wantWorktree: "wt-add-logging-support",
+		},
+		{
+			name:   "reuse with branch but no worktree",
+			phrase: "add logging support",
+			reuse:  true,
+			gitMock: func(workspaceDir string) *mockGit {
+				return &mockGit{
+					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
+					branchExistsFn: func(_ string, _ bool) (bool, error) {
+						return true, nil
+					},
+					listWorktreesFn: func() ([]git.Worktree, error) {
+						return nil, nil
+					},
+				}
+			},
+			wantErr:        true,
+			wantErrContain: "exists but has no worktree",
+		},
+		{
+			name:   "reuse with ListWorktrees error",
+			phrase: "add logging support",
+			reuse:  true,
+			gitMock: func(workspaceDir string) *mockGit {
+				return &mockGit{
+					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
+					branchExistsFn: func(_ string, _ bool) (bool, error) {
+						return true, nil
+					},
+					listWorktreesFn: func() ([]git.Worktree, error) {
+						return nil, assert.AnError
+					},
+				}
+			},
+			wantErr:        true,
+			wantErrContain: "failed to list worktrees",
+		},
+		{
+			name:   "reuse with orphaned dir on disk",
+			phrase: "add logging support",
+			reuse:  true,
+			gitMock: func(workspaceDir string) *mockGit {
+				return &mockGit{
+					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
+				}
+			},
+			setupFS: func(t *testing.T, workspaceDir string) {
+				t.Helper()
+				require.NoError(t, os.MkdirAll(filepath.Join(workspaceDir, "wt-add-logging-support"), 0o755))
+			},
+			wantErr:        true,
+			wantErrContain: "already exists",
+		},
+		{
+			name:   "reuse with non-matching worktrees",
+			phrase: "add logging support",
+			reuse:  true,
+			gitMock: func(workspaceDir string) *mockGit {
+				return &mockGit{
+					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
+					branchExistsFn: func(_ string, _ bool) (bool, error) {
+						return true, nil
+					},
+					listWorktreesFn: func() ([]git.Worktree, error) {
+						return []git.Worktree{
+							{
+								AbsolutePath: filepath.Join(workspaceDir, "wt-something-else"),
+								Ref:          git.NewLocalBranch("feature/something-else", "", "", false, 0, 0, git.Commit{}),
+							},
+						}, nil
+					},
+				}
+			},
+			wantErr:        true,
+			wantErrContain: "exists but has no worktree",
+		},
 	}
 
 	for _, tt := range tests {
@@ -150,6 +261,7 @@ func TestExecuteCreate(t *testing.T) {
 			ctx := &createContext{
 				cfg:       defaultTestConfig(),
 				gitClient: tt.gitMock(workspaceDir),
+				reuse:     tt.reuse,
 			}
 
 			err := executeCreate(&stdout, ctx, tt.phrase)
@@ -164,9 +276,12 @@ func TestExecuteCreate(t *testing.T) {
 
 			require.NoError(t, err)
 
+			output := strings.TrimSpace(stdout.String())
 			if tt.wantWorktree != "" {
-				output := strings.TrimSpace(stdout.String())
 				assert.Equal(t, filepath.Join(workspaceDir, tt.wantWorktree), output)
+			}
+			if tt.wantOutput != "" {
+				assert.Equal(t, filepath.Join(workspaceDir, tt.wantOutput), output)
 			}
 		})
 	}

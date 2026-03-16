@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/charmbracelet/log"
 	"github.com/jmcampanini/grove-cli/internal/config"
 	"github.com/jmcampanini/grove-cli/internal/git"
 	"github.com/jmcampanini/grove-cli/internal/naming"
@@ -42,6 +43,7 @@ To check out an existing pull request, use 'grove pr checkout' instead.`,
 
 func init() {
 	createCmd.Flags().String("from", "", "git ref (branch, tag, or commit) to create the new branch from (default: HEAD)")
+	createCmd.Flags().Bool("reuse", false, "reuse existing worktree if one already exists for this phrase")
 	createCmd.GroupID = "worktree"
 	rootCmd.AddCommand(createCmd)
 }
@@ -50,12 +52,18 @@ type createContext struct {
 	baseRef   string
 	cfg       config.Config
 	gitClient git.Git
+	reuse     bool
 }
 
 func runCreate(cmd *cobra.Command, args []string) error {
 	phrase := args[0]
 
 	fromRef, err := cmd.Flags().GetString("from")
+	if err != nil {
+		return err
+	}
+
+	reuse, err := cmd.Flags().GetBool("reuse")
 	if err != nil {
 		return err
 	}
@@ -69,6 +77,7 @@ func runCreate(cmd *cobra.Command, args []string) error {
 		baseRef:   fromRef,
 		cfg:       rt.cfg,
 		gitClient: rt.gitClient,
+		reuse:     reuse,
 	}
 
 	return executeCreate(cmd.OutOrStdout(), ctx, phrase)
@@ -101,7 +110,24 @@ Examples:
 		return fmt.Errorf("failed to check if branch exists: %w", err)
 	}
 	if exists {
-		return fmt.Errorf("branch %q already exists; to use it: git worktree add <path> %s", branchName, branchName)
+		if !ctx.reuse {
+			return fmt.Errorf("branch %q already exists; to use it: git worktree add <path> %s", branchName, branchName)
+		}
+
+		worktrees, err := ctx.gitClient.ListWorktrees()
+		if err != nil {
+			return fmt.Errorf("failed to list worktrees: %w", err)
+		}
+
+		for _, wt := range worktrees {
+			if branch, ok := wt.Ref.FullBranch(); ok && branch.Name == branchName {
+				log.WithPrefix("create").Warn("reusing existing worktree", "branch", branchName, "path", wt.AbsolutePath)
+				_, err = fmt.Fprintln(stdout, wt.AbsolutePath)
+				return err
+			}
+		}
+
+		return fmt.Errorf("branch %q exists but has no worktree", branchName)
 	}
 
 	worktreeName := namer.GenerateWorktreeName(branchName)
