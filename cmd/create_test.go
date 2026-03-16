@@ -158,6 +158,10 @@ func TestExecuteCreate(t *testing.T) {
 					},
 				}
 			},
+			setupFS: func(t *testing.T, workspaceDir string) {
+				t.Helper()
+				require.NoError(t, os.MkdirAll(filepath.Join(workspaceDir, "wt-add-logging-support"), 0o755))
+			},
 			wantOutput: "wt-add-logging-support",
 		},
 		{
