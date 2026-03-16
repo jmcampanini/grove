@@ -22,7 +22,6 @@ func TestExecuteCreate(t *testing.T) {
 		setupFS        func(t *testing.T, workspaceDir string)
 		wantErr        bool
 		wantErrContain string
-		wantWorktree   string
 		wantOutput     string
 	}{
 		{
@@ -33,7 +32,7 @@ func TestExecuteCreate(t *testing.T) {
 					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
 				}
 			},
-			wantWorktree: "wt-add-logging-support",
+			wantOutput: "wt-add-logging-support",
 		},
 		{
 			name:   "special characters",
@@ -43,7 +42,7 @@ func TestExecuteCreate(t *testing.T) {
 					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
 				}
 			},
-			wantWorktree: "wt-fix-handle-404-500-errors",
+			wantOutput: "wt-fix-handle-404-500-errors",
 		},
 		{
 			name:   "mixed casing",
@@ -53,7 +52,7 @@ func TestExecuteCreate(t *testing.T) {
 					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
 				}
 			},
-			wantWorktree: "wt-add-oauth2-google-integration",
+			wantOutput: "wt-add-oauth2-google-integration",
 		},
 		{
 			name:   "long phrase triggers hash truncation",
@@ -63,7 +62,7 @@ func TestExecuteCreate(t *testing.T) {
 					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
 				}
 			},
-			wantWorktree: "wt-implement-comprehensive-user-authentication-a-nquu",
+			wantOutput: "wt-implement-comprehensive-user-authentication-a-nquu",
 		},
 		{
 			name:   "duplicate branch",
@@ -170,7 +169,7 @@ func TestExecuteCreate(t *testing.T) {
 					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
 				}
 			},
-			wantWorktree: "wt-add-logging-support",
+			wantOutput: "wt-add-logging-support",
 		},
 		{
 			name:   "reuse with branch but no worktree",
@@ -187,8 +186,50 @@ func TestExecuteCreate(t *testing.T) {
 					},
 				}
 			},
+			wantOutput: "wt-add-logging-support",
+		},
+		{
+			name:   "reuse with branch but no worktree and create fails",
+			phrase: "add logging support",
+			reuse:  true,
+			gitMock: func(workspaceDir string) *mockGit {
+				return &mockGit{
+					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
+					branchExistsFn: func(_ string, _ bool) (bool, error) {
+						return true, nil
+					},
+					listWorktreesFn: func() ([]git.Worktree, error) {
+						return nil, nil
+					},
+					createWorktreeForExistingBranchFn: func(_, _ string) error {
+						return assert.AnError
+					},
+				}
+			},
 			wantErr:        true,
-			wantErrContain: "exists but has no worktree",
+			wantErrContain: "failed to create worktree for existing branch",
+		},
+		{
+			name:   "reuse with branch and orphaned dir on disk",
+			phrase: "add logging support",
+			reuse:  true,
+			gitMock: func(workspaceDir string) *mockGit {
+				return &mockGit{
+					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
+					branchExistsFn: func(_ string, _ bool) (bool, error) {
+						return true, nil
+					},
+					listWorktreesFn: func() ([]git.Worktree, error) {
+						return nil, nil
+					},
+				}
+			},
+			setupFS: func(t *testing.T, workspaceDir string) {
+				t.Helper()
+				require.NoError(t, os.MkdirAll(filepath.Join(workspaceDir, "wt-add-logging-support"), 0o755))
+			},
+			wantErr:        true,
+			wantErrContain: "already exists",
 		},
 		{
 			name:   "reuse with ListWorktrees error",
@@ -244,8 +285,7 @@ func TestExecuteCreate(t *testing.T) {
 					},
 				}
 			},
-			wantErr:        true,
-			wantErrContain: "exists but has no worktree",
+			wantOutput: "wt-add-logging-support",
 		},
 	}
 
@@ -276,11 +316,8 @@ func TestExecuteCreate(t *testing.T) {
 
 			require.NoError(t, err)
 
-			output := strings.TrimSpace(stdout.String())
-			if tt.wantWorktree != "" {
-				assert.Equal(t, filepath.Join(workspaceDir, tt.wantWorktree), output)
-			}
 			if tt.wantOutput != "" {
+				output := strings.TrimSpace(stdout.String())
 				assert.Equal(t, filepath.Join(workspaceDir, tt.wantOutput), output)
 			}
 		})

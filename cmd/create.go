@@ -113,21 +113,7 @@ Examples:
 		if !ctx.reuse {
 			return fmt.Errorf("branch %q already exists; to use it: git worktree add <path> %s", branchName, branchName)
 		}
-
-		worktrees, err := ctx.gitClient.ListWorktrees()
-		if err != nil {
-			return fmt.Errorf("failed to list worktrees: %w", err)
-		}
-
-		for _, wt := range worktrees {
-			if branch, ok := wt.Ref.FullBranch(); ok && branch.Name == branchName {
-				log.WithPrefix("create").Warn("reusing existing worktree", "branch", branchName, "path", wt.AbsolutePath)
-				_, err = fmt.Fprintln(stdout, wt.AbsolutePath)
-				return err
-			}
-		}
-
-		return fmt.Errorf("branch %q exists but has no worktree", branchName)
+		return reuseExistingBranch(stdout, ctx, namer, branchName, workspacePath)
 	}
 
 	worktreeName := namer.GenerateWorktreeName(branchName)
@@ -139,6 +125,36 @@ Examples:
 
 	if err := ctx.gitClient.CreateWorktreeForNewBranchFromRef(branchName, worktreePath, ctx.baseRef); err != nil {
 		return fmt.Errorf("failed to create branch and worktree: %w", err)
+	}
+
+	_, err = fmt.Fprintln(stdout, worktreePath)
+	return err
+}
+
+func reuseExistingBranch(stdout io.Writer, ctx *createContext, namer *naming.LocalBranchNamer, branchName, workspacePath string) error {
+	worktrees, err := ctx.gitClient.ListWorktrees()
+	if err != nil {
+		return fmt.Errorf("failed to list worktrees: %w", err)
+	}
+
+	for _, wt := range worktrees {
+		if branch, ok := wt.Ref.FullBranch(); ok && branch.Name == branchName {
+			log.WithPrefix("create").Warn("reusing existing worktree", "branch", branchName, "path", wt.AbsolutePath)
+			_, err = fmt.Fprintln(stdout, wt.AbsolutePath)
+			return err
+		}
+	}
+
+	worktreeName := namer.GenerateWorktreeName(branchName)
+	worktreePath := filepath.Join(workspacePath, worktreeName)
+
+	if _, err := os.Stat(worktreePath); err == nil {
+		return fmt.Errorf("worktree path %q already exists; to remove it: git worktree remove %s", worktreePath, worktreeName)
+	}
+
+	log.WithPrefix("create").Warn("creating worktree for existing branch", "branch", branchName, "path", worktreePath)
+	if err := ctx.gitClient.CreateWorktreeForExistingBranch(branchName, worktreePath); err != nil {
+		return fmt.Errorf("failed to create worktree for existing branch: %w", err)
 	}
 
 	_, err = fmt.Fprintln(stdout, worktreePath)
