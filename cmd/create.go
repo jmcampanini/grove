@@ -146,6 +146,10 @@ func reuseExistingBranch(stdout io.Writer, ctx *createContext, namer *naming.Loc
 			continue
 		}
 		if branch, ok := wt.Ref.FullBranch(); ok && branch.Name == branchName {
+			if _, statErr := os.Stat(wt.AbsolutePath); statErr != nil {
+				log.WithPrefix("create").Warn("stale worktree entry; skipping", "branch", branchName, "path", wt.AbsolutePath)
+				continue
+			}
 			log.WithPrefix("create").Warn("reusing existing worktree", "branch", branchName, "path", wt.AbsolutePath)
 			_, err = fmt.Fprintln(stdout, wt.AbsolutePath)
 			return err
