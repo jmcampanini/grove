@@ -141,18 +141,26 @@ func reuseExistingBranch(stdout io.Writer, ctx *createContext, namer *naming.Loc
 		return fmt.Errorf("failed to list worktrees: %w", err)
 	}
 
+	foundStale := false
 	for _, wt := range worktrees {
 		if wt.Ref == nil {
 			continue
 		}
 		if branch, ok := wt.Ref.FullBranch(); ok && branch.Name == branchName {
 			if _, statErr := os.Stat(wt.AbsolutePath); statErr != nil {
-				log.WithPrefix("create").Warn("stale worktree entry; skipping", "branch", branchName, "path", wt.AbsolutePath)
+				log.WithPrefix("create").Warn("stale worktree entry found", "branch", branchName, "path", wt.AbsolutePath)
+				foundStale = true
 				continue
 			}
 			log.WithPrefix("create").Warn("reusing existing worktree", "branch", branchName, "path", wt.AbsolutePath)
 			_, err = fmt.Fprintln(stdout, wt.AbsolutePath)
 			return err
+		}
+	}
+
+	if foundStale {
+		if err := ctx.gitClient.PruneWorktrees(); err != nil {
+			return fmt.Errorf("failed to prune stale worktrees: %w", err)
 		}
 	}
 

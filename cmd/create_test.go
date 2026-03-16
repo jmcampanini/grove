@@ -187,6 +187,32 @@ func TestExecuteCreate(t *testing.T) {
 			wantOutput: "wt-add-logging-support",
 		},
 		{
+			name:   "reuse with stale worktree entry and prune fails",
+			phrase: "add logging support",
+			reuse:  true,
+			gitMock: func(workspaceDir string) *mockGit {
+				return &mockGit{
+					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
+					branchExistsFn: func(_ string, _ bool) (bool, error) {
+						return true, nil
+					},
+					listWorktreesFn: func() ([]git.Worktree, error) {
+						return []git.Worktree{
+							{
+								AbsolutePath: filepath.Join(workspaceDir, "nonexistent-dir"),
+								Ref:          git.NewLocalBranch("feature/add-logging-support", "", "", false, 0, 0, git.Commit{}),
+							},
+						}, nil
+					},
+					pruneWorktreesFn: func() error {
+						return assert.AnError
+					},
+				}
+			},
+			wantErr:        true,
+			wantErrContain: "failed to prune stale worktrees",
+		},
+		{
 			name:   "reuse with nothing existing",
 			phrase: "add logging support",
 			reuse:  true,
