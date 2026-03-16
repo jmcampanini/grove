@@ -324,6 +324,53 @@ func TestExecuteCreate(t *testing.T) {
 	}
 }
 
+func TestExecuteCreate_ReuseWithFromErrors(t *testing.T) {
+	var stdout bytes.Buffer
+	ctx := &createContext{
+		baseRef:   "main",
+		cfg:       defaultTestConfig(),
+		gitClient: &mockGit{},
+		reuse:     true,
+	}
+
+	err := executeCreate(&stdout, ctx, "add logging support")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--reuse and --from cannot be used together")
+}
+
+func TestExecuteCreate_ReuseVerifiesGitArgs(t *testing.T) {
+	workspaceDir := t.TempDir()
+
+	var gotBranch, gotPath string
+	gitMock := &mockGit{
+		getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
+		branchExistsFn: func(_ string, _ bool) (bool, error) {
+			return true, nil
+		},
+		listWorktreesFn: func() ([]git.Worktree, error) {
+			return nil, nil
+		},
+		createWorktreeForExistingBranchFn: func(branchName, worktreeAbsPath string) error {
+			gotBranch = branchName
+			gotPath = worktreeAbsPath
+			return nil
+		},
+	}
+
+	var stdout bytes.Buffer
+	ctx := &createContext{
+		cfg:       defaultTestConfig(),
+		gitClient: gitMock,
+		reuse:     true,
+	}
+
+	err := executeCreate(&stdout, ctx, "add logging support")
+	require.NoError(t, err)
+
+	assert.Equal(t, "feature/add-logging-support", gotBranch)
+	assert.Equal(t, filepath.Join(workspaceDir, "wt-add-logging-support"), gotPath)
+}
+
 func TestExecuteCreate_VerifiesGitArgs(t *testing.T) {
 	tests := []struct {
 		name        string

@@ -84,6 +84,10 @@ func runCreate(cmd *cobra.Command, args []string) error {
 }
 
 func executeCreate(stdout io.Writer, ctx *createContext, phrase string) error {
+	if ctx.reuse && ctx.baseRef != "" {
+		return errors.New("--reuse and --from cannot be used together: --reuse attaches to an existing branch and ignores --from")
+	}
+
 	if strings.TrimSpace(phrase) == "" {
 		return errors.New("phrase cannot be empty")
 	}
@@ -138,6 +142,9 @@ func reuseExistingBranch(stdout io.Writer, ctx *createContext, namer *naming.Loc
 	}
 
 	for _, wt := range worktrees {
+		if wt.Ref == nil {
+			continue
+		}
 		if branch, ok := wt.Ref.FullBranch(); ok && branch.Name == branchName {
 			log.WithPrefix("create").Warn("reusing existing worktree", "branch", branchName, "path", wt.AbsolutePath)
 			_, err = fmt.Fprintln(stdout, wt.AbsolutePath)
