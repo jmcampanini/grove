@@ -3,6 +3,7 @@ package cmd
 import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
+	"github.com/jmcampanini/grove-cli/internal/logging"
 	"github.com/spf13/cobra"
 )
 
@@ -67,5 +68,6 @@ func configureLogStyles() {
 
 // Execute runs the root command.
 func Execute() error {
+	defer logging.Close()
 	return rootCmd.Execute()
 }

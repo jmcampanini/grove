@@ -13,6 +13,7 @@ import (
 	"github.com/jmcampanini/grove-cli/internal/config"
 	"github.com/jmcampanini/grove-cli/internal/git"
 	"github.com/jmcampanini/grove-cli/internal/github"
+	"github.com/jmcampanini/grove-cli/internal/logging"
 )
 
 var errNotGitRepo = errors.New("grove must be run inside a git repository")
@@ -87,6 +88,10 @@ func loadCommandRuntime() (*commandRuntime, error) {
 	loadResult, err := config.NewDefaultLoader().Load(configPaths)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
+	}
+
+	if err := logging.Setup(loadResult.Config.Log.File); err != nil {
+		log.Warn("failed to set up file logging", "path", loadResult.Config.Log.File, "error", err)
 	}
 
 	return &commandRuntime{
