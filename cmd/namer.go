@@ -42,12 +42,15 @@ func loadNamingConfig() (config.Config, error) {
 	defaultTimeout := config.DefaultConfig().Git.Timeout
 	g := git.New(false, cwd, defaultTimeout)
 
+	// Unlike loadCommandRuntime, git errors (timeout, corrupt index) are treated
+	// the same as "not in a repo" so the namer can degrade gracefully to defaults.
 	paths := config.BootstrapConfigPaths(cwd, homeDir)
 	if root, gitErr := g.GetWorktreeRoot(); gitErr == nil && root != "" {
 		if mainPath, gitErr := g.GetMainWorktreePath(); gitErr == nil {
 			paths = config.ConfigPaths(cwd, root, mainPath, homeDir)
 		} else {
-			log.Debug("namer: failed to get main worktree path, using bootstrap config", "err", gitErr)
+			log.Debug("namer: failed to get main worktree path, using worktree root only", "err", gitErr)
+			paths = config.ConfigPaths(cwd, root, root, homeDir)
 		}
 	} else {
 		log.Debug("namer: not in a git repository, attempting workspace root detection", "cwd", cwd)

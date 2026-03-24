@@ -38,6 +38,8 @@ func executeNamerBranch(w io.Writer, ctx *namerContext, phrase string) error {
 		return err
 	}
 
-	_, err = fmt.Fprintln(w, name)
-	return err
+	if _, err = fmt.Fprintln(w, name); err != nil {
+		return fmt.Errorf("failed to write output: %w", err)
+	}
+	return nil
 }

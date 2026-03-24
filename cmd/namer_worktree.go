@@ -39,10 +39,9 @@ func executeNamerWorktree(w io.Writer, ctx *namerContext, phrase string) error {
 	}
 
 	name := ctx.namer.GenerateWorktreeName(branchName)
-	if name == "" {
-		return fmt.Errorf("branch name %q produces an empty worktree name after slugification", branchName)
-	}
 
-	_, err = fmt.Fprintln(w, name)
-	return err
+	if _, err = fmt.Fprintln(w, name); err != nil {
+		return fmt.Errorf("failed to write output: %w", err)
+	}
+	return nil
 }
