@@ -131,7 +131,7 @@ func TestTeeWriter_TerminalError_StillWritesToFile(t *testing.T) {
 	n, err := tw.Write([]byte("hello\n"))
 	assert.Equal(t, 0, n)
 	assert.ErrorIs(t, err, termErr)
-	assert.Equal(t, "", file.String(), "file should get stripped p[:0] when terminal writes 0 bytes")
+	assert.Equal(t, "hello\n", file.String(), "file should get full content even when terminal fails")
 }
 
 func TestTeeWriter_FileError_LogsWarningOnce(t *testing.T) {

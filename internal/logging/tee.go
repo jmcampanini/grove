@@ -22,7 +22,7 @@ type teeWriter struct {
 func (t *teeWriter) Write(p []byte) (n int, err error) {
 	n, err = t.terminal.Write(p)
 
-	stripped := []byte(ansi.Strip(string(p[:max(n, 0)])))
+	stripped := []byte(ansi.Strip(string(p)))
 	if _, fileErr := t.file.Write(stripped); fileErr != nil && !t.fileErrLogged {
 		t.fileErrLogged = true
 		_, _ = fmt.Fprintf(t.terminal, "WARN file logging failed: %v\n", fileErr)
