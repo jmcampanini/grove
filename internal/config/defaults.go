@@ -41,7 +41,10 @@ func DefaultConfig() Config {
 	}
 }
 
-// DefaultLogFilePath returns the default log file path based on XDG_STATE_HOME.
+// DefaultLogFilePath returns the default log file path following the XDG Base
+// Directory Specification. It uses $XDG_STATE_HOME/grove/grove.log, falling
+// back to ~/.local/state/grove/grove.log. Returns empty string if the home
+// directory cannot be determined, which disables file logging.
 func DefaultLogFilePath() string {
 	stateDir := os.Getenv("XDG_STATE_HOME")
 	if stateDir == "" {

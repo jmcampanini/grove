@@ -91,7 +91,7 @@ func loadCommandRuntime() (*commandRuntime, error) {
 	}
 
 	if err := logging.Setup(loadResult.Config.Log.File); err != nil {
-		log.Warn("failed to set up file logging", "error", err)
+		log.Warn("failed to set up file logging", "path", loadResult.Config.Log.File, "error", err)
 	}
 
 	return &commandRuntime{

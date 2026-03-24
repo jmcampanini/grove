@@ -2,8 +2,10 @@ package logging
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/charmbracelet/log"
@@ -111,4 +113,76 @@ func TestSetup_AppendsToExistingFile(t *testing.T) {
 func TestClose_NilSafe(t *testing.T) {
 	logFile = nil
 	Close()
+}
+
+type errWriter struct{ err error }
+
+func (e *errWriter) Write([]byte) (int, error) { return 0, e.err }
+
+func TestTeeWriter_TerminalError_StillWritesToFile(t *testing.T) {
+	var file bytes.Buffer
+	termErr := errors.New("terminal broken")
+
+	tw := &teeWriter{
+		terminal: &errWriter{err: termErr},
+		file:     &file,
+	}
+
+	n, err := tw.Write([]byte("hello\n"))
+	assert.Equal(t, 0, n)
+	assert.ErrorIs(t, err, termErr)
+	assert.Equal(t, "", file.String(), "file should get stripped p[:0] when terminal writes 0 bytes")
+}
+
+func TestTeeWriter_FileError_LogsWarningOnce(t *testing.T) {
+	var terminal bytes.Buffer
+	fileErr := errors.New("disk full")
+
+	tw := &teeWriter{
+		terminal: &terminal,
+		file:     &errWriter{err: fileErr},
+	}
+
+	_, _ = tw.Write([]byte("line 1\n"))
+	_, _ = tw.Write([]byte("line 2\n"))
+
+	output := terminal.String()
+	assert.Contains(t, output, "WARN file logging failed: disk full")
+	assert.Equal(t, 1, strings.Count(output, "WARN file logging failed"),
+		"warning should be logged only once")
+}
+
+func TestSetup_DoubleCall_ClosesPreviousFile(t *testing.T) {
+	saveAndRestoreLogger(t)
+
+	dir := t.TempDir()
+	pathA := filepath.Join(dir, "a.log")
+	pathB := filepath.Join(dir, "b.log")
+
+	require.NoError(t, Setup(pathA))
+	firstFile := logFile
+
+	require.NoError(t, Setup(pathB))
+
+	_, writeErr := firstFile.WriteString("should fail")
+	assert.Error(t, writeErr, "first file should be closed after second Setup call")
+	assert.FileExists(t, pathB)
+}
+
+func TestSetup_Integration_LogReachesFile(t *testing.T) {
+	saveAndRestoreLogger(t)
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "grove.log")
+
+	require.NoError(t, Setup(path))
+	log.Info("integration test message", "key", "value")
+
+	content, err := os.ReadFile(path)
+	require.NoError(t, err)
+
+	text := string(content)
+	assert.Contains(t, text, "integration test message")
+	assert.Contains(t, text, "key=value")
+	assert.NotContains(t, text, "\x1b[", "file should not contain ANSI codes")
 }
