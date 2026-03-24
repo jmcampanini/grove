@@ -29,6 +29,7 @@ func init() {
 		&cobra.Group{ID: "worktree", Title: "Worktree Commands:"},
 		&cobra.Group{ID: "pr", Title: "Pull Request Commands:"},
 		&cobra.Group{ID: "config", Title: "Configuration Commands:"},
+		&cobra.Group{ID: "utility", Title: "Utility Commands:"},
 	)
 	rootCmd.SetHelpCommandGroupID("config")
 	rootCmd.SetCompletionCommandGroupID("config")
