@@ -45,7 +45,7 @@ func runResolve(cmd *cobra.Command, args []string) error {
 	cfg := config.DefaultConfig()
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		log.Debug("resolve: failed to get home directory, using defaults", "err", err)
+		return fmt.Errorf("failed to get user home directory: %w", err)
 	}
 	if homeDir != "" {
 		paths := config.BootstrapConfigPaths(targetPath, homeDir)
@@ -106,7 +106,7 @@ func resolveGitDir(targetPath string, ctx *resolveContext) (string, error) {
 	log.Debug("resolve: path is not a worktree, trying workspace discovery", "path", targetPath)
 	wsRoot, err := resolveWorkspaceRoot(targetPath, ctx.primaryBranches, ctx.timeout)
 	if err != nil {
-		return "", fmt.Errorf("%s is not a grove workspace or worktree", targetPath)
+		return "", fmt.Errorf("%s is not a grove workspace or worktree: %w", targetPath, err)
 	}
 	return wsRoot, nil
 }

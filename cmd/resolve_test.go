@@ -75,6 +75,17 @@ func TestExecuteResolve(t *testing.T) {
 			wantSuffix: "/develop",
 		},
 		{
+			name: "subdirectory within worktree resolves to primary",
+			setup: func(t *testing.T) string {
+				root := t.TempDir()
+				setupResolveWorkspace(t, root, "main")
+				sub := filepath.Join(root, "main", "subdir")
+				require.NoError(t, os.Mkdir(sub, 0755))
+				return sub
+			},
+			wantSuffix: "/main",
+		},
+		{
 			name: "non-existent path returns error",
 			setup: func(t *testing.T) string {
 				return filepath.Join(t.TempDir(), "nope")
