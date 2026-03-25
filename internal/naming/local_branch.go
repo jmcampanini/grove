@@ -17,16 +17,9 @@ type LocalBranchNamer struct {
 func NewLocalBranchNamer(localBranchCfg config.LocalBranchConfig, slugCfg config.SlugifyConfig) *LocalBranchNamer {
 	return &LocalBranchNamer{
 		branchPrefix:      localBranchCfg.BranchPrefix,
+		slugifyOpts:       SlugifyOptionsFromConfig(slugCfg),
 		stripBranchPrefix: localBranchCfg.StripBranchPrefix,
 		worktreePrefix:    localBranchCfg.WorktreePrefix,
-		slugifyOpts: SlugifyOptions{
-			CollapseDashes:     slugCfg.CollapseDashes,
-			HashLength:         slugCfg.HashLength,
-			Lowercase:          slugCfg.Lowercase,
-			MaxLength:          slugCfg.MaxLength,
-			ReplaceNonAlphaNum: slugCfg.ReplaceNonAlphanum,
-			TrimDashes:         slugCfg.TrimDashes,
-		},
 	}
 }
 
