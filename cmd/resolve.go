@@ -42,19 +42,17 @@ func runResolve(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	cfg := config.DefaultConfig()
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("failed to get user home directory: %w", err)
 	}
-	if homeDir != "" {
-		paths := config.BootstrapConfigPaths(targetPath, homeDir)
-		result, loadErr := config.NewDefaultLoader().Load(paths)
-		if loadErr != nil {
-			return fmt.Errorf("failed to load config: %w", loadErr)
-		}
-		cfg = result.Config
+
+	paths := config.BootstrapConfigPaths(targetPath, homeDir)
+	result, err := config.NewDefaultLoader().Load(paths)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
 	}
+	cfg := result.Config
 
 	ctx := &resolveContext{
 		primaryBranches: cfg.Workspace.PrimaryBranches,
@@ -113,7 +111,15 @@ func resolveGitDir(targetPath string, ctx *resolveContext) (string, error) {
 
 func resolveTargetPath(args []string) (string, error) {
 	if len(args) > 0 {
-		return filepath.Abs(args[0])
+		abs, err := filepath.Abs(args[0])
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve path %q: %w", args[0], err)
+		}
+		return abs, nil
 	}
-	return os.Getwd()
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("failed to get current directory: %w", err)
+	}
+	return cwd, nil
 }
