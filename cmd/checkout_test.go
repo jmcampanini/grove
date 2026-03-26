@@ -94,6 +94,26 @@ func TestExecuteCheckout(t *testing.T) {
 			wantOutput: "wt-fix-login",
 		},
 		{
+			name: "remote branch with local already existing skips fetch",
+			ref:  "origin/feature/fix-login",
+			gitMock: func(workspaceDir string) *mockGit {
+				return &mockGit{
+					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
+					listRemotesFn: func() ([]string, error) {
+						return []string{"origin"}, nil
+					},
+					branchExistsFn: func(branchName string, _ bool) (bool, error) {
+						return branchName == "feature/fix-login", nil
+					},
+					fetchRemoteBranchFn: func(_, _, _ string) error {
+						t.Error("FetchRemoteBranch should not be called when branch exists locally")
+						return nil
+					},
+				}
+			},
+			wantOutput: "wt-fix-login",
+		},
+		{
 			name: "worktree already exists for branch",
 			ref:  "feature/fix-login",
 			gitMock: func(workspaceDir string) *mockGit {
