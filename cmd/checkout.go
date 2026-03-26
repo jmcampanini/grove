@@ -30,10 +30,7 @@ For remote branches, prefix with the remote name:
   grove checkout upstream/hotfix-123
 
 The first path segment is checked against known git remotes. If it matches
-a remote, the remainder is treated as the branch name on that remote.
-
-Use --fetch to sync the remote before checking out:
-  grove checkout origin/feature/fix-login --fetch
+a remote, the branch is fetched from that remote and a worktree is created.
 
 To start new work (create a new branch), use 'grove create' instead.
 To check out a pull request by number, use 'grove pr checkout' instead.`,
@@ -42,14 +39,12 @@ To check out a pull request by number, use 'grove pr checkout' instead.`,
 }
 
 func init() {
-	checkoutCmd.Flags().Bool("fetch", false, "fetch from the remote before checkout (requires a remote ref)")
 	checkoutCmd.GroupID = "worktree"
 	rootCmd.AddCommand(checkoutCmd)
 }
 
 type checkoutContext struct {
 	cfg       config.Config
-	fetch     bool
 	gitClient git.Git
 }
 
@@ -63,11 +58,6 @@ func (p parsedRef) isRemote() bool {
 }
 
 func runCheckout(cmd *cobra.Command, args []string) error {
-	fetch, err := cmd.Flags().GetBool("fetch")
-	if err != nil {
-		return err
-	}
-
 	rt, err := loadCommandRuntime()
 	if err != nil {
 		return err
@@ -75,7 +65,6 @@ func runCheckout(cmd *cobra.Command, args []string) error {
 
 	ctx := &checkoutContext{
 		cfg:       rt.cfg,
-		fetch:     fetch,
 		gitClient: rt.gitClient,
 	}
 
@@ -90,10 +79,6 @@ func executeCheckout(stdout io.Writer, ctx *checkoutContext, ref string) error {
 	parsed, err := parseRef(ctx.gitClient, ref)
 	if err != nil {
 		return fmt.Errorf("failed to parse ref: %w", err)
-	}
-
-	if ctx.fetch && !parsed.isRemote() {
-		return fmt.Errorf("--fetch requires a remote ref (e.g., 'origin/%s')", ref)
 	}
 
 	if parsed.isRemote() {
@@ -143,23 +128,9 @@ func checkoutLocalBranch(stdout io.Writer, ctx *checkoutContext, branchName stri
 }
 
 func checkoutRemoteBranch(stdout io.Writer, ctx *checkoutContext, parsed parsedRef) error {
-	if ctx.fetch {
-		log.WithPrefix("checkout").Info("fetching remote", "remote", parsed.remoteName)
-		if _, err := ctx.gitClient.FetchRemote(parsed.remoteName); err != nil {
-			return fmt.Errorf("failed to fetch remote %q: %w", parsed.remoteName, err)
-		}
-	}
-
-	exists, err := ctx.gitClient.BranchExists(parsed.branchName, false)
-	if err != nil {
-		return fmt.Errorf("failed to check if branch exists: %w", err)
-	}
-
-	if !exists || ctx.fetch {
-		log.WithPrefix("checkout").Info("fetching branch from remote", "remote", parsed.remoteName, "branch", parsed.branchName)
-		if err := ctx.gitClient.FetchRemoteBranch(parsed.remoteName, parsed.branchName, parsed.branchName); err != nil {
-			return fmt.Errorf("failed to fetch branch %q from remote %q: %w", parsed.branchName, parsed.remoteName, err)
-		}
+	log.WithPrefix("checkout").Info("fetching branch from remote", "remote", parsed.remoteName, "branch", parsed.branchName)
+	if err := ctx.gitClient.FetchRemoteBranch(parsed.remoteName, parsed.branchName, parsed.branchName); err != nil {
+		return fmt.Errorf("failed to fetch branch %q from remote %q: %w", parsed.branchName, parsed.remoteName, err)
 	}
 
 	return createWorktreeForBranch(stdout, ctx, parsed.branchName)

@@ -17,7 +17,6 @@ func TestExecuteCheckout(t *testing.T) {
 	tests := []struct {
 		name           string
 		ref            string
-		fetch          bool
 		gitMock        func(workspaceDir string) *mockGit
 		setupFS        func(t *testing.T, workspaceDir string)
 		wantErr        bool
@@ -93,106 +92,6 @@ func TestExecuteCheckout(t *testing.T) {
 				}
 			},
 			wantOutput: "wt-fix-login",
-		},
-		{
-			name: "remote branch with local already existing skips fetch",
-			ref:  "origin/feature/fix-login",
-			gitMock: func(workspaceDir string) *mockGit {
-				return &mockGit{
-					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
-					listRemotesFn: func() ([]string, error) {
-						return []string{"origin"}, nil
-					},
-					branchExistsFn: func(branchName string, _ bool) (bool, error) {
-						return branchName == "feature/fix-login", nil
-					},
-					fetchRemoteBranchFn: func(_, _, _ string) error {
-						t.Error("FetchRemoteBranch should not be called when branch exists locally")
-						return nil
-					},
-				}
-			},
-			wantOutput: "wt-fix-login",
-		},
-		{
-			name:  "remote ref with fetch flag runs FetchRemote",
-			ref:   "origin/feature/fix-login",
-			fetch: true,
-			gitMock: func(workspaceDir string) *mockGit {
-				fetchRemoteCalled := false
-				return &mockGit{
-					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
-					listRemotesFn: func() ([]string, error) {
-						return []string{"origin"}, nil
-					},
-					fetchRemoteFn: func(remoteName string) (string, error) {
-						assert.Equal(t, "origin", remoteName)
-						fetchRemoteCalled = true
-						return "", nil
-					},
-					fetchRemoteBranchFn: func(_, _, _ string) error {
-						assert.True(t, fetchRemoteCalled, "FetchRemote should be called before FetchRemoteBranch")
-						return nil
-					},
-				}
-			},
-			wantOutput: "wt-fix-login",
-		},
-		{
-			name:  "fetch flag updates existing local branch from remote",
-			ref:   "origin/feature/fix-login",
-			fetch: true,
-			gitMock: func(workspaceDir string) *mockGit {
-				fetchRemoteBranchCalled := false
-				return &mockGit{
-					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
-					listRemotesFn: func() ([]string, error) {
-						return []string{"origin"}, nil
-					},
-					branchExistsFn: func(branchName string, _ bool) (bool, error) {
-						return branchName == "feature/fix-login", nil
-					},
-					fetchRemoteFn: func(remoteName string) (string, error) {
-						return "", nil
-					},
-					fetchRemoteBranchFn: func(remote, remoteRef, localRef string) error {
-						assert.Equal(t, "origin", remote)
-						assert.Equal(t, "feature/fix-login", remoteRef)
-						assert.Equal(t, "feature/fix-login", localRef)
-						fetchRemoteBranchCalled = true
-						return nil
-					},
-					createWorktreeForExistingBranchFn: func(_, _ string) error {
-						assert.True(t, fetchRemoteBranchCalled, "FetchRemoteBranch should be called before creating worktree")
-						return nil
-					},
-				}
-			},
-			wantOutput: "wt-fix-login",
-		},
-		{
-			name:  "fetch flag without remote ref errors",
-			ref:   "my-local-branch",
-			fetch: true,
-			gitMock: func(workspaceDir string) *mockGit {
-				return &mockGit{}
-			},
-			wantErr:        true,
-			wantErrContain: "--fetch requires a remote ref",
-		},
-		{
-			name:  "fetch flag with slash ref that is not a remote errors",
-			ref:   "feature/some-branch",
-			fetch: true,
-			gitMock: func(workspaceDir string) *mockGit {
-				return &mockGit{
-					listRemotesFn: func() ([]string, error) {
-						return []string{"origin"}, nil
-					},
-				}
-			},
-			wantErr:        true,
-			wantErrContain: "--fetch requires a remote ref",
 		},
 		{
 			name: "worktree already exists for branch",
@@ -322,23 +221,6 @@ func TestExecuteCheckout(t *testing.T) {
 			wantErrContain: "failed to fetch branch",
 		},
 		{
-			name:  "fetch remote error with fetch flag",
-			ref:   "origin/feature/fix-login",
-			fetch: true,
-			gitMock: func(_ string) *mockGit {
-				return &mockGit{
-					listRemotesFn: func() ([]string, error) {
-						return []string{"origin"}, nil
-					},
-					fetchRemoteFn: func(_ string) (string, error) {
-						return "", assert.AnError
-					},
-				}
-			},
-			wantErr:        true,
-			wantErrContain: "failed to fetch remote",
-		},
-		{
 			name: "upstream remote works",
 			ref:  "upstream/hotfix-123",
 			gitMock: func(workspaceDir string) *mockGit {
@@ -375,22 +257,6 @@ func TestExecuteCheckout(t *testing.T) {
 			ref:  "my-branch",
 			gitMock: func(_ string) *mockGit {
 				return &mockGit{
-					branchExistsFn: func(_ string, _ bool) (bool, error) {
-						return false, assert.AnError
-					},
-				}
-			},
-			wantErr:        true,
-			wantErrContain: "failed to check if branch exists",
-		},
-		{
-			name: "BranchExists error in remote branch path",
-			ref:  "origin/feature/fix-login",
-			gitMock: func(_ string) *mockGit {
-				return &mockGit{
-					listRemotesFn: func() ([]string, error) {
-						return []string{"origin"}, nil
-					},
 					branchExistsFn: func(_ string, _ bool) (bool, error) {
 						return false, assert.AnError
 					},
@@ -441,7 +307,6 @@ func TestExecuteCheckout(t *testing.T) {
 			var stdout bytes.Buffer
 			ctx := &checkoutContext{
 				cfg:       defaultTestConfig(),
-				fetch:     tt.fetch,
 				gitClient: tt.gitMock(workspaceDir),
 			}
 
