@@ -36,6 +36,10 @@ func TestDefaultConfig(t *testing.T) {
 	assert.Equal(t, "{{.BranchName}}", cfg.PullRequest.BranchTemplate)
 	assert.Equal(t, "pr-", cfg.PullRequest.WorktreePrefix)
 
+	// Log defaults
+	assert.NotEmpty(t, cfg.Log.File)
+	assert.Contains(t, cfg.Log.File, "grove.log")
+
 	// Workspace defaults
 	assert.Equal(t, []string{"main", "develop", "master"}, cfg.Workspace.PrimaryBranches)
 
@@ -702,4 +706,48 @@ func TestNewDefaultLoader(t *testing.T) {
 	loader := NewDefaultLoader()
 	assert.NotNil(t, loader)
 	assert.IsType(t, OSFileSystem{}, loader.fs)
+}
+
+func TestDefaultLogFilePath(t *testing.T) {
+	t.Run("uses XDG_STATE_HOME when set", func(t *testing.T) {
+		t.Setenv("XDG_STATE_HOME", "/custom/state")
+		assert.Equal(t, "/custom/state/grove/grove.log", DefaultLogFilePath())
+	})
+
+	t.Run("falls back to ~/.local/state", func(t *testing.T) {
+		t.Setenv("XDG_STATE_HOME", "")
+		assert.Contains(t, DefaultLogFilePath(), ".local/state/grove/grove.log")
+	})
+}
+
+func TestLoad_LogFile(t *testing.T) {
+	tests := []struct {
+		name     string
+		toml     string
+		wantFile string
+	}{
+		{
+			name:     "custom path",
+			toml:     "[log]\nfile = \"/tmp/custom-grove.log\"\n",
+			wantFile: "/tmp/custom-grove.log",
+		},
+		{
+			name:     "disabled with empty string",
+			toml:     "[log]\nfile = \"\"\n",
+			wantFile: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			configPath := filepath.Join(tmpDir, "grove.toml")
+			require.NoError(t, os.WriteFile(configPath, []byte(tt.toml), 0644))
+
+			loader := NewDefaultLoader()
+			result, err := loader.Load([]string{configPath})
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantFile, result.Config.Log.File)
+		})
+	}
 }

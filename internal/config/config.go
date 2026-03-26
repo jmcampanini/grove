@@ -10,6 +10,7 @@ type Config struct {
 	Git         GitConfig         `toml:"git"`
 	GitHub      GitHubConfig      `toml:"github"`
 	LocalBranch LocalBranchConfig `toml:"local_branch"`
+	Log         LogConfig         `toml:"log"`
 	PullRequest PullRequestConfig `toml:"pull_request"`
 	Slugify     SlugifyConfig     `toml:"slugify"`
 	Workspace   WorkspaceConfig   `toml:"workspace"`
@@ -52,6 +53,23 @@ type GitHubConfig struct {
 	PreviewCacheTTL time.Duration `toml:"preview_cache_ttl"` // TTL for FZF preview cache (e.g., "5m"); 0 disables
 }
 
+// LocalBranchConfig configures local branch worktree naming.
+type LocalBranchConfig struct {
+	BranchPrefix string `toml:"branch_prefix"` // e.g., "feature/"
+
+	// StripBranchPrefix is a list of prefixes to strip from branch names.
+	// Only the first matching prefix is stripped (checked in list order).
+	// e.g., branch "feature/add-auth" with ["fix/", "feature/"] -> "add-auth"
+	StripBranchPrefix []string `toml:"strip_branch_prefix"`
+
+	WorktreePrefix string `toml:"worktree_prefix"` // e.g., "wt-"
+}
+
+// LogConfig configures file logging.
+type LogConfig struct {
+	File string `toml:"file"` // Path to log file; empty string disables file logging
+}
+
 // PullRequestConfig configures pull request worktree naming.
 type PullRequestConfig struct {
 	BranchTemplate string `toml:"branch_template"` // Template for local branch name (e.g., "{{.BranchName}}")
@@ -66,18 +84,6 @@ type SlugifyConfig struct {
 	MaxLength          int  `toml:"max_length"`
 	ReplaceNonAlphanum bool `toml:"replace_non_alphanum"`
 	TrimDashes         bool `toml:"trim_dashes"`
-}
-
-// LocalBranchConfig configures local branch worktree naming.
-type LocalBranchConfig struct {
-	BranchPrefix string `toml:"branch_prefix"` // e.g., "feature/"
-
-	// StripBranchPrefix is a list of prefixes to strip from branch names.
-	// Only the first matching prefix is stripped (checked in list order).
-	// e.g., branch "feature/add-auth" with ["fix/", "feature/"] -> "add-auth"
-	StripBranchPrefix []string `toml:"strip_branch_prefix"`
-
-	WorktreePrefix string `toml:"worktree_prefix"` // e.g., "wt-"
 }
 
 // WorkspaceConfig configures workspace root detection.

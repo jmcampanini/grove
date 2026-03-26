@@ -3,6 +3,7 @@ package cmd
 import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
+	"github.com/jmcampanini/grove-cli/internal/logging"
 	"github.com/spf13/cobra"
 )
 
@@ -29,6 +30,7 @@ func init() {
 		&cobra.Group{ID: "worktree", Title: "Worktree Commands:"},
 		&cobra.Group{ID: "pr", Title: "Pull Request Commands:"},
 		&cobra.Group{ID: "config", Title: "Configuration Commands:"},
+		&cobra.Group{ID: "utility", Title: "Utility Commands:"},
 	)
 	rootCmd.SetHelpCommandGroupID("config")
 	rootCmd.SetCompletionCommandGroupID("config")
@@ -67,5 +69,6 @@ func configureLogStyles() {
 
 // Execute runs the root command.
 func Execute() error {
+	defer logging.Close()
 	return rootCmd.Execute()
 }

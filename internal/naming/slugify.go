@@ -4,6 +4,8 @@ import (
 	"hash/fnv"
 	"regexp"
 	"strings"
+
+	"github.com/jmcampanini/grove-cli/internal/config"
 )
 
 // SlugifyOptions configures the behavior of the Slugify function.
@@ -27,6 +29,17 @@ type SlugifyOptions struct {
 
 	// TrimDashes removes leading and trailing dashes from the result.
 	TrimDashes bool
+}
+
+func SlugifyOptionsFromConfig(cfg config.SlugifyConfig) SlugifyOptions {
+	return SlugifyOptions{
+		CollapseDashes:     cfg.CollapseDashes,
+		HashLength:         cfg.HashLength,
+		Lowercase:          cfg.Lowercase,
+		MaxLength:          cfg.MaxLength,
+		ReplaceNonAlphaNum: cfg.ReplaceNonAlphanum,
+		TrimDashes:         cfg.TrimDashes,
+	}
 }
 
 var (

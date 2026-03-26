@@ -14,8 +14,13 @@ import (
 
 func initGitRepo(t *testing.T, dir string) {
 	t.Helper()
+	initGitRepoWithBranch(t, dir, "main")
+}
+
+func initGitRepoWithBranch(t *testing.T, dir, branch string) {
+	t.Helper()
 	for _, args := range [][]string{
-		{"init", "-b", "main"},
+		{"init", "-b", branch},
 		{"config", "user.email", "test@test.com"},
 		{"config", "user.name", "Test"},
 		{"commit", "--no-gpg-sign", "--allow-empty", "-m", "init"},
