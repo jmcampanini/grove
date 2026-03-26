@@ -338,6 +338,64 @@ func TestExecuteCheckout(t *testing.T) {
 			wantErr:        true,
 			wantErrContain: "branch name cannot be empty after remote prefix",
 		},
+		{
+			name: "BranchExists error in local branch path",
+			ref:  "my-branch",
+			gitMock: func(_ string) *mockGit {
+				return &mockGit{
+					branchExistsFn: func(_ string, _ bool) (bool, error) {
+						return false, assert.AnError
+					},
+				}
+			},
+			wantErr:        true,
+			wantErrContain: "failed to check if branch exists",
+		},
+		{
+			name: "BranchExists error in remote branch path",
+			ref:  "origin/feature/fix-login",
+			gitMock: func(_ string) *mockGit {
+				return &mockGit{
+					listRemotesFn: func() ([]string, error) {
+						return []string{"origin"}, nil
+					},
+					branchExistsFn: func(_ string, _ bool) (bool, error) {
+						return false, assert.AnError
+					},
+				}
+			},
+			wantErr:        true,
+			wantErrContain: "failed to check if branch exists",
+		},
+		{
+			name: "ListWorktrees error",
+			ref:  "feature/fix-login",
+			gitMock: func(_ string) *mockGit {
+				return &mockGit{
+					branchExistsFn: func(_ string, _ bool) (bool, error) {
+						return true, nil
+					},
+					listWorktreesFn: func() ([]git.Worktree, error) {
+						return nil, assert.AnError
+					},
+				}
+			},
+			wantErr:        true,
+			wantErrContain: "failed to list worktrees",
+		},
+		{
+			name: "GetDefaultRemote error in local branch not found",
+			ref:  "my-branch",
+			gitMock: func(_ string) *mockGit {
+				return &mockGit{
+					getDefaultRemoteFn: func(_ string) (string, error) {
+						return "", assert.AnError
+					},
+				}
+			},
+			wantErr:        true,
+			wantErrContain: "failed to determine remote",
+		},
 	}
 
 	for _, tt := range tests {
@@ -430,7 +488,6 @@ func TestParseRef(t *testing.T) {
 			remotes: []string{"origin"},
 			wantParsed: parsedRef{
 				branchName: "feature/fix-login",
-				isRemote:   true,
 				remoteName: "origin",
 			},
 		},
@@ -440,7 +497,6 @@ func TestParseRef(t *testing.T) {
 			remotes: []string{"origin", "upstream"},
 			wantParsed: parsedRef{
 				branchName: "main",
-				isRemote:   true,
 				remoteName: "upstream",
 			},
 		},

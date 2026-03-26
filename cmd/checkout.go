@@ -55,8 +55,11 @@ type checkoutContext struct {
 
 type parsedRef struct {
 	branchName string
-	isRemote   bool
 	remoteName string
+}
+
+func (p parsedRef) isRemote() bool {
+	return p.remoteName != ""
 }
 
 func runCheckout(cmd *cobra.Command, args []string) error {
@@ -89,11 +92,11 @@ func executeCheckout(stdout io.Writer, ctx *checkoutContext, ref string) error {
 		return fmt.Errorf("failed to parse ref: %w", err)
 	}
 
-	if ctx.fetch && !parsed.isRemote {
+	if ctx.fetch && !parsed.isRemote() {
 		return fmt.Errorf("--fetch requires a remote ref (e.g., 'origin/%s')", ref)
 	}
 
-	if parsed.isRemote {
+	if parsed.isRemote() {
 		return checkoutRemoteBranch(stdout, ctx, parsed)
 	}
 	return checkoutLocalBranch(stdout, ctx, parsed.branchName)
@@ -119,7 +122,6 @@ func parseRef(gitClient git.Git, ref string) (parsedRef, error) {
 	}
 	return parsedRef{
 		branchName: branchName,
-		isRemote:   true,
 		remoteName: candidateRemote,
 	}, nil
 }
@@ -130,7 +132,10 @@ func checkoutLocalBranch(stdout io.Writer, ctx *checkoutContext, branchName stri
 		return fmt.Errorf("failed to check if branch exists: %w", err)
 	}
 	if !exists {
-		remote, _ := ctx.gitClient.GetDefaultRemote("origin")
+		remote, err := ctx.gitClient.GetDefaultRemote("origin")
+		if err != nil {
+			return fmt.Errorf("failed to determine remote: %w", err)
+		}
 		return fmt.Errorf("branch %q not found locally; did you mean %q?", branchName, remote+"/"+branchName)
 	}
 
