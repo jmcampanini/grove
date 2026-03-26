@@ -139,6 +139,38 @@ func TestExecuteCheckout(t *testing.T) {
 			wantOutput: "wt-fix-login",
 		},
 		{
+			name:  "fetch flag updates existing local branch from remote",
+			ref:   "origin/feature/fix-login",
+			fetch: true,
+			gitMock: func(workspaceDir string) *mockGit {
+				fetchRemoteBranchCalled := false
+				return &mockGit{
+					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
+					listRemotesFn: func() ([]string, error) {
+						return []string{"origin"}, nil
+					},
+					branchExistsFn: func(branchName string, _ bool) (bool, error) {
+						return branchName == "feature/fix-login", nil
+					},
+					fetchRemoteFn: func(remoteName string) (string, error) {
+						return "", nil
+					},
+					fetchRemoteBranchFn: func(remote, remoteRef, localRef string) error {
+						assert.Equal(t, "origin", remote)
+						assert.Equal(t, "feature/fix-login", remoteRef)
+						assert.Equal(t, "feature/fix-login", localRef)
+						fetchRemoteBranchCalled = true
+						return nil
+					},
+					createWorktreeForExistingBranchFn: func(_, _ string) error {
+						assert.True(t, fetchRemoteBranchCalled, "FetchRemoteBranch should be called before creating worktree")
+						return nil
+					},
+				}
+			},
+			wantOutput: "wt-fix-login",
+		},
+		{
 			name:  "fetch flag without remote ref errors",
 			ref:   "my-local-branch",
 			fetch: true,

@@ -155,7 +155,7 @@ func checkoutRemoteBranch(stdout io.Writer, ctx *checkoutContext, parsed parsedR
 		return fmt.Errorf("failed to check if branch exists: %w", err)
 	}
 
-	if !exists {
+	if !exists || ctx.fetch {
 		log.WithPrefix("checkout").Info("fetching branch from remote", "remote", parsed.remoteName, "branch", parsed.branchName)
 		if err := ctx.gitClient.FetchRemoteBranch(parsed.remoteName, parsed.branchName, parsed.branchName); err != nil {
 			return fmt.Errorf("failed to fetch branch %q from remote %q: %w", parsed.branchName, parsed.remoteName, err)
