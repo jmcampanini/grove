@@ -286,6 +286,22 @@ func TestExecuteCheckout(t *testing.T) {
 			wantErrContain: "failed to check if branch exists",
 		},
 		{
+			name: "BranchExists error in remote branch path",
+			ref:  "origin/feature/fix-login",
+			gitMock: func(_ string) *mockGit {
+				return &mockGit{
+					listRemotesFn: func() ([]string, error) {
+						return []string{"origin"}, nil
+					},
+					branchExistsFn: func(_ string, _ bool) (bool, error) {
+						return false, assert.AnError
+					},
+				}
+			},
+			wantErr:        true,
+			wantErrContain: "failed to check if branch exists",
+		},
+		{
 			name: "ListWorktrees error",
 			ref:  "feature/fix-login",
 			gitMock: func(_ string) *mockGit {
