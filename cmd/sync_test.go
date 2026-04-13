@@ -117,6 +117,21 @@ func TestExecuteSync(t *testing.T) {
 			wantErrContain: "failed to reset",
 		},
 		{
+			name: "ref exists check failure propagates error",
+			gitMock: &mockGit{
+				getCurrentBranchFn: func() (string, error) { return "feature/my-branch", nil },
+				listLocalBranchesFn: func() ([]git.LocalBranch, error) {
+					return []git.LocalBranch{
+						git.NewLocalBranch("feature/my-branch", "origin/feature/my-branch", "", true, 0, 0, git.Commit{}),
+					}, nil
+				},
+				fetchRemoteFn: func(string) (string, error) { return "", nil },
+				refExistsFn:   func(string) (bool, error) { return false, errors.New("git broken") },
+			},
+			wantErr:        true,
+			wantErrContain: "failed to verify ref",
+		},
+		{
 			name: "upstream ref gone after fetch returns error with guidance",
 			gitMock: &mockGit{
 				getCurrentBranchFn: func() (string, error) { return "feature/my-branch", nil },
@@ -129,7 +144,7 @@ func TestExecuteSync(t *testing.T) {
 				refExistsFn:   func(string) (bool, error) { return false, nil },
 			},
 			wantErr:        true,
-			wantErrContain: "does not exist on the remote",
+			wantErrContain: "git push -u origin feature/my-branch:feature/my-branch",
 		},
 		{
 			name: "reset hard is called with correct upstream ref",

@@ -543,7 +543,7 @@ func (g *GitCli) RefExists(ref string) (bool, error) {
 		return true, nil
 	}
 	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
 		return false, nil
 	}
 	return false, err

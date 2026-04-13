@@ -554,6 +554,50 @@ func TestBranchExists_Integration_CaseInsensitive(t *testing.T) {
 }
 
 // =============================================================================
+// RefExists tests
+// =============================================================================
+
+func TestRefExists_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	repo := newTestRepo(t)
+	repo.commit("initial commit")
+	repo.createBranch("feature")
+
+	exists, err := repo.Git.RefExists("feature")
+	require.NoError(t, err)
+	assert.True(t, exists)
+
+	exists, err = repo.Git.RefExists("HEAD")
+	require.NoError(t, err)
+	assert.True(t, exists)
+
+	exists, err = repo.Git.RefExists("nonexistent-ref")
+	require.NoError(t, err)
+	assert.False(t, exists)
+}
+
+func TestRefExists_Integration_RemoteTrackingRef(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	repo := newTestRepo(t)
+	repo.commit("initial commit")
+	repo.addRemote("origin")
+
+	exists, err := repo.Git.RefExists("origin/main")
+	require.NoError(t, err)
+	assert.True(t, exists)
+
+	exists, err = repo.Git.RefExists("origin/nonexistent")
+	require.NoError(t, err)
+	assert.False(t, exists)
+}
+
+// =============================================================================
 // ListWorktrees tests
 // =============================================================================
 
