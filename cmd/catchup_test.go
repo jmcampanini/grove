@@ -61,7 +61,6 @@ func TestExecuteCatchup(t *testing.T) {
 			gitMock: &mockGit{
 				getCurrentBranchFn:     func() (string, error) { return "feature/x", nil },
 				getRepoDefaultBranchFn: func(string) (string, error) { return "main", nil },
-				fetchRemoteFn:          func(string) (string, error) { return "", nil },
 				getWorktreeRootFn:      func() (string, error) { return "/workspace/wt-x", nil },
 				isWorktreeDirtyFn:      func(string) (bool, error) { return true, nil },
 			},
