@@ -3,6 +3,7 @@ module github.com/jmcampanini/grove-cli
 go 1.25.5
 
 require (
+	github.com/246859/tail v1.0.0
 	github.com/BurntSushi/toml v1.6.0
 	github.com/charmbracelet/bubbles v1.0.0
 	github.com/charmbracelet/glamour v1.0.0
