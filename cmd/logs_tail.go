@@ -63,6 +63,9 @@ func validateTailLines(n int) error {
 }
 
 func readTail(f *os.File, n int) ([]byte, error) {
+	// tail.Tail treats \n as a separator, not a terminator, so a file ending
+	// in \n has an empty trailing segment that consumes one of the N lines.
+	// Over-fetch by one and trim back to exactly n lines.
 	data, err := tail.Tail(f, n+1)
 	if err != nil {
 		return nil, fmt.Errorf("reading log file tail: %w", err)

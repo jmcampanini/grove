@@ -46,6 +46,24 @@ func TestReadTail(t *testing.T) {
 			n:        2,
 			expected: "b\nc",
 		},
+		{
+			name:     "n equals 1",
+			content:  "a\nb\nc\n",
+			n:        1,
+			expected: "c\n",
+		},
+		{
+			name:     "blank lines count",
+			content:  "a\n\nb\nc\n",
+			n:        2,
+			expected: "b\nc\n",
+		},
+		{
+			name:     "exactly N lines",
+			content:  "a\nb\nc\n",
+			n:        3,
+			expected: "a\nb\nc\n",
+		},
 	}
 
 	for _, tt := range tests {
