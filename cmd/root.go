@@ -28,6 +28,7 @@ func init() {
 
 	rootCmd.AddGroup(
 		&cobra.Group{ID: "worktree", Title: "Worktree Commands:"},
+		&cobra.Group{ID: "git", Title: "Git Commands:"},
 		&cobra.Group{ID: "pr", Title: "Pull Request Commands:"},
 		&cobra.Group{ID: "config", Title: "Configuration Commands:"},
 		&cobra.Group{ID: "utility", Title: "Utility Commands:"},
