@@ -664,6 +664,15 @@ func (g *GitCli) DeleteBranch(name string, force bool) error {
 	return g.executeMutatingGitCommand("failed to delete branch", "branch", flag, name)
 }
 
+func (g *GitCli) GetStatus(absPath string) (string, error) {
+	g.log.Debug("Getting worktree status", "path", absPath)
+	output, err := g.executeGitCommand("-C", absPath, "status")
+	if err != nil {
+		return "", fmt.Errorf("failed to get worktree status: %w", err)
+	}
+	return output, nil
+}
+
 func (g *GitCli) IsWorktreeDirty(absPath string) (bool, error) {
 	g.log.Debug("Checking worktree dirty state", "path", absPath)
 	output, err := g.executeGitCommand("-C", absPath, "status", "--porcelain")
@@ -671,6 +680,16 @@ func (g *GitCli) IsWorktreeDirty(absPath string) (bool, error) {
 		return false, fmt.Errorf("failed to check worktree dirty state: %w", err)
 	}
 	return output != "", nil
+}
+
+func (g *GitCli) Merge(ref string) (string, error) {
+	g.log.Info("Merging ref", "ref", ref)
+	return g.executeMutatingGitCommandWithOutput("failed to merge", "merge", "--no-edit", ref)
+}
+
+func (g *GitCli) ResetHard(ref string) error {
+	g.log.Info("Resetting to ref", "ref", ref)
+	return g.executeMutatingGitCommand("failed to reset", "reset", "--hard", ref)
 }
 
 func (g *GitCli) PruneWorktrees() error {

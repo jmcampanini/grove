@@ -57,6 +57,7 @@ type mockGit struct {
 	getDefaultRemoteFn                  func(fallback string) (string, error)
 	getMainWorktreePathFn               func() (string, error)
 	getRepoDefaultBranchFn              func(remoteName string) (string, error)
+	getStatusFn                         func(absPath string) (string, error)
 	getWorkspacePathFn                  func() (string, error)
 	getWorktreeRootFn                   func() (string, error)
 	isWorktreeDirtyFn                   func(absPath string) (bool, error)
@@ -65,8 +66,10 @@ type mockGit struct {
 	listRemotesFn                       func() ([]string, error)
 	listTagsFn                          func() ([]git.Tag, error)
 	listWorktreesFn                     func() ([]git.Worktree, error)
+	mergeFn                             func(ref string) (string, error)
 	pruneWorktreesFn                    func() error
 	removeWorktreeFn                    func(absPath string, force bool) error
+	resetHardFn                         func(ref string) error
 	syncTagsFn                          func(remoteName string) error
 }
 
@@ -154,6 +157,13 @@ func (m *mockGit) GetRepoDefaultBranch(remoteName string) (string, error) {
 	return "main", nil
 }
 
+func (m *mockGit) GetStatus(absPath string) (string, error) {
+	if m.getStatusFn != nil {
+		return m.getStatusFn(absPath)
+	}
+	return "", nil
+}
+
 func (m *mockGit) GetWorkspacePath() (string, error) {
 	if m.getWorkspacePathFn != nil {
 		return m.getWorkspacePathFn()
@@ -210,6 +220,13 @@ func (m *mockGit) IsWorktreeDirty(absPath string) (bool, error) {
 	return false, nil
 }
 
+func (m *mockGit) Merge(ref string) (string, error) {
+	if m.mergeFn != nil {
+		return m.mergeFn(ref)
+	}
+	return "", nil
+}
+
 func (m *mockGit) PruneWorktrees() error {
 	if m.pruneWorktreesFn != nil {
 		return m.pruneWorktreesFn()
@@ -220,6 +237,13 @@ func (m *mockGit) PruneWorktrees() error {
 func (m *mockGit) RemoveWorktree(absPath string, force bool) error {
 	if m.removeWorktreeFn != nil {
 		return m.removeWorktreeFn(absPath, force)
+	}
+	return nil
+}
+
+func (m *mockGit) ResetHard(ref string) error {
+	if m.resetHardFn != nil {
+		return m.resetHardFn(ref)
 	}
 	return nil
 }

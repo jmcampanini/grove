@@ -228,9 +228,21 @@ type Git interface {
 	// Will mutate the current git state.
 	DeleteBranch(name string, force bool) error
 
+	// GetStatus returns the human-readable output of git status for the worktree at absPath.
+	GetStatus(absPath string) (string, error)
+
 	// IsWorktreeDirty returns true if the worktree at absPath has uncommitted changes
 	// (modified, staged, or untracked files).
 	IsWorktreeDirty(absPath string) (bool, error)
+
+	// Merge merges the given ref into the current branch using --no-edit.
+	// Returns the merge output (e.g., fast-forward info, file change summary).
+	// Will mutate the current git state.
+	Merge(ref string) (string, error)
+
+	// ResetHard resets the current branch to the given ref, discarding all local changes.
+	// Will mutate the current git state.
+	ResetHard(ref string) error
 
 	// PruneWorktrees removes stale worktree metadata for worktrees whose directories
 	// no longer exist on disk.
