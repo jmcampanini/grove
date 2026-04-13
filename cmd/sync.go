@@ -93,6 +93,21 @@ func executeSync(w io.Writer, ctx *syncContext, force bool) error {
 		return fmt.Errorf("failed to fetch remote %q: %w", remoteName, err)
 	}
 
+	exists, err := ctx.gitClient.RefExists(upstream)
+	if err != nil {
+		return fmt.Errorf("failed to verify ref %q: %w", upstream, err)
+	}
+	if !exists {
+		remoteBranch := strings.TrimPrefix(upstream, remoteName+"/")
+		return fmt.Errorf(
+			"remote tracking branch %q does not exist on the remote\n\n"+
+				"The branch may have been deleted after merge, or was never pushed.\n"+
+				"To push: git push -u %s %s:%s\n"+
+				"To clean up: grove prune",
+			upstream, remoteName, currentBranch, remoteBranch,
+		)
+	}
+
 	if err := checkDirtyAndConfirm(w, ctx.gitClient, force); err != nil {
 		if errors.Is(err, errSyncAborted) {
 			_, err = fmt.Fprintln(w, "Sync aborted.")

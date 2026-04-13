@@ -187,6 +187,9 @@ type Git interface {
 	// BranchExists checks if a branch with the given name already exists.
 	BranchExists(branchName string, caseInsensitive bool) (bool, error)
 
+	// RefExists checks if a git ref (branch, tag, remote tracking ref, etc.) resolves to a valid object.
+	RefExists(ref string) (bool, error)
+
 	// ListWorktrees returns detailed information about all worktrees in the repository.
 	// This includes the path, associated branch (if any), HEAD commit, and various flags.
 	ListWorktrees() ([]Worktree, error)
