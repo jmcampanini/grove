@@ -82,10 +82,6 @@ func executeCatchup(w io.Writer, ctx *catchupContext) error {
 		return fmt.Errorf("already on root branch %q; use 'grove sync' instead", rootBranch)
 	}
 
-	if _, err := ctx.gitClient.FetchRemote(remoteName); err != nil {
-		return fmt.Errorf("failed to fetch remote %q: %w", remoteName, err)
-	}
-
 	worktreeRoot, err := ctx.gitClient.GetWorktreeRoot()
 	if err != nil {
 		return fmt.Errorf("failed to get worktree root: %w", err)
@@ -97,6 +93,10 @@ func executeCatchup(w io.Writer, ctx *catchupContext) error {
 	}
 	if dirty {
 		return errors.New("worktree has uncommitted changes; commit, stash, or reset before running catchup")
+	}
+
+	if _, err := ctx.gitClient.FetchRemote(remoteName); err != nil {
+		return fmt.Errorf("failed to fetch remote %q: %w", remoteName, err)
 	}
 
 	mergeRef := remoteName + "/" + rootBranch

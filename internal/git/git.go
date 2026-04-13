@@ -228,7 +228,7 @@ type Git interface {
 	// Will mutate the current git state.
 	DeleteBranch(name string, force bool) error
 
-	// GetStatus returns the verbose human-readable output of git status for the worktree at absPath.
+	// GetStatus returns the human-readable output of git status for the worktree at absPath.
 	GetStatus(absPath string) (string, error)
 
 	// IsWorktreeDirty returns true if the worktree at absPath has uncommitted changes

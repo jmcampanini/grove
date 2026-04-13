@@ -95,7 +95,8 @@ func executeSync(w io.Writer, ctx *syncContext, force bool) error {
 
 	if err := checkDirtyAndConfirm(w, ctx.gitClient, force); err != nil {
 		if errors.Is(err, errSyncAborted) {
-			return nil
+			_, err = fmt.Fprintln(w, "Sync aborted.")
+			return err
 		}
 		return err
 	}

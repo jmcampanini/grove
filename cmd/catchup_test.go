@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -104,6 +105,23 @@ func TestExecuteCatchup(t *testing.T) {
 				mergeFn:                func(string) (string, error) { return "", nil },
 			},
 			wantOutput: "Merged origin/develop into feature/x\n",
+		},
+		{
+			name: "merge is called with correct ref",
+			gitMock: &mockGit{
+				getCurrentBranchFn:     func() (string, error) { return "feature/x", nil },
+				getRepoDefaultBranchFn: func(string) (string, error) { return "main", nil },
+				fetchRemoteFn:          func(string) (string, error) { return "", nil },
+				getWorktreeRootFn:      func() (string, error) { return "/workspace/wt-x", nil },
+				isWorktreeDirtyFn:      func(string) (bool, error) { return false, nil },
+				mergeFn: func(ref string) (string, error) {
+					if ref != "origin/main" {
+						return "", fmt.Errorf("unexpected merge ref: %s", ref)
+					}
+					return "", nil
+				},
+			},
+			wantOutput: "Merged origin/main into feature/x\n",
 		},
 	}
 

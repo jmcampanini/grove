@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/jmcampanini/grove-cli/internal/git"
@@ -97,6 +98,44 @@ func TestExecuteSync(t *testing.T) {
 				},
 			},
 			wantOutput: "Branch \"feature/x\" has no remote tracking branch.\n",
+		},
+		{
+			name: "reset hard failure propagates error",
+			gitMock: &mockGit{
+				getCurrentBranchFn: func() (string, error) { return "main", nil },
+				listLocalBranchesFn: func() ([]git.LocalBranch, error) {
+					return []git.LocalBranch{
+						git.NewLocalBranch("main", "origin/main", "", true, 0, 0, git.Commit{}),
+					}, nil
+				},
+				fetchRemoteFn:     func(string) (string, error) { return "", nil },
+				getWorktreeRootFn: func() (string, error) { return "/workspace/main", nil },
+				isWorktreeDirtyFn: func(string) (bool, error) { return false, nil },
+				resetHardFn:       func(string) error { return errors.New("lock file exists") },
+			},
+			wantErr:        true,
+			wantErrContain: "failed to reset",
+		},
+		{
+			name: "reset hard is called with correct upstream ref",
+			gitMock: &mockGit{
+				getCurrentBranchFn: func() (string, error) { return "feature/my-branch", nil },
+				listLocalBranchesFn: func() ([]git.LocalBranch, error) {
+					return []git.LocalBranch{
+						git.NewLocalBranch("feature/my-branch", "origin/feature/my-branch", "", true, 0, 0, git.Commit{}),
+					}, nil
+				},
+				fetchRemoteFn:     func(string) (string, error) { return "", nil },
+				getWorktreeRootFn: func() (string, error) { return "/workspace/wt-my-branch", nil },
+				isWorktreeDirtyFn: func(string) (bool, error) { return false, nil },
+				resetHardFn: func(ref string) error {
+					if ref != "origin/feature/my-branch" {
+						return fmt.Errorf("unexpected ref: %s", ref)
+					}
+					return nil
+				},
+			},
+			wantOutput: "Synced feature/my-branch to origin/feature/my-branch\n",
 		},
 	}
 
