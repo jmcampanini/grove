@@ -100,6 +100,11 @@ func executeCatchup(w io.Writer, ctx *catchupContext) error {
 	}
 
 	mergeRef := remoteName + "/" + rootBranch
+
+	if err := requireRefExists(ctx.gitClient, mergeRef, remoteName); err != nil {
+		return err
+	}
+
 	output, err := ctx.gitClient.Merge(mergeRef)
 	if err != nil {
 		return fmt.Errorf("failed to merge %s: %w", mergeRef, err)
@@ -112,4 +117,15 @@ func executeCatchup(w io.Writer, ctx *catchupContext) error {
 	}
 	_, err = fmt.Fprintf(w, "Merged %s into %s\n", mergeRef, currentBranch)
 	return err
+}
+
+func requireRefExists(gitClient git.Git, ref, remoteName string) error {
+	exists, err := gitClient.RefExists(ref)
+	if err != nil {
+		return fmt.Errorf("failed to verify ref %q: %w", ref, err)
+	}
+	if !exists {
+		return fmt.Errorf("ref %q does not exist after fetch; check that remote %q is configured correctly", ref, remoteName)
+	}
+	return nil
 }

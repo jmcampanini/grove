@@ -106,6 +106,19 @@ func TestExecuteCatchup(t *testing.T) {
 			wantOutput: "Merged origin/develop into feature/x\n",
 		},
 		{
+			name: "merge ref gone after fetch returns error",
+			gitMock: &mockGit{
+				getCurrentBranchFn:     func() (string, error) { return "feature/x", nil },
+				getRepoDefaultBranchFn: func(string) (string, error) { return "main", nil },
+				fetchRemoteFn:          func(string) (string, error) { return "", nil },
+				getWorktreeRootFn:      func() (string, error) { return "/workspace/wt-x", nil },
+				isWorktreeDirtyFn:      func(string) (bool, error) { return false, nil },
+				refExistsFn:            func(string) (bool, error) { return false, nil },
+			},
+			wantErr:        true,
+			wantErrContain: "does not exist after fetch",
+		},
+		{
 			name: "merge is called with correct ref",
 			gitMock: &mockGit{
 				getCurrentBranchFn:     func() (string, error) { return "feature/x", nil },
