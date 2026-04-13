@@ -106,6 +106,32 @@ func TestExecuteCatchup(t *testing.T) {
 			wantOutput: "Merged origin/develop into feature/x\n",
 		},
 		{
+			name: "ref exists check failure propagates error",
+			gitMock: &mockGit{
+				getCurrentBranchFn:     func() (string, error) { return "feature/x", nil },
+				getRepoDefaultBranchFn: func(string) (string, error) { return "main", nil },
+				fetchRemoteFn:          func(string) (string, error) { return "", nil },
+				getWorktreeRootFn:      func() (string, error) { return "/workspace/wt-x", nil },
+				isWorktreeDirtyFn:      func(string) (bool, error) { return false, nil },
+				refExistsFn:            func(string) (bool, error) { return false, errors.New("git broken") },
+			},
+			wantErr:        true,
+			wantErrContain: "failed to verify ref",
+		},
+		{
+			name: "merge ref gone after fetch returns error",
+			gitMock: &mockGit{
+				getCurrentBranchFn:     func() (string, error) { return "feature/x", nil },
+				getRepoDefaultBranchFn: func(string) (string, error) { return "main", nil },
+				fetchRemoteFn:          func(string) (string, error) { return "", nil },
+				getWorktreeRootFn:      func() (string, error) { return "/workspace/wt-x", nil },
+				isWorktreeDirtyFn:      func(string) (bool, error) { return false, nil },
+				refExistsFn:            func(string) (bool, error) { return false, nil },
+			},
+			wantErr:        true,
+			wantErrContain: "does not exist after fetch",
+		},
+		{
 			name: "merge is called with correct ref",
 			gitMock: &mockGit{
 				getCurrentBranchFn:     func() (string, error) { return "feature/x", nil },
@@ -143,6 +169,51 @@ func TestExecuteCatchup(t *testing.T) {
 			if tt.wantOutput != "" {
 				assert.Equal(t, tt.wantOutput, buf.String())
 			}
+		})
+	}
+}
+
+func TestRequireRefExists(t *testing.T) {
+	tests := []struct {
+		name           string
+		gitMock        *mockGit
+		ref            string
+		remoteName     string
+		wantErr        bool
+		wantErrContain string
+	}{
+		{
+			name:    "ref exists returns nil",
+			gitMock: &mockGit{refExistsFn: func(string) (bool, error) { return true, nil }},
+			ref:     "origin/main",
+		},
+		{
+			name:           "ref missing returns descriptive error",
+			gitMock:        &mockGit{refExistsFn: func(string) (bool, error) { return false, nil }},
+			ref:            "origin/main",
+			remoteName:     "origin",
+			wantErr:        true,
+			wantErrContain: "does not exist after fetch",
+		},
+		{
+			name:           "ref check error propagates",
+			gitMock:        &mockGit{refExistsFn: func(string) (bool, error) { return false, errors.New("broken") }},
+			ref:            "origin/main",
+			wantErr:        true,
+			wantErrContain: "failed to verify ref",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := requireRefExists(tt.gitMock, tt.ref, tt.remoteName)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErrContain)
+				return
+			}
+			require.NoError(t, err)
 		})
 	}
 }

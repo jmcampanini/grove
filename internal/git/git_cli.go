@@ -3,6 +3,7 @@ package git
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -534,6 +535,18 @@ func (g *GitCli) BranchExists(branchName string, caseInsensitive bool) (bool, er
 	}
 
 	return false, nil
+}
+
+func (g *GitCli) RefExists(ref string) (bool, error) {
+	_, err := g.executeGitCommand("rev-parse", "--verify", "--quiet", ref)
+	if err == nil {
+		return true, nil
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+		return false, nil
+	}
+	return false, err
 }
 
 func (g *GitCli) ListWorktrees() ([]Worktree, error) {

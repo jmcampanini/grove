@@ -68,6 +68,7 @@ type mockGit struct {
 	listWorktreesFn                     func() ([]git.Worktree, error)
 	mergeFn                             func(ref string) (string, error)
 	pruneWorktreesFn                    func() error
+	refExistsFn                         func(ref string) (bool, error)
 	removeWorktreeFn                    func(absPath string, force bool) error
 	resetHardFn                         func(ref string) error
 	syncTagsFn                          func(remoteName string) error
@@ -232,6 +233,13 @@ func (m *mockGit) PruneWorktrees() error {
 		return m.pruneWorktreesFn()
 	}
 	return nil
+}
+
+func (m *mockGit) RefExists(ref string) (bool, error) {
+	if m.refExistsFn != nil {
+		return m.refExistsFn(ref)
+	}
+	return true, nil
 }
 
 func (m *mockGit) RemoveWorktree(absPath string, force bool) error {
