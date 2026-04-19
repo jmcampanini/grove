@@ -1,9 +1,6 @@
 BINARY_NAME := grove
 BUILD_DIR := out
 
-SHELL := bash
-.SHELLFLAGS := -eu -o pipefail -c
-
 VERSION := $(shell git describe --tags --dirty --always 2>/dev/null || date -u '+%Y-%m-%dT%H:%M:%SZ')
 LDFLAGS := -ldflags "-X github.com/jmcampanini/grove-cli/cmd.Version=$(VERSION)"
 
