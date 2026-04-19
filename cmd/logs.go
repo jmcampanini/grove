@@ -16,6 +16,19 @@ import (
 var logsCmd = &cobra.Command{
 	Use:   "logs",
 	Short: "View grove log information",
+	Long: `Grove writes file logs to the path configured by log.file. The default
+follows the XDG Base Directory Specification:
+
+  $XDG_STATE_HOME/grove/grove.log
+  ~/.local/state/grove/grove.log   (fallback when XDG_STATE_HOME is unset)
+
+File logging is disabled when log.file is the empty string, or when the
+home directory cannot be determined. Pass --debug on any grove command
+to raise the log level to debug for that invocation.
+
+Subcommands:
+  grove logs path   Print the log file path
+  grove logs tail   Print the last lines of the log file`,
 }
 
 func init() {
