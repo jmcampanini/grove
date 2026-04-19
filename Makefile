@@ -1,4 +1,3 @@
-BINARY_NAME := grove
 BUILD_DIR := out
 
 VERSION := $(shell git describe --tags --dirty --always 2>/dev/null || date -u '+%Y-%m-%dT%H:%M:%SZ')
@@ -11,7 +10,7 @@ help: ## show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-15s %s\n", $$1, $$2}'
 
 build: ## compile the grove binary
-	go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) .
+	go build $(LDFLAGS) -o $(BUILD_DIR)/grove .
 
 test: ## run tests with -race
 	go test -race ./...
