@@ -2,7 +2,7 @@ BINARY_NAME := grove
 BUILD_DIR := out
 
 SHELL := bash
-.SHELLFLAGS := -eu -o pipefail -O inherit_errexit -c
+.SHELLFLAGS := -eu -o pipefail -c
 
 VERSION := $(shell git describe --tags --dirty --always 2>/dev/null || date -u '+%Y-%m-%dT%H:%M:%SZ')
 LDFLAGS := -ldflags "-X github.com/jmcampanini/grove-cli/cmd.Version=$(VERSION)"
@@ -23,6 +23,7 @@ lint: ## run golangci-lint
 	golangci-lint run ./...
 
 check: ## fmt check + tidy check + lint + test
+	@# Capture stderr so parse errors / missing gofmt fail loudly, not silently.
 	@out=$$(gofmt -l . 2>&1 || true); if [ -n "$$out" ]; then echo "gofmt output:"; echo "$$out"; gofmt -d .; exit 1; fi
 	go mod tidy -diff
 	golangci-lint run ./...
