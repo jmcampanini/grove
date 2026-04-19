@@ -23,8 +23,7 @@ lint: ## run golangci-lint
 	golangci-lint run ./...
 
 check: ## fmt check + tidy check + lint + test
-	@# Capture stderr so parse errors / missing gofmt fail loudly, not silently.
-	@out=$$(gofmt -l . 2>&1 || true); if [ -n "$$out" ]; then echo "gofmt output:"; echo "$$out"; gofmt -d .; exit 1; fi
+	@test -z "$$(gofmt -l .)" || { echo "gofmt drift; run: make fmt"; exit 1; }
 	go mod tidy -diff
 	golangci-lint run ./...
 	go test -race ./...
