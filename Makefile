@@ -1,6 +1,9 @@
 BINARY_NAME := grove
 BUILD_DIR := out
 
+SHELL := bash
+.SHELLFLAGS := -eu -o pipefail -O inherit_errexit -c
+
 VERSION := $(shell git describe --tags --dirty --always 2>/dev/null || date -u '+%Y-%m-%dT%H:%M:%SZ')
 LDFLAGS := -ldflags "-X github.com/jmcampanini/grove-cli/cmd.Version=$(VERSION)"
 
@@ -10,7 +13,7 @@ LDFLAGS := -ldflags "-X github.com/jmcampanini/grove-cli/cmd.Version=$(VERSION)"
 help: ## show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-15s %s\n", $$1, $$2}'
 
-build: ## compile binary to ./out/grove
+build: ## compile the grove binary
 	go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) .
 
 test: ## run tests with -race
@@ -19,8 +22,8 @@ test: ## run tests with -race
 lint: ## run golangci-lint
 	golangci-lint run ./...
 
-check: ## fmt check + tidy check + lint + test (CI gate)
-	@test -z "$$(gofmt -l .)" || { echo "gofmt needed:"; gofmt -d .; exit 1; }
+check: ## fmt check + tidy check + lint + test
+	@out=$$(gofmt -l . 2>&1 || true); if [ -n "$$out" ]; then echo "gofmt output:"; echo "$$out"; gofmt -d .; exit 1; fi
 	go mod tidy -diff
 	golangci-lint run ./...
 	go test -race ./...
@@ -31,7 +34,7 @@ fmt: ## apply gofmt in-place
 tidy: ## apply go mod tidy
 	go mod tidy
 
-clean: ## remove build artifacts, test cache, coverage files
+clean: ## remove out/, test cache, *.out, cover.*
 	rm -rf $(BUILD_DIR)
 	go clean -testcache
 	rm -f *.out cover.*
