@@ -23,8 +23,13 @@ follows the XDG Base Directory Specification:
   ~/.local/state/grove/grove.log   (fallback when XDG_STATE_HOME is unset)
 
 File logging is disabled when log.file is the empty string, or when the
-home directory cannot be determined. Pass --debug on any grove command
-to raise the log level to debug for that invocation.
+home directory cannot be determined. It is also disabled for a single
+invocation if grove cannot open the log file at runtime (missing parent
+directory, permissions, disk full); in that case a warning is printed to
+stderr and the command continues without file logging.
+
+Pass --debug on any grove command to raise the log level to debug for
+that invocation.
 
 Subcommands:
   grove logs path   Print the log file path

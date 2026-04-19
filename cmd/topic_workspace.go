@@ -20,7 +20,8 @@ Requirements:
 
   1. The workspace directory name must match the tail of the git remote
      origin URL (e.g., "repo-name" for "git@github.com:org-name/repo-name").
-  2. You must be at or below the workspace root for grove to detect it.
+  2. Grove detects the workspace when you are at the workspace root or
+     inside one of its worktrees (at any depth).
   3. The workspace only contains git repository or worktree roots as
      subdirectories.`,
 }
