@@ -1,67 +1,37 @@
 BINARY_NAME := grove
-BUILD_DIR := build
-INSTALL_DIR := $(HOME)/.local/bin
+BUILD_DIR := out
 
 VERSION := $(shell git describe --tags --dirty --always 2>/dev/null || date -u '+%Y-%m-%dT%H:%M:%SZ')
 LDFLAGS := -ldflags "-X github.com/jmcampanini/grove-cli/cmd.Version=$(VERSION)"
 
-# Shell completion directories
-BREW_PREFIX := $(shell brew --prefix 2>/dev/null || echo "/opt/homebrew")
-FISH_COMPLETIONS_DIR := $(HOME)/.config/fish/completions
-BASH_COMPLETIONS_DIR := $(BREW_PREFIX)/etc/bash_completion.d
-ZSH_COMPLETIONS_DIR := $(BREW_PREFIX)/share/zsh/site-functions
+.DEFAULT_GOAL := help
+.PHONY: build check clean fmt help lint test tidy
 
-.PHONY: all build check fmt lint test clean help install install-completions uninstall
+help: ## show this help
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-15s %s\n", $$1, $$2}'
 
-all: build ## Default target
-
-build: clean check ## Build the binary
-	mkdir -p $(BUILD_DIR)
+build: ## compile binary to ./out/grove
 	go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) .
 
-check: lint test ## Run all quality checks
+test: ## run tests with -race
+	go test -race ./...
 
-fmt: ## Fix formatting and tidy go.mod
-	gofmt -w .
-	go mod tidy
-
-lint: ## Run quality checks
-	go mod tidy -diff
-	@test -z "$$(gofmt -l .)" || { echo "gofmt needed:"; gofmt -d .; exit 1; }
+lint: ## run golangci-lint
 	golangci-lint run ./...
 
-test: ## Run tests
-	go test ./...
+check: ## fmt check + tidy check + lint + test (CI gate)
+	@test -z "$$(gofmt -l .)" || { echo "gofmt needed:"; gofmt -d .; exit 1; }
+	go mod tidy -diff
+	golangci-lint run ./...
+	go test -race ./...
 
-clean: ## Remove build artifacts
-	go clean
+fmt: ## apply gofmt in-place
+	gofmt -w .
+
+tidy: ## apply go mod tidy
+	go mod tidy
+
+clean: ## remove build artifacts, test cache, coverage files
 	rm -rf $(BUILD_DIR)
-
-install-completions: build ## Install shell completions
-	@echo "Installing shell completions..."
-	@mkdir -p $(FISH_COMPLETIONS_DIR)
-	@$(BUILD_DIR)/$(BINARY_NAME) completion fish > $(FISH_COMPLETIONS_DIR)/$(BINARY_NAME).fish
-	@echo "  fish: $(FISH_COMPLETIONS_DIR)/$(BINARY_NAME).fish"
-	@mkdir -p $(BASH_COMPLETIONS_DIR)
-	@$(BUILD_DIR)/$(BINARY_NAME) completion bash > $(BASH_COMPLETIONS_DIR)/$(BINARY_NAME)
-	@echo "  bash: $(BASH_COMPLETIONS_DIR)/$(BINARY_NAME)"
-	@mkdir -p $(ZSH_COMPLETIONS_DIR)
-	@$(BUILD_DIR)/$(BINARY_NAME) completion zsh > $(ZSH_COMPLETIONS_DIR)/_$(BINARY_NAME)
-	@echo "  zsh:  $(ZSH_COMPLETIONS_DIR)/_$(BINARY_NAME)"
-
-install: build install-completions ## Install binary and completions
-	@echo "Installing $(BINARY_NAME) to $(INSTALL_DIR)..."
-	@mkdir -p $(INSTALL_DIR)
-	@cp $(BUILD_DIR)/$(BINARY_NAME) $(INSTALL_DIR)/$(BINARY_NAME)
-	@echo "Installed $(INSTALL_DIR)/$(BINARY_NAME)"
-
-uninstall: ## Remove binary and completions
-	@echo "Uninstalling $(BINARY_NAME)..."
-	@rm -f $(INSTALL_DIR)/$(BINARY_NAME)
-	@rm -f $(FISH_COMPLETIONS_DIR)/$(BINARY_NAME).fish
-	@rm -f $(BASH_COMPLETIONS_DIR)/$(BINARY_NAME)
-	@rm -f $(ZSH_COMPLETIONS_DIR)/_$(BINARY_NAME)
-	@echo "Uninstalled"
-
-help: ## Show this help
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-15s %s\n", $$1, $$2}'
+	go clean -testcache
+	rm -f *.out cover.*

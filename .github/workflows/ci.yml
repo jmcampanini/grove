@@ -20,4 +20,5 @@ jobs:
         with:
           version: latest
 
+      - run: make check
       - run: make build

@@ -43,7 +43,8 @@ brew upgrade --fetch-HEAD grove
 ### From source
 
 ```sh
-make install
+make build
+# then copy out/grove to a directory on your PATH
 ```
 
 
