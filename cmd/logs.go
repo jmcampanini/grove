@@ -24,8 +24,8 @@ follows the XDG Base Directory Specification:
 
 File logging is disabled when log.file is the empty string, or when the
 home directory cannot be determined. It is also disabled for a single
-invocation if grove cannot open the log file at runtime (missing parent
-directory, permissions, disk full); in that case a warning is printed to
+invocation if grove cannot open the log file at runtime (unwritable
+parent directory, permissions, disk full); in that case a warning is printed to
 stderr and the command continues without file logging.
 
 Pass --debug on any grove command to raise the log level to debug for
