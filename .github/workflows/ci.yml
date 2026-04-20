@@ -20,4 +20,6 @@ jobs:
         with:
           version: latest
 
+      - run: make check
       - run: make build
+      - run: ./out/grove --version
