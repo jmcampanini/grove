@@ -67,22 +67,22 @@ func loadLogConfig() (config.Config, error) {
 		paths = resolveLogConfigPaths(cwd, homeDir, paths, defaultTimeout)
 	}
 
-	result, err := config.NewDefaultLoader().Load(paths)
+	cfg, _, err := config.LoadFiles(paths)
 	if err != nil {
 		return config.Config{}, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	return result.Config, nil
+	return cfg, nil
 }
 
 func resolveLogConfigPaths(cwd, homeDir string, fallback []string, timeout time.Duration) []string {
-	bootstrapResult, err := config.NewDefaultLoader().Load(fallback)
+	bootstrapCfg, _, err := config.LoadFiles(fallback)
 	if err != nil {
 		log.Debug("logs: failed to load bootstrap config", "err", err)
 		return fallback
 	}
 
-	wsRoot, err := resolveWorkspaceRoot(cwd, bootstrapResult.Config.Workspace.PrimaryBranches, timeout)
+	wsRoot, err := resolveWorkspaceRoot(cwd, bootstrapCfg.Workspace.PrimaryBranches, timeout)
 	if err != nil {
 		log.Debug("logs: workspace root detection failed, using bootstrap config", "err", err)
 		return fallback
