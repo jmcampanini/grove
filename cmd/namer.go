@@ -57,22 +57,22 @@ func loadNamingConfig() (config.Config, error) {
 		paths = resolveNamerConfigPaths(cwd, homeDir, paths, defaultTimeout)
 	}
 
-	result, err := config.NewDefaultLoader().Load(paths)
+	cfg, _, err := config.LoadFiles(paths)
 	if err != nil {
 		return config.Config{}, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	return result.Config, nil
+	return cfg, nil
 }
 
 func resolveNamerConfigPaths(cwd, homeDir string, fallback []string, timeout time.Duration) []string {
-	bootstrapResult, err := config.NewDefaultLoader().Load(fallback)
+	bootstrapCfg, _, err := config.LoadFiles(fallback)
 	if err != nil {
 		log.Debug("namer: failed to load bootstrap config", "err", err)
 		return fallback
 	}
 
-	wsRoot, err := resolveWorkspaceRoot(cwd, bootstrapResult.Config.Workspace.PrimaryBranches, timeout)
+	wsRoot, err := resolveWorkspaceRoot(cwd, bootstrapCfg.Workspace.PrimaryBranches, timeout)
 	if err != nil {
 		log.Debug("namer: workspace root detection failed, using bootstrap config", "err", err)
 		return fallback
