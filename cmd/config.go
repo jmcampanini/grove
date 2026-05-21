@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/jmcampanini/go-config-loader/configreporter"
 	"github.com/spf13/cobra"
@@ -51,35 +52,20 @@ func runConfig(cmd *cobra.Command, _ []string) error {
 
 func writeConfigProvenance(w io.Writer, headers []string, rows [][]string) error {
 	if len(headers) > 0 {
-		for i, header := range headers {
-			if i > 0 {
-				if _, err := fmt.Fprint(w, "\t"); err != nil {
-					return err
-				}
-			}
-			if _, err := fmt.Fprint(w, header); err != nil {
-				return err
-			}
-		}
-		if _, err := fmt.Fprintln(w); err != nil {
+		if err := writeTabSeparatedRow(w, headers); err != nil {
 			return err
 		}
 	}
 
 	for _, row := range rows {
-		for i, cell := range row {
-			if i > 0 {
-				if _, err := fmt.Fprint(w, "\t"); err != nil {
-					return err
-				}
-			}
-			if _, err := fmt.Fprint(w, cell); err != nil {
-				return err
-			}
-		}
-		if _, err := fmt.Fprintln(w); err != nil {
+		if err := writeTabSeparatedRow(w, row); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func writeTabSeparatedRow(w io.Writer, cells []string) error {
+	_, err := fmt.Fprintln(w, strings.Join(cells, "\t"))
+	return err
 }
