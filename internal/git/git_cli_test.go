@@ -530,7 +530,7 @@ func TestParseRemoteBranchBlock(t *testing.T) {
 }
 
 // =============================================================================
-// parseRemoteBranchesFromFormat tests
+// parseRemoteDefaultBranchFromLSRemote tests
 // =============================================================================
 
 func TestParseRemoteDefaultBranchFromLSRemote(t *testing.T) {
@@ -575,6 +575,10 @@ func TestParseRemoteDefaultBranchFromLSRemote(t *testing.T) {
 		})
 	}
 }
+
+// =============================================================================
+// parseRemoteBranchesFromFormat tests
+// =============================================================================
 
 func TestParseRemoteBranchesFromFormat(t *testing.T) {
 	tests := []struct {

@@ -376,81 +376,112 @@ func TestExecuteCreate(t *testing.T) {
 	}
 }
 
-func TestExecuteCreate_ReuseWithFromErrors(t *testing.T) {
-	var stdout bytes.Buffer
-	ctx := &createContext{
-		baseRef:   "main",
-		cfg:       defaultTestConfig(),
-		gitClient: &mockGit{},
-		reuse:     true,
+func TestExecuteCreate_ValidatesIncompatibleOptions(t *testing.T) {
+	tests := []struct {
+		name           string
+		ctx            createContext
+		wantErrContain string
+	}{
+		{
+			name: "--reuse and --from cannot be used together",
+			ctx: createContext{
+				baseRef: "main",
+				reuse:   true,
+			},
+			wantErrContain: "--reuse and --from cannot be used together",
+		},
+		{
+			name: "--from and --from-remote-primary cannot be used together",
+			ctx: createContext{
+				baseRef:           "main",
+				fromRemotePrimary: true,
+			},
+			wantErrContain: "--from and --from-remote-primary cannot be used together",
+		},
+		{
+			name: "--reuse and --from-remote-primary cannot be used together",
+			ctx: createContext{
+				fromRemotePrimary: true,
+				reuse:             true,
+			},
+			wantErrContain: "--reuse and --from-remote-primary cannot be used together",
+		},
 	}
 
-	err := executeCreate(&stdout, ctx, "add logging support")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "--reuse and --from cannot be used together")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := tt.ctx
+			ctx.cfg = defaultTestConfig()
+			ctx.gitClient = &mockGit{}
+
+			var stdout bytes.Buffer
+			err := executeCreate(&stdout, &ctx, "add logging support")
+
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.wantErrContain)
+		})
+	}
 }
 
 func TestExecuteCreate_FromRemotePrimary(t *testing.T) {
+	const expectedWorktreeName = "wt-add-logging-support"
+
 	tests := []struct {
-		name                 string
-		defaultBranch        string
-		defaultRemote        string
-		fetchErr             error
-		getDefaultRemoteErr  error
-		getRemoteBranchErr   error
-		wantBaseRef          string
-		wantErrContain       string
-		wantFetchBranch      string
-		wantFetchRemote      string
-		wantOutputWorktree   string
-		wantRepoBranchRemote string
+		name                    string
+		defaultBranch           string
+		defaultRemote           string
+		fetchErr                error
+		getDefaultRemoteErr     error
+		getRemoteBranchErr      error
+		wantBaseRef             string
+		wantDefaultBranchRemote string
+		wantErrContain          string
+		wantFetchBranch         string
+		wantFetchRemote         string
 	}{
 		{
-			name:                 "success with origin main",
-			defaultBranch:        "main",
-			defaultRemote:        "origin",
-			wantBaseRef:          "origin/main",
-			wantFetchBranch:      "main",
-			wantFetchRemote:      "origin",
-			wantOutputWorktree:   "wt-add-logging-support",
-			wantRepoBranchRemote: "origin",
+			name:                    "success with origin main",
+			defaultBranch:           "main",
+			defaultRemote:           "origin",
+			wantBaseRef:             "origin/main",
+			wantDefaultBranchRemote: "origin",
+			wantFetchBranch:         "main",
+			wantFetchRemote:         "origin",
 		},
 		{
-			name:                 "custom default branch",
-			defaultBranch:        "develop",
-			defaultRemote:        "origin",
-			wantBaseRef:          "origin/develop",
-			wantFetchBranch:      "develop",
-			wantFetchRemote:      "origin",
-			wantOutputWorktree:   "wt-add-logging-support",
-			wantRepoBranchRemote: "origin",
+			name:                    "custom default branch",
+			defaultBranch:           "develop",
+			defaultRemote:           "origin",
+			wantBaseRef:             "origin/develop",
+			wantDefaultBranchRemote: "origin",
+			wantFetchBranch:         "develop",
+			wantFetchRemote:         "origin",
 		},
 		{
-			name:                 "custom default remote",
-			defaultBranch:        "trunk",
-			defaultRemote:        "upstream",
-			wantBaseRef:          "upstream/trunk",
-			wantFetchBranch:      "trunk",
-			wantFetchRemote:      "upstream",
-			wantOutputWorktree:   "wt-add-logging-support",
-			wantRepoBranchRemote: "upstream",
+			name:                    "custom default remote",
+			defaultBranch:           "trunk",
+			defaultRemote:           "upstream",
+			wantBaseRef:             "upstream/trunk",
+			wantDefaultBranchRemote: "upstream",
+			wantFetchBranch:         "trunk",
+			wantFetchRemote:         "upstream",
 		},
 		{
-			name:                 "missing default branch",
-			defaultBranch:        "",
-			defaultRemote:        "origin",
-			wantErrContain:       "could not determine default branch for remote \"origin\"",
-			wantRepoBranchRemote: "origin",
+			name:                    "missing default branch",
+			defaultBranch:           "",
+			defaultRemote:           "origin",
+			wantDefaultBranchRemote: "origin",
+			wantErrContain:          "could not determine default branch for remote \"origin\"",
 		},
 		{
-			name:                 "fetch failure propagates",
-			defaultBranch:        "main",
-			defaultRemote:        "origin",
-			fetchErr:             assert.AnError,
-			wantErrContain:       "failed to fetch default branch \"main\" from remote \"origin\"",
-			wantFetchBranch:      "main",
-			wantFetchRemote:      "origin",
-			wantRepoBranchRemote: "origin",
+			name:                    "fetch failure propagates",
+			defaultBranch:           "main",
+			defaultRemote:           "origin",
+			fetchErr:                assert.AnError,
+			wantDefaultBranchRemote: "origin",
+			wantErrContain:          "failed to fetch default branch \"main\" from remote \"origin\"",
+			wantFetchBranch:         "main",
+			wantFetchRemote:         "origin",
 		},
 		{
 			name:                "default remote failure propagates",
@@ -458,11 +489,11 @@ func TestExecuteCreate_FromRemotePrimary(t *testing.T) {
 			wantErrContain:      "failed to determine default remote",
 		},
 		{
-			name:                 "default branch failure propagates",
-			defaultRemote:        "origin",
-			getRemoteBranchErr:   assert.AnError,
-			wantErrContain:       "failed to determine default branch for remote \"origin\"",
-			wantRepoBranchRemote: "origin",
+			name:                    "default branch failure propagates",
+			defaultRemote:           "origin",
+			getRemoteBranchErr:      assert.AnError,
+			wantDefaultBranchRemote: "origin",
+			wantErrContain:          "failed to determine default branch for remote \"origin\"",
 		},
 	}
 
@@ -470,7 +501,7 @@ func TestExecuteCreate_FromRemotePrimary(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			workspaceDir := t.TempDir()
 
-			var gotBaseRef, gotBranch, gotFetchBranch, gotFetchRemote, gotPath, gotRepoBranchRemote string
+			var gotBaseRef, gotBranch, gotDefaultBranchRemote, gotFetchBranch, gotFetchRemote, gotPath string
 			gitMock := &mockGit{
 				getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
 				getDefaultRemoteFn: func(fallback string) (string, error) {
@@ -481,7 +512,7 @@ func TestExecuteCreate_FromRemotePrimary(t *testing.T) {
 					return tt.defaultRemote, nil
 				},
 				getRemoteDefaultBranchFn: func(remoteName string) (string, error) {
-					gotRepoBranchRemote = remoteName
+					gotDefaultBranchRemote = remoteName
 					if tt.getRemoteBranchErr != nil {
 						return "", tt.getRemoteBranchErr
 					}
@@ -516,44 +547,17 @@ func TestExecuteCreate_FromRemotePrimary(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				assert.Equal(t, "feature/add-logging-support", gotBranch)
-				assert.Equal(t, filepath.Join(workspaceDir, tt.wantOutputWorktree), gotPath)
+				wantOutputPath := filepath.Join(workspaceDir, expectedWorktreeName)
+				assert.Equal(t, wantOutputPath, gotPath)
 				assert.Equal(t, tt.wantBaseRef, gotBaseRef)
-				assert.Equal(t, filepath.Join(workspaceDir, tt.wantOutputWorktree)+"\n", stdout.String())
+				assert.Equal(t, wantOutputPath+"\n", stdout.String())
 			}
 
-			assert.Equal(t, tt.wantRepoBranchRemote, gotRepoBranchRemote)
+			assert.Equal(t, tt.wantDefaultBranchRemote, gotDefaultBranchRemote)
 			assert.Equal(t, tt.wantFetchRemote, gotFetchRemote)
 			assert.Equal(t, tt.wantFetchBranch, gotFetchBranch)
 		})
 	}
-}
-
-func TestExecuteCreate_FromRemotePrimaryWithFromErrors(t *testing.T) {
-	var stdout bytes.Buffer
-	ctx := &createContext{
-		baseRef:           "main",
-		cfg:               defaultTestConfig(),
-		fromRemotePrimary: true,
-		gitClient:         &mockGit{},
-	}
-
-	err := executeCreate(&stdout, ctx, "add logging support")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "--from and --from-remote-primary cannot be used together")
-}
-
-func TestExecuteCreate_FromRemotePrimaryWithReuseErrors(t *testing.T) {
-	var stdout bytes.Buffer
-	ctx := &createContext{
-		cfg:               defaultTestConfig(),
-		fromRemotePrimary: true,
-		gitClient:         &mockGit{},
-		reuse:             true,
-	}
-
-	err := executeCreate(&stdout, ctx, "add logging support")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "--reuse and --from-remote-primary cannot be used together")
 }
 
 func TestCreateCommandHasFromRemotePrimaryFlag(t *testing.T) {

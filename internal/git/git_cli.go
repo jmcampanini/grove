@@ -171,11 +171,20 @@ func (g *GitCli) remoteExists(remoteName string) (bool, error) {
 	return false, err
 }
 
+func (g *GitCli) ensureRemoteExists(remoteName string) error {
+	exists, err := g.remoteExists(remoteName)
+	if err != nil {
+		return fmt.Errorf("failed to check remote existence: %w", err)
+	}
+	if !exists {
+		return fmt.Errorf("remote '%s' does not exist", remoteName)
+	}
+	return nil
+}
+
 func (g *GitCli) GetRepoDefaultBranch(remoteName string) (string, error) {
-	if exists, err := g.remoteExists(remoteName); err != nil {
-		return "", fmt.Errorf("failed to check remote existence: %w", err)
-	} else if !exists {
-		return "", fmt.Errorf("remote '%s' does not exist", remoteName)
+	if err := g.ensureRemoteExists(remoteName); err != nil {
+		return "", err
 	}
 
 	output, err := g.executeGitCommand("rev-parse", "--abbrev-ref", remoteName+"/HEAD")
@@ -192,10 +201,8 @@ func (g *GitCli) GetRepoDefaultBranch(remoteName string) (string, error) {
 }
 
 func (g *GitCli) GetRemoteDefaultBranch(remoteName string) (string, error) {
-	if exists, err := g.remoteExists(remoteName); err != nil {
-		return "", fmt.Errorf("failed to check remote existence: %w", err)
-	} else if !exists {
-		return "", fmt.Errorf("remote '%s' does not exist", remoteName)
+	if err := g.ensureRemoteExists(remoteName); err != nil {
+		return "", err
 	}
 
 	output, err := g.executeGitCommand("ls-remote", "--symref", remoteName, "HEAD")
