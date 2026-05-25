@@ -52,10 +52,12 @@ type mockGit struct {
 	deleteBranchFn                      func(name string, force bool) error
 	fetchRemoteBranchFn                 func(remote, remoteRef, localRef string) error
 	fetchRemoteFn                       func(remoteName string) (string, error)
+	fetchRemoteTrackingBranchFn         func(remoteName, branchName string) error
 	getCurrentBranchFn                  func() (string, error)
 	getCommitSubjectFn                  func() (string, error)
 	getDefaultRemoteFn                  func(fallback string) (string, error)
 	getMainWorktreePathFn               func() (string, error)
+	getRemoteDefaultBranchFn            func(remoteName string) (string, error)
 	getRepoDefaultBranchFn              func(remoteName string) (string, error)
 	getStatusFn                         func(absPath string) (string, error)
 	getWorkspacePathFn                  func() (string, error)
@@ -123,6 +125,13 @@ func (m *mockGit) FetchRemote(remoteName string) (string, error) {
 	return "", nil
 }
 
+func (m *mockGit) FetchRemoteTrackingBranch(remoteName, branchName string) error {
+	if m.fetchRemoteTrackingBranchFn != nil {
+		return m.fetchRemoteTrackingBranchFn(remoteName, branchName)
+	}
+	return nil
+}
+
 func (m *mockGit) GetCurrentBranch() (string, error) {
 	if m.getCurrentBranchFn != nil {
 		return m.getCurrentBranchFn()
@@ -149,6 +158,13 @@ func (m *mockGit) GetMainWorktreePath() (string, error) {
 		return m.getMainWorktreePathFn()
 	}
 	return "/workspace/main", nil
+}
+
+func (m *mockGit) GetRemoteDefaultBranch(remoteName string) (string, error) {
+	if m.getRemoteDefaultBranchFn != nil {
+		return m.getRemoteDefaultBranchFn(remoteName)
+	}
+	return "main", nil
 }
 
 func (m *mockGit) GetRepoDefaultBranch(remoteName string) (string, error) {

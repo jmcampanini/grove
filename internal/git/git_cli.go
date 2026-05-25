@@ -171,11 +171,20 @@ func (g *GitCli) remoteExists(remoteName string) (bool, error) {
 	return false, err
 }
 
+func (g *GitCli) ensureRemoteExists(remoteName string) error {
+	exists, err := g.remoteExists(remoteName)
+	if err != nil {
+		return fmt.Errorf("failed to check remote existence: %w", err)
+	}
+	if !exists {
+		return fmt.Errorf("remote '%s' does not exist", remoteName)
+	}
+	return nil
+}
+
 func (g *GitCli) GetRepoDefaultBranch(remoteName string) (string, error) {
-	if exists, err := g.remoteExists(remoteName); err != nil {
-		return "", fmt.Errorf("failed to check remote existence: %w", err)
-	} else if !exists {
-		return "", fmt.Errorf("remote '%s' does not exist", remoteName)
+	if err := g.ensureRemoteExists(remoteName); err != nil {
+		return "", err
 	}
 
 	output, err := g.executeGitCommand("rev-parse", "--abbrev-ref", remoteName+"/HEAD")
@@ -189,6 +198,38 @@ func (g *GitCli) GetRepoDefaultBranch(remoteName string) (string, error) {
 
 	branchName := strings.TrimPrefix(output, remoteName+"/")
 	return branchName, nil
+}
+
+func (g *GitCli) GetRemoteDefaultBranch(remoteName string) (string, error) {
+	if err := g.ensureRemoteExists(remoteName); err != nil {
+		return "", err
+	}
+
+	output, err := g.executeGitCommand("ls-remote", "--symref", remoteName, "HEAD")
+	if err != nil {
+		return "", fmt.Errorf("failed to query remote HEAD: %w", err)
+	}
+
+	branchName := parseRemoteDefaultBranchFromLSRemote(output)
+	if branchName == "" {
+		g.log.Debug("Remote HEAD not configured as branch", "remoteName", remoteName)
+	}
+	return branchName, nil
+}
+
+func parseRemoteDefaultBranchFromLSRemote(output string) string {
+	const headsPrefix = "refs/heads/"
+
+	for _, line := range strings.Split(output, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) != 3 || fields[0] != "ref:" || fields[2] != "HEAD" {
+			continue
+		}
+		if branchName, ok := strings.CutPrefix(fields[1], headsPrefix); ok {
+			return branchName
+		}
+	}
+	return ""
 }
 
 func (g *GitCli) ListLocalBranches() ([]LocalBranch, error) {
@@ -660,6 +701,14 @@ func (g *GitCli) FetchRemoteBranch(remote, remoteRef, localRef string) error {
 	refSpec := remoteRef + ":" + localRef
 	args := []string{"fetch", remote, refSpec}
 	return g.executeMutatingGitCommand("failed to fetch remote branch", args...)
+}
+
+func (g *GitCli) FetchRemoteTrackingBranch(remoteName, branchName string) error {
+	g.log.Info("Fetching remote tracking branch", "remote", remoteName, "branch", branchName)
+	remoteTrackingRef := fmt.Sprintf("refs/remotes/%s/%s", remoteName, branchName)
+	refSpec := fmt.Sprintf("+refs/heads/%s:%s", branchName, remoteTrackingRef)
+	args := []string{"fetch", "--no-tags", remoteName, refSpec}
+	return g.executeMutatingGitCommand("failed to fetch remote tracking branch", args...)
 }
 
 func (g *GitCli) FetchRemote(remoteName string) (string, error) {
