@@ -990,6 +990,31 @@ func TestFetchRemoteBranch_Integration(t *testing.T) {
 	assert.True(t, exists)
 }
 
+func TestFetchRemoteTrackingBranch_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	repo := newTestRepo(t)
+	repo.commit("initial commit")
+	remoteDir := repo.addRemote("origin")
+
+	// Create a new branch in the remote after the initial fetch.
+	runGit(t, remoteDir, "branch", "remote-feature")
+
+	err := repo.Git.FetchRemoteTrackingBranch("origin", "remote-feature")
+
+	require.NoError(t, err)
+
+	remoteRefExists, err := repo.Git.RefExists("refs/remotes/origin/remote-feature")
+	require.NoError(t, err)
+	assert.True(t, remoteRefExists)
+
+	localBranchExists, err := repo.Git.BranchExists("remote-feature", false)
+	require.NoError(t, err)
+	assert.False(t, localBranchExists)
+}
+
 // =============================================================================
 // FetchRemote tests
 // =============================================================================

@@ -662,6 +662,13 @@ func (g *GitCli) FetchRemoteBranch(remote, remoteRef, localRef string) error {
 	return g.executeMutatingGitCommand("failed to fetch remote branch", args...)
 }
 
+func (g *GitCli) FetchRemoteTrackingBranch(remoteName, branchName string) error {
+	g.log.Info("Fetching remote tracking branch", "remote", remoteName, "branch", branchName)
+	refSpec := fmt.Sprintf("+refs/heads/%s:refs/remotes/%s/%s", branchName, remoteName, branchName)
+	args := []string{"fetch", "--no-tags", remoteName, refSpec}
+	return g.executeMutatingGitCommand("failed to fetch remote tracking branch", args...)
+}
+
 func (g *GitCli) FetchRemote(remoteName string) (string, error) {
 	g.log.Info("Fetching from remote", "remote", remoteName)
 	args := []string{"fetch", remoteName, "--prune", "--prune-tags", "--tags"}

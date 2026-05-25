@@ -217,6 +217,11 @@ type Git interface {
 	// Will mutate the current git state.
 	FetchRemoteBranch(remote, remoteRef, localRef string) error
 
+	// FetchRemoteTrackingBranch fetches a single branch from a remote and updates
+	// the corresponding remote-tracking ref used by <remote>/<branch>.
+	// Will mutate the current git state.
+	FetchRemoteTrackingBranch(remoteName, branchName string) error
+
 	// SyncTags fetches and prunes tags from the remote.
 	// If remoteName is empty, uses GetDefaultRemote("origin").
 	// Will mutate the current git state.

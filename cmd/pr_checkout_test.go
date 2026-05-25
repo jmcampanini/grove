@@ -52,6 +52,7 @@ type mockGit struct {
 	deleteBranchFn                      func(name string, force bool) error
 	fetchRemoteBranchFn                 func(remote, remoteRef, localRef string) error
 	fetchRemoteFn                       func(remoteName string) (string, error)
+	fetchRemoteTrackingBranchFn         func(remoteName, branchName string) error
 	getCurrentBranchFn                  func() (string, error)
 	getCommitSubjectFn                  func() (string, error)
 	getDefaultRemoteFn                  func(fallback string) (string, error)
@@ -121,6 +122,13 @@ func (m *mockGit) FetchRemote(remoteName string) (string, error) {
 		return m.fetchRemoteFn(remoteName)
 	}
 	return "", nil
+}
+
+func (m *mockGit) FetchRemoteTrackingBranch(remoteName, branchName string) error {
+	if m.fetchRemoteTrackingBranchFn != nil {
+		return m.fetchRemoteTrackingBranchFn(remoteName, branchName)
+	}
+	return nil
 }
 
 func (m *mockGit) GetCurrentBranch() (string, error) {

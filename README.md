@@ -34,6 +34,12 @@ grove create "add user authentication"
 
 Grove creates a branch, adds a worktree for it as a sibling of `main/`, and prints the new worktree path.
 
+For automation that should always start from the latest remote primary branch without updating the primary worktree:
+
+```sh
+grove create "add user authentication" --from-remote-primary
+```
+
 ## Reference
 
 For the full command reference, run `grove --help`. Topic pages:
