@@ -24,6 +24,13 @@ By default, the new branch is created from the current HEAD. Use --from to
 specify a different starting point (any git ref: branch, tag, or commit SHA).
 Use --from-remote-primary to fetch and start from the latest remote primary
 branch without updating the primary worktree; this is recommended for automation.
+Use --reuse to attach to an existing branch/worktree for the phrase instead of
+failing when it already exists.
+
+Creation mode flags are mutually exclusive; choose at most one:
+  --from <ref>
+  --from-remote-primary
+  --reuse
 
 The phrase is converted to a branch name using the configured slugify rules
 and prefix. A worktree is then created with the configured worktree naming.
@@ -35,6 +42,7 @@ Example:
   grove create "backport" --from v1.2.0
   grove create "experiment" --from origin/develop
   grove create "add user authentication" --from-remote-primary
+  grove create "add user authentication" --reuse
 
 Note: The create command takes a single quoted string argument. The shell wrapper
 function (grc) can handle passing arbitrary phrases by quoting the arguments.
