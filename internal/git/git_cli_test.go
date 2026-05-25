@@ -533,6 +533,49 @@ func TestParseRemoteBranchBlock(t *testing.T) {
 // parseRemoteBranchesFromFormat tests
 // =============================================================================
 
+func TestParseRemoteDefaultBranchFromLSRemote(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name: "main branch",
+			input: "ref: refs/heads/main\tHEAD\n" +
+				"abc123\tHEAD",
+			want: "main",
+		},
+		{
+			name: "branch with slash",
+			input: "ref: refs/heads/release/next\tHEAD\n" +
+				"abc123\tHEAD",
+			want: "release/next",
+		},
+		{
+			name:  "missing symref",
+			input: "abc123\tHEAD",
+			want:  "",
+		},
+		{
+			name:  "HEAD points outside heads",
+			input: "ref: refs/tags/v1.0.0\tHEAD\nabc123\tHEAD",
+			want:  "",
+		},
+		{
+			name:  "empty output",
+			input: "",
+			want:  "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseRemoteDefaultBranchFromLSRemote(tt.input)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
 func TestParseRemoteBranchesFromFormat(t *testing.T) {
 	tests := []struct {
 		name       string

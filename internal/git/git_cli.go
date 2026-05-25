@@ -191,6 +191,38 @@ func (g *GitCli) GetRepoDefaultBranch(remoteName string) (string, error) {
 	return branchName, nil
 }
 
+func (g *GitCli) GetRemoteDefaultBranch(remoteName string) (string, error) {
+	if exists, err := g.remoteExists(remoteName); err != nil {
+		return "", fmt.Errorf("failed to check remote existence: %w", err)
+	} else if !exists {
+		return "", fmt.Errorf("remote '%s' does not exist", remoteName)
+	}
+
+	output, err := g.executeGitCommand("ls-remote", "--symref", remoteName, "HEAD")
+	if err != nil {
+		return "", fmt.Errorf("failed to query remote HEAD: %w", err)
+	}
+
+	branchName := parseRemoteDefaultBranchFromLSRemote(output)
+	if branchName == "" {
+		g.log.Debug("Remote HEAD not configured as branch", "remoteName", remoteName)
+	}
+	return branchName, nil
+}
+
+func parseRemoteDefaultBranchFromLSRemote(output string) string {
+	for _, line := range strings.Split(output, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) != 3 || fields[0] != "ref:" || fields[2] != "HEAD" {
+			continue
+		}
+		if branchName, ok := strings.CutPrefix(fields[1], "refs/heads/"); ok {
+			return branchName
+		}
+	}
+	return ""
+}
+
 func (g *GitCli) ListLocalBranches() ([]LocalBranch, error) {
 	format := `branch %(refname:short)
 checkedOut %(if)%(HEAD)%(then)true%(else)false%(end)

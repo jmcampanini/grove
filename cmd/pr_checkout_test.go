@@ -57,6 +57,7 @@ type mockGit struct {
 	getCommitSubjectFn                  func() (string, error)
 	getDefaultRemoteFn                  func(fallback string) (string, error)
 	getMainWorktreePathFn               func() (string, error)
+	getRemoteDefaultBranchFn            func(remoteName string) (string, error)
 	getRepoDefaultBranchFn              func(remoteName string) (string, error)
 	getStatusFn                         func(absPath string) (string, error)
 	getWorkspacePathFn                  func() (string, error)
@@ -157,6 +158,13 @@ func (m *mockGit) GetMainWorktreePath() (string, error) {
 		return m.getMainWorktreePathFn()
 	}
 	return "/workspace/main", nil
+}
+
+func (m *mockGit) GetRemoteDefaultBranch(remoteName string) (string, error) {
+	if m.getRemoteDefaultBranchFn != nil {
+		return m.getRemoteDefaultBranchFn(remoteName)
+	}
+	return "main", nil
 }
 
 func (m *mockGit) GetRepoDefaultBranch(remoteName string) (string, error) {

@@ -838,6 +838,74 @@ func TestGetRepoDefaultBranch_Integration_RemoteDoesNotExist(t *testing.T) {
 }
 
 // =============================================================================
+// GetRemoteDefaultBranch tests
+// =============================================================================
+
+func TestGetRemoteDefaultBranch_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	repo := newTestRepo(t)
+	repo.commit("initial commit")
+	repo.addRemote("origin")
+
+	branch, err := repo.Git.GetRemoteDefaultBranch("origin")
+
+	require.NoError(t, err)
+	assert.Equal(t, "main", branch)
+}
+
+func TestGetRemoteDefaultBranch_Integration_MissingLocalRemoteHead(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	repo := newTestRepo(t)
+	repo.commit("initial commit")
+	repo.addRemote("origin")
+	runGit(t, repo.path(), "remote", "set-head", "origin", "-d")
+
+	branch, err := repo.Git.GetRemoteDefaultBranch("origin")
+
+	require.NoError(t, err)
+	assert.Equal(t, "main", branch)
+}
+
+func TestGetRemoteDefaultBranch_Integration_StaleLocalRemoteHead(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	repo := newTestRepo(t)
+	repo.commit("initial commit")
+	remoteDir := repo.addRemote("origin")
+	runGit(t, repo.path(), "remote", "set-head", "origin", "main")
+	runGit(t, remoteDir, "branch", "develop", "main")
+	runGit(t, remoteDir, "symbolic-ref", "HEAD", "refs/heads/develop")
+
+	branch, err := repo.Git.GetRemoteDefaultBranch("origin")
+
+	require.NoError(t, err)
+	assert.Equal(t, "develop", branch)
+}
+
+func TestGetRemoteDefaultBranch_Integration_RemoteDoesNotExist(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	repo := newTestRepo(t)
+	repo.commit("initial commit")
+
+	branch, err := repo.Git.GetRemoteDefaultBranch("nonexistent")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "does not exist")
+	assert.Empty(t, branch)
+}
+
+// =============================================================================
 // CreateWorktreeForNewBranch tests
 // =============================================================================
 

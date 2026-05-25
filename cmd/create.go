@@ -172,12 +172,12 @@ func resolveRemotePrimaryBaseRef(gitClient git.Git) (string, error) {
 		return "", fmt.Errorf("failed to determine default remote: %w", err)
 	}
 
-	branchName, err := gitClient.GetRepoDefaultBranch(remoteName)
+	branchName, err := gitClient.GetRemoteDefaultBranch(remoteName)
 	if err != nil {
 		return "", fmt.Errorf("failed to determine default branch for remote %q: %w", remoteName, err)
 	}
 	if branchName == "" {
-		return "", fmt.Errorf("could not determine default branch for remote %q; run 'git remote set-head %s --auto' to configure", remoteName, remoteName)
+		return "", fmt.Errorf("could not determine default branch for remote %q; ensure the remote HEAD/default branch is configured", remoteName)
 	}
 
 	if err := gitClient.FetchRemoteTrackingBranch(remoteName, branchName); err != nil {

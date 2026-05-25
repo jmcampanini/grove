@@ -396,8 +396,8 @@ func TestExecuteCreate_FromRemotePrimary(t *testing.T) {
 		defaultBranch        string
 		defaultRemote        string
 		fetchErr             error
-		getDefaultBranchErr  error
 		getDefaultRemoteErr  error
+		getRemoteBranchErr   error
 		wantBaseRef          string
 		wantErrContain       string
 		wantFetchBranch      string
@@ -460,7 +460,7 @@ func TestExecuteCreate_FromRemotePrimary(t *testing.T) {
 		{
 			name:                 "default branch failure propagates",
 			defaultRemote:        "origin",
-			getDefaultBranchErr:  assert.AnError,
+			getRemoteBranchErr:   assert.AnError,
 			wantErrContain:       "failed to determine default branch for remote \"origin\"",
 			wantRepoBranchRemote: "origin",
 		},
@@ -480,10 +480,10 @@ func TestExecuteCreate_FromRemotePrimary(t *testing.T) {
 					}
 					return tt.defaultRemote, nil
 				},
-				getRepoDefaultBranchFn: func(remoteName string) (string, error) {
+				getRemoteDefaultBranchFn: func(remoteName string) (string, error) {
 					gotRepoBranchRemote = remoteName
-					if tt.getDefaultBranchErr != nil {
-						return "", tt.getDefaultBranchErr
+					if tt.getRemoteBranchErr != nil {
+						return "", tt.getRemoteBranchErr
 					}
 					return tt.defaultBranch, nil
 				},

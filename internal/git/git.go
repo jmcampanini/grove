@@ -158,15 +158,23 @@ type Git interface {
 	// Returns the value of git config remote.pushDefault if set, otherwise returns the fallback parameter.
 	GetDefaultRemote(fallback string) (string, error)
 
-	// GetRepoDefaultBranch returns the default branch name by querying the remote's HEAD reference.
-	// Returns the branch name (e.g., "main") if the remote HEAD is configured.
-	// Returns ("", nil) if the remote exists but the remote HEAD is not set.
+	// GetRepoDefaultBranch returns the default branch name from the local
+	// remote-tracking HEAD reference (e.g., refs/remotes/origin/HEAD).
+	// Returns the branch name (e.g., "main") if the local remote HEAD is configured.
+	// Returns ("", nil) if the remote exists but the local remote HEAD is not set.
 	// Returns an error if:
 	//   - The remote does not exist
 	//   - Not in a git repository
 	//   - Git command fails (e.g., git not installed)
 	// This works in both regular repositories and worktrees.
 	GetRepoDefaultBranch(remoteName string) (string, error)
+
+	// GetRemoteDefaultBranch returns the default branch name by querying the
+	// remote's live HEAD reference.
+	// Returns the branch name (e.g., "main") if the remote HEAD is configured.
+	// Returns ("", nil) if the remote exists but the remote HEAD is not set to a branch.
+	// Returns an error if the remote does not exist, cannot be contacted, or git fails.
+	GetRemoteDefaultBranch(remoteName string) (string, error)
 
 	// ListLocalBranches returns detailed information about all local branches.
 	// This includes the branch name, commit SHA, worktree path (if checked out), upstream tracking, and commit subject.
