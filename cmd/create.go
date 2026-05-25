@@ -134,12 +134,9 @@ Examples:
 		return fmt.Errorf("worktree path %q already exists; to remove it: git worktree remove %s", worktreePath, worktreeName)
 	}
 
-	baseRef := ctx.baseRef
-	if ctx.fromRemotePrimary {
-		baseRef, err = resolveRemotePrimaryBaseRef(ctx.gitClient)
-		if err != nil {
-			return err
-		}
+	baseRef, err := resolveCreateBaseRef(ctx)
+	if err != nil {
+		return err
 	}
 
 	if err := ctx.gitClient.CreateWorktreeForNewBranchFromRef(branchName, worktreePath, baseRef); err != nil {
@@ -151,19 +148,25 @@ Examples:
 }
 
 func validateCreateRequest(ctx *createContext, phrase string) error {
-	if ctx.fromRemotePrimary && ctx.baseRef != "" {
+	switch {
+	case ctx.fromRemotePrimary && ctx.baseRef != "":
 		return errors.New("--from and --from-remote-primary cannot be used together")
-	}
-	if ctx.fromRemotePrimary && ctx.reuse {
+	case ctx.fromRemotePrimary && ctx.reuse:
 		return errors.New("--reuse and --from-remote-primary cannot be used together")
-	}
-	if ctx.reuse && ctx.baseRef != "" {
+	case ctx.reuse && ctx.baseRef != "":
 		return errors.New("--reuse and --from cannot be used together: --reuse attaches to an existing branch and ignores --from")
-	}
-	if strings.TrimSpace(phrase) == "" {
+	case strings.TrimSpace(phrase) == "":
 		return errors.New("phrase cannot be empty")
+	default:
+		return nil
 	}
-	return nil
+}
+
+func resolveCreateBaseRef(ctx *createContext) (string, error) {
+	if ctx.fromRemotePrimary {
+		return resolveRemotePrimaryBaseRef(ctx.gitClient)
+	}
+	return ctx.baseRef, nil
 }
 
 func resolveRemotePrimaryBaseRef(gitClient git.Git) (string, error) {

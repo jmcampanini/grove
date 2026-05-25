@@ -218,12 +218,14 @@ func (g *GitCli) GetRemoteDefaultBranch(remoteName string) (string, error) {
 }
 
 func parseRemoteDefaultBranchFromLSRemote(output string) string {
+	const headsPrefix = "refs/heads/"
+
 	for _, line := range strings.Split(output, "\n") {
 		fields := strings.Fields(line)
 		if len(fields) != 3 || fields[0] != "ref:" || fields[2] != "HEAD" {
 			continue
 		}
-		if branchName, ok := strings.CutPrefix(fields[1], "refs/heads/"); ok {
+		if branchName, ok := strings.CutPrefix(fields[1], headsPrefix); ok {
 			return branchName
 		}
 	}
@@ -703,7 +705,8 @@ func (g *GitCli) FetchRemoteBranch(remote, remoteRef, localRef string) error {
 
 func (g *GitCli) FetchRemoteTrackingBranch(remoteName, branchName string) error {
 	g.log.Info("Fetching remote tracking branch", "remote", remoteName, "branch", branchName)
-	refSpec := fmt.Sprintf("+refs/heads/%s:refs/remotes/%s/%s", branchName, remoteName, branchName)
+	remoteTrackingRef := fmt.Sprintf("refs/remotes/%s/%s", remoteName, branchName)
+	refSpec := fmt.Sprintf("+refs/heads/%s:%s", branchName, remoteTrackingRef)
 	args := []string{"fetch", "--no-tags", remoteName, refSpec}
 	return g.executeMutatingGitCommand("failed to fetch remote tracking branch", args...)
 }

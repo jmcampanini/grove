@@ -426,18 +426,27 @@ func TestExecuteCreate_ValidatesIncompatibleOptions(t *testing.T) {
 func TestExecuteCreate_FromRemotePrimary(t *testing.T) {
 	const expectedWorktreeName = "wt-add-logging-support"
 
+	type createFromRemotePrimaryCalls struct {
+		baseRef             string
+		branch              string
+		defaultBranchRemote string
+		fetchBranch         string
+		fetchRemote         string
+		path                string
+	}
+
 	tests := []struct {
-		name                    string
-		defaultBranch           string
-		defaultRemote           string
-		fetchErr                error
-		getDefaultRemoteErr     error
-		getRemoteBranchErr      error
-		wantBaseRef             string
-		wantDefaultBranchRemote string
-		wantErrContain          string
-		wantFetchBranch         string
-		wantFetchRemote         string
+		name                      string
+		defaultBranch             string
+		defaultRemote             string
+		fetchErr                  error
+		getDefaultRemoteErr       error
+		getRemoteDefaultBranchErr error
+		wantBaseRef               string
+		wantDefaultBranchRemote   string
+		wantErrContain            string
+		wantFetchBranch           string
+		wantFetchRemote           string
 	}{
 		{
 			name:                    "success with origin main",
@@ -489,11 +498,11 @@ func TestExecuteCreate_FromRemotePrimary(t *testing.T) {
 			wantErrContain:      "failed to determine default remote",
 		},
 		{
-			name:                    "default branch failure propagates",
-			defaultRemote:           "origin",
-			getRemoteBranchErr:      assert.AnError,
-			wantDefaultBranchRemote: "origin",
-			wantErrContain:          "failed to determine default branch for remote \"origin\"",
+			name:                      "default branch failure propagates",
+			defaultRemote:             "origin",
+			getRemoteDefaultBranchErr: assert.AnError,
+			wantDefaultBranchRemote:   "origin",
+			wantErrContain:            "failed to determine default branch for remote \"origin\"",
 		},
 	}
 
@@ -501,7 +510,7 @@ func TestExecuteCreate_FromRemotePrimary(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			workspaceDir := t.TempDir()
 
-			var gotBaseRef, gotBranch, gotDefaultBranchRemote, gotFetchBranch, gotFetchRemote, gotPath string
+			calls := createFromRemotePrimaryCalls{}
 			gitMock := &mockGit{
 				getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
 				getDefaultRemoteFn: func(fallback string) (string, error) {
@@ -512,21 +521,21 @@ func TestExecuteCreate_FromRemotePrimary(t *testing.T) {
 					return tt.defaultRemote, nil
 				},
 				getRemoteDefaultBranchFn: func(remoteName string) (string, error) {
-					gotDefaultBranchRemote = remoteName
-					if tt.getRemoteBranchErr != nil {
-						return "", tt.getRemoteBranchErr
+					calls.defaultBranchRemote = remoteName
+					if tt.getRemoteDefaultBranchErr != nil {
+						return "", tt.getRemoteDefaultBranchErr
 					}
 					return tt.defaultBranch, nil
 				},
 				fetchRemoteTrackingBranchFn: func(remoteName, branchName string) error {
-					gotFetchRemote = remoteName
-					gotFetchBranch = branchName
+					calls.fetchRemote = remoteName
+					calls.fetchBranch = branchName
 					return tt.fetchErr
 				},
 				createWorktreeForNewBranchFromRefFn: func(newBranchName, worktreeAbsPath, baseRef string) error {
-					gotBranch = newBranchName
-					gotPath = worktreeAbsPath
-					gotBaseRef = baseRef
+					calls.branch = newBranchName
+					calls.path = worktreeAbsPath
+					calls.baseRef = baseRef
 					return nil
 				},
 			}
@@ -542,20 +551,20 @@ func TestExecuteCreate_FromRemotePrimary(t *testing.T) {
 			if tt.wantErrContain != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.wantErrContain)
-				assert.Empty(t, gotBaseRef)
-				assert.Empty(t, gotBranch)
+				assert.Empty(t, calls.baseRef)
+				assert.Empty(t, calls.branch)
 			} else {
 				require.NoError(t, err)
-				assert.Equal(t, "feature/add-logging-support", gotBranch)
+				assert.Equal(t, "feature/add-logging-support", calls.branch)
 				wantOutputPath := filepath.Join(workspaceDir, expectedWorktreeName)
-				assert.Equal(t, wantOutputPath, gotPath)
-				assert.Equal(t, tt.wantBaseRef, gotBaseRef)
+				assert.Equal(t, wantOutputPath, calls.path)
+				assert.Equal(t, tt.wantBaseRef, calls.baseRef)
 				assert.Equal(t, wantOutputPath+"\n", stdout.String())
 			}
 
-			assert.Equal(t, tt.wantDefaultBranchRemote, gotDefaultBranchRemote)
-			assert.Equal(t, tt.wantFetchRemote, gotFetchRemote)
-			assert.Equal(t, tt.wantFetchBranch, gotFetchBranch)
+			assert.Equal(t, tt.wantDefaultBranchRemote, calls.defaultBranchRemote)
+			assert.Equal(t, tt.wantFetchRemote, calls.fetchRemote)
+			assert.Equal(t, tt.wantFetchBranch, calls.fetchBranch)
 		})
 	}
 }
