@@ -1,20 +1,32 @@
 version: 2
 updates:
-  # Go modules - individual PRs for careful review
   - package-ecosystem: "gomod"
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 5
     labels:
       - "dependencies"
+      - "go"
+    commit-message:
+      prefix: "deps(go)"
 
-  # GitHub Actions - grouped to reduce noise
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+      time: "09:30"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 5
     labels:
       - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "deps(actions)"
     groups:
       actions:
         patterns:
