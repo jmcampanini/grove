@@ -40,4 +40,4 @@ jobs:
         run: make build
 
       - name: Version smoke test
-        run: ./out/grove --version
+        run: ./build/grove --version

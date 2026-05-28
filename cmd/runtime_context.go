@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/log"
-	configloader "github.com/jmcampanini/go-config-loader"
+	"github.com/jmcampanini/go-config-loader/configloader"
 
 	"github.com/jmcampanini/grove-cli/internal/cache"
 	"github.com/jmcampanini/grove-cli/internal/config"

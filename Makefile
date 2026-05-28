@@ -1,36 +1,49 @@
-BUILD_DIR := out
+BUILD_DIR := build
+BINARY := $(BUILD_DIR)/grove
+GO_FILES := $(shell git ls-files '*.go' ':!:vendor/*')
 
 VERSION := $(shell git describe --tags --dirty --always 2>/dev/null || date -u '+%Y-%m-%dT%H:%M:%SZ')
 LDFLAGS := -ldflags "-X github.com/jmcampanini/grove-cli/cmd.Version=$(VERSION)"
 
 .DEFAULT_GOAL := help
-.PHONY: build check clean fmt help lint test tidy
+.PHONY: help build test lint lint-fix fmt fmt-check tidy tidy-check check clean
 
-help: ## show this help
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-15s %s\n", $$1, $$2}'
+help: ## Show this help.
+	@awk 'BEGIN {FS = ":.*##"; printf "Usage:\n  make <target>\n\nTargets:\n"} /^[a-zA-Z0-9_.-]+:.*##/ { printf "  %-16s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
 
-build: ## compile the grove binary
-	go build $(LDFLAGS) -o $(BUILD_DIR)/grove .
+build: ## Compile the grove binary.
+	mkdir -p $(BUILD_DIR)
+	go build $(LDFLAGS) -o $(BINARY) .
 
-test: ## run tests with -race
+test: ## Run tests with the race detector.
 	go test -race ./...
 
-lint: ## run golangci-lint
+lint: ## Run golangci-lint.
 	golangci-lint run ./...
 
-check: ## fmt check + tidy check + lint + test
-	@test -z "$$(gofmt -l .)" || { echo "gofmt drift; run: make fmt"; exit 1; }
-	go mod tidy -diff
-	golangci-lint run ./...
-	go test -race ./...
+lint-fix: ## Run golangci-lint with autofixes.
+	golangci-lint run --fix ./...
 
-fmt: ## apply gofmt in-place
-	gofmt -w .
+fmt: ## Apply gofmt to tracked Go files.
+	gofmt -w $(GO_FILES)
 
-tidy: ## apply go mod tidy
+fmt-check: ## Check gofmt without modifying files.
+	@files="$$(gofmt -l $(GO_FILES))"; \
+	if [ -n "$$files" ]; then \
+		echo "gofmt drift; run: make fmt"; \
+		echo "$$files"; \
+		exit 1; \
+	fi
+
+tidy: ## Apply go mod tidy.
 	go mod tidy
 
-clean: ## remove out/, test cache, *.out, cover.*
-	rm -rf $(BUILD_DIR)
+tidy-check: ## Check go.mod/go.sum without modifying files.
+	go mod tidy -diff
+
+check: fmt-check tidy-check lint test ## Run all non-mutating checks.
+
+clean: ## Remove build artifacts, coverage files, and test cache.
+	rm -rf $(BUILD_DIR) dist
 	go clean -testcache
-	rm -f *.out cover.*
+	rm -f *.out cover.* coverage.*
