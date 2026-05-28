@@ -71,7 +71,7 @@ Run grove config to inspect the merged effective configuration. Run grove config
     worktree_prefix = "wt-"
 
     [log]
-    file = "~/.local/state/grove/grove.log"
+    file = "/absolute/path/to/grove.log"
 
     [pull_request]
     branch_template = "{{.BranchName}}"
@@ -91,6 +91,7 @@ Run grove config to inspect the merged effective configuration. Run grove config
 ## Validation notes
 
 - git.timeout and github.preview_cache_ttl must be zero or positive durations.
+- log.file is used as written; shell shortcuts such as ~ are not expanded. Run grove config to see the computed default.
 - pull_request.worktree_prefix cannot be empty.
 - slugify.hash_length and slugify.max_length must be zero or positive.
 - slugify.hash_length must leave at least two characters when slugify.max_length is set.

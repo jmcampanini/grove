@@ -42,7 +42,7 @@ grove create "add user authentication" --from-remote-primary
 
 ## Reference
 
-For the full command reference, run `grove --help` or `grove docs`. Topic pages:
+For command help, run `grove --help`. For a Markdown overview and configuration reference, run `grove docs`. Topic pages:
 
 - `grove help workspace` — workspace layout and requirements
 - `grove help exit-codes` — exit codes and error categories

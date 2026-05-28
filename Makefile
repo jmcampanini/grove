@@ -1,6 +1,6 @@
 BUILD_DIR := build
 BINARY := $(BUILD_DIR)/grove
-GO_FILES := $(shell git ls-files '*.go' ':!:vendor/*')
+GOFMT_FILES := $(shell git ls-files --cached --others --exclude-standard -- '*.go')
 
 VERSION := $(shell git describe --tags --dirty --always 2>/dev/null || date -u '+%Y-%m-%dT%H:%M:%SZ')
 LDFLAGS := -ldflags "-X github.com/jmcampanini/grove-cli/cmd.Version=$(VERSION)"
@@ -24,16 +24,14 @@ lint: ## Run golangci-lint.
 lint-fix: ## Run golangci-lint with autofixes.
 	golangci-lint run --fix ./...
 
-fmt: ## Apply gofmt to tracked Go files.
-	gofmt -w $(GO_FILES)
+fmt: ## Apply gofmt -w to tracked/non-ignored Go files.
+	@if [ -n "$(GOFMT_FILES)" ]; then gofmt -w $(GOFMT_FILES); fi
 
-fmt-check: ## Check gofmt without modifying files.
-	@files="$$(gofmt -l $(GO_FILES))"; \
-	if [ -n "$$files" ]; then \
-		echo "gofmt drift; run: make fmt"; \
-		echo "$$files"; \
-		exit 1; \
-	fi
+fmt-check: ## Fail if tracked/non-ignored Go files need gofmt.
+	@if [ -z "$(GOFMT_FILES)" ]; then exit 0; fi; \
+	diff=$$(gofmt -l $(GOFMT_FILES) 2>&1); rc=$$?; \
+	if [ $$rc -ne 0 ]; then echo "gofmt failed (rc=$$rc):"; echo "$$diff"; exit $$rc; fi; \
+	if [ -n "$$diff" ]; then echo "gofmt issues:"; echo "$$diff"; exit 1; fi
 
 tidy: ## Apply go mod tidy.
 	go mod tidy
