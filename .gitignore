@@ -1,3 +1,18 @@
-out/
+# Build artifacts
+/build/
+/dist/
+
+# Coverage and test output
+*.out
+cover.*
+coverage.*
+
+# Agent scratch paths
+.claude/
+.claude-plans/
+.claude-sandbox/
+.codex-*
+
+# Local editor and dependency directories
 .idea/
 vendor/

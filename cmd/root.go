@@ -11,8 +11,10 @@ import (
 var Version = "n/a"
 
 var rootCmd = &cobra.Command{
-	Use:   "grove",
-	Short: "Git worktree workspace manager",
+	Use:           "grove",
+	Short:         "Git worktree workspace manager",
+	SilenceErrors: true,
+	SilenceUsage:  true,
 	Long: `Grove manages git worktrees in a workspace structure.
 
 Common workflows:

@@ -48,11 +48,10 @@ func runResolve(cmd *cobra.Command, args []string) error {
 	}
 
 	paths := config.BootstrapConfigPaths(targetPath, homeDir)
-	result, err := config.NewDefaultLoader().Load(paths)
+	cfg, _, err := config.LoadFiles(paths)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
-	cfg := result.Config
 
 	ctx := &resolveContext{
 		primaryBranches: cfg.Workspace.PrimaryBranches,

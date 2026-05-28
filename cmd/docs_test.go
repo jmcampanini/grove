@@ -1,0 +1,29 @@
+package cmd
+
+import (
+	"bytes"
+	"testing"
+
+	"github.com/spf13/cobra"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestDocsCommandWritesReference(t *testing.T) {
+	var buf bytes.Buffer
+	cmd := &cobra.Command{}
+	cmd.SetOut(&buf)
+
+	err := runDocs(cmd, nil)
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "# grove reference")
+	assert.Contains(t, output, "grove config --provenance")
+	assert.Contains(t, output, "[workspace]")
+}
+
+func TestDocsCommandMetadata(t *testing.T) {
+	assert.Equal(t, "utility", docsCmd.GroupID)
+	assert.Equal(t, "docs", docsCmd.Use)
+}

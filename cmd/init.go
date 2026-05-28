@@ -21,6 +21,11 @@ var initCmd = &cobra.Command{
 Usage:
   grove init --<shell>
 
+Shell selection flags are mutually exclusive; choose exactly one:
+  --bash
+  --fish
+  --zsh
+
 Examples:
   Zsh:
     grove init --zsh > "${XDG_DATA_HOME:-$HOME/.local/share}/grove/init.zsh"

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/log"
+	"github.com/jmcampanini/go-config-loader/configloader"
 
 	"github.com/jmcampanini/grove-cli/internal/cache"
 	"github.com/jmcampanini/grove-cli/internal/config"
@@ -20,6 +21,7 @@ var errNotGitRepo = errors.New("grove must be run inside a git repository")
 
 type commandRuntime struct {
 	cfg              config.Config
+	configReport     configloader.LoadReport
 	cwd              string
 	gitClient        git.Git
 	mainWorktreePath string
@@ -62,13 +64,13 @@ func loadCommandRuntime() (*commandRuntime, error) {
 		log.Debug("not in a git repository, attempting workspace root detection", "cwd", originalCwd)
 
 		bootstrapPaths := config.BootstrapConfigPaths(originalCwd, homeDir)
-		bootstrapResult, err := config.NewDefaultLoader().Load(bootstrapPaths)
+		bootstrapCfg, bootstrapReport, err := config.LoadFiles(bootstrapPaths)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load bootstrap config: %w", err)
 		}
-		log.Debug("bootstrap config loaded", "paths", bootstrapPaths, "sources", bootstrapResult.SourcePaths)
+		log.Debug("bootstrap config loaded", "paths", bootstrapPaths, "sources", bootstrapReport.LoadedFiles)
 
-		worktreeRoot, err = resolveWorkspaceRoot(originalCwd, bootstrapResult.Config.Workspace.PrimaryBranches, defaultTimeout)
+		worktreeRoot, err = resolveWorkspaceRoot(originalCwd, bootstrapCfg.Workspace.PrimaryBranches, defaultTimeout)
 		if err != nil {
 			log.Debug("workspace root detection failed", "err", err)
 			return nil, errNotGitRepo
@@ -85,19 +87,21 @@ func loadCommandRuntime() (*commandRuntime, error) {
 	}
 
 	configPaths := config.ConfigPaths(originalCwd, worktreeRoot, mainWorktreePath, homeDir)
-	loadResult, err := config.NewDefaultLoader().Load(configPaths)
+	cfg, report, err := config.LoadFiles(configPaths)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
+	log.Debug("config loaded", "paths", configPaths, "sources", report.LoadedFiles)
 
-	if err := logging.Setup(loadResult.Config.Log.File); err != nil {
-		log.Warn("failed to set up file logging", "path", loadResult.Config.Log.File, "error", err)
+	if err := logging.Setup(cfg.Log.File); err != nil {
+		log.Warn("failed to set up file logging", "path", cfg.Log.File, "error", err)
 	}
 
 	return &commandRuntime{
-		cfg:              loadResult.Config,
+		cfg:              cfg,
+		configReport:     report,
 		cwd:              gitDir,
-		gitClient:        git.New(false, gitDir, loadResult.Config.Git.Timeout),
+		gitClient:        git.New(false, gitDir, cfg.Git.Timeout),
 		mainWorktreePath: mainWorktreePath,
 	}, nil
 }

@@ -22,6 +22,15 @@ var createCmd = &cobra.Command{
 
 By default, the new branch is created from the current HEAD. Use --from to
 specify a different starting point (any git ref: branch, tag, or commit SHA).
+Use --from-remote-primary to fetch and start from the latest remote primary
+branch without updating the primary worktree; this is recommended for automation.
+Use --reuse to attach to an existing branch/worktree for the phrase instead of
+failing when it already exists.
+
+Creation mode flags are mutually exclusive; choose at most one:
+  --from <ref>
+  --from-remote-primary
+  --reuse
 
 The phrase is converted to a branch name using the configured slugify rules
 and prefix. A worktree is then created with the configured worktree naming.
@@ -32,6 +41,8 @@ Example:
   grove create "hotfix" --from main
   grove create "backport" --from v1.2.0
   grove create "experiment" --from origin/develop
+  grove create "add user authentication" --from-remote-primary
+  grove create "add user authentication" --reuse
 
 Note: The create command takes a single quoted string argument. The shell wrapper
 function (grc) can handle passing arbitrary phrases by quoting the arguments.
@@ -43,16 +54,18 @@ To check out an existing pull request, use 'grove pr checkout' instead.`,
 
 func init() {
 	createCmd.Flags().String("from", "", "git ref (branch, tag, or commit) to create the new branch from (default: HEAD)")
+	createCmd.Flags().Bool("from-remote-primary", false, "fetch the default remote's primary branch and create the new branch from it")
 	createCmd.Flags().Bool("reuse", false, "reuse existing worktree if one already exists for this phrase")
 	createCmd.GroupID = "worktree"
 	rootCmd.AddCommand(createCmd)
 }
 
 type createContext struct {
-	baseRef   string
-	cfg       config.Config
-	gitClient git.Git
-	reuse     bool
+	baseRef           string
+	cfg               config.Config
+	fromRemotePrimary bool
+	gitClient         git.Git
+	reuse             bool
 }
 
 func runCreate(cmd *cobra.Command, args []string) error {
@@ -68,28 +81,30 @@ func runCreate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	fromRemotePrimary, err := cmd.Flags().GetBool("from-remote-primary")
+	if err != nil {
+		return err
+	}
+
 	rt, err := loadCommandRuntime()
 	if err != nil {
 		return err
 	}
 
 	ctx := &createContext{
-		baseRef:   fromRef,
-		cfg:       rt.cfg,
-		gitClient: rt.gitClient,
-		reuse:     reuse,
+		baseRef:           fromRef,
+		cfg:               rt.cfg,
+		fromRemotePrimary: fromRemotePrimary,
+		gitClient:         rt.gitClient,
+		reuse:             reuse,
 	}
 
 	return executeCreate(cmd.OutOrStdout(), ctx, phrase)
 }
 
 func executeCreate(stdout io.Writer, ctx *createContext, phrase string) error {
-	if ctx.reuse && ctx.baseRef != "" {
-		return errors.New("--reuse and --from cannot be used together: --reuse attaches to an existing branch and ignores --from")
-	}
-
-	if strings.TrimSpace(phrase) == "" {
-		return errors.New("phrase cannot be empty")
+	if err := validateCreateRequest(ctx, phrase); err != nil {
+		return err
 	}
 
 	namer := naming.NewLocalBranchNamer(ctx.cfg.LocalBranch, ctx.cfg.Slugify)
@@ -127,12 +142,60 @@ Examples:
 		return fmt.Errorf("worktree path %q already exists; to remove it: git worktree remove %s", worktreePath, worktreeName)
 	}
 
-	if err := ctx.gitClient.CreateWorktreeForNewBranchFromRef(branchName, worktreePath, ctx.baseRef); err != nil {
+	baseRef, err := resolveCreateBaseRef(ctx)
+	if err != nil {
+		return err
+	}
+
+	if err := ctx.gitClient.CreateWorktreeForNewBranchFromRef(branchName, worktreePath, baseRef); err != nil {
 		return fmt.Errorf("failed to create branch and worktree: %w", err)
 	}
 
 	_, err = fmt.Fprintln(stdout, worktreePath)
 	return err
+}
+
+func validateCreateRequest(ctx *createContext, phrase string) error {
+	switch {
+	case ctx.fromRemotePrimary && ctx.baseRef != "":
+		return errors.New("--from and --from-remote-primary cannot be used together")
+	case ctx.fromRemotePrimary && ctx.reuse:
+		return errors.New("--reuse and --from-remote-primary cannot be used together")
+	case ctx.reuse && ctx.baseRef != "":
+		return errors.New("--reuse and --from cannot be used together: --reuse attaches to an existing branch and ignores --from")
+	case strings.TrimSpace(phrase) == "":
+		return errors.New("phrase cannot be empty")
+	default:
+		return nil
+	}
+}
+
+func resolveCreateBaseRef(ctx *createContext) (string, error) {
+	if ctx.fromRemotePrimary {
+		return resolveRemotePrimaryBaseRef(ctx.gitClient)
+	}
+	return ctx.baseRef, nil
+}
+
+func resolveRemotePrimaryBaseRef(gitClient git.Git) (string, error) {
+	remoteName, err := gitClient.GetDefaultRemote("origin")
+	if err != nil {
+		return "", fmt.Errorf("failed to determine default remote: %w", err)
+	}
+
+	branchName, err := gitClient.GetRemoteDefaultBranch(remoteName)
+	if err != nil {
+		return "", fmt.Errorf("failed to determine default branch for remote %q: %w", remoteName, err)
+	}
+	if branchName == "" {
+		return "", fmt.Errorf("could not determine default branch for remote %q; ensure the remote HEAD/default branch is configured", remoteName)
+	}
+
+	if err := gitClient.FetchRemoteTrackingBranch(remoteName, branchName); err != nil {
+		return "", fmt.Errorf("failed to fetch default branch %q from remote %q: %w", branchName, remoteName, err)
+	}
+
+	return remoteName + "/" + branchName, nil
 }
 
 func reuseExistingBranch(stdout io.Writer, ctx *createContext, namer *naming.LocalBranchNamer, branchName, workspacePath string) error {

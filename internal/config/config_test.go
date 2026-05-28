@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jmcampanini/go-config-loader/configloader"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -405,23 +406,11 @@ func TestBootstrapConfigPaths(t *testing.T) {
 	}
 }
 
-// fakeFileSystem is a test double for FileSystem
-type fakeFileSystem struct {
-	existingFiles map[string]bool
-}
-
-func (f *fakeFileSystem) Exists(path string) bool {
-	return f.existingFiles[path]
-}
-
 func TestLoad_MissingFile(t *testing.T) {
-	fs := &fakeFileSystem{existingFiles: map[string]bool{}}
-	loader := NewLoader(fs)
-
-	result, err := loader.Load([]string{"/nonexistent/grove.toml"})
+	cfg, report, err := LoadFiles([]string{"/nonexistent/grove.toml"})
 	require.NoError(t, err)
-	assert.Equal(t, DefaultConfig(), result.Config)
-	assert.Empty(t, result.SourcePaths)
+	assert.Equal(t, DefaultConfig(), cfg)
+	assert.Empty(t, report.LoadedFiles)
 }
 
 func TestLoad_SingleFile(t *testing.T) {
@@ -511,12 +500,11 @@ primary_branches = ["trunk", "main"]
 			err := os.WriteFile(configPath, []byte(tt.content), 0644)
 			require.NoError(t, err)
 
-			loader := NewDefaultLoader()
-			result, err := loader.Load([]string{configPath})
+			cfg, report, err := LoadFiles([]string{configPath})
 			require.NoError(t, err)
 
-			tt.check(t, result.Config)
-			assert.Equal(t, []string{configPath}, result.SourcePaths)
+			tt.check(t, cfg)
+			assert.Equal(t, []string{configPath}, report.LoadedFiles)
 		})
 	}
 }
@@ -542,16 +530,15 @@ branch_prefix = "high/"
 	require.NoError(t, os.WriteFile(lowPriorityPath, []byte(lowPriorityContent), 0644))
 	require.NoError(t, os.WriteFile(highPriorityPath, []byte(highPriorityContent), 0644))
 
-	loader := NewDefaultLoader()
-	result, err := loader.Load([]string{lowPriorityPath, highPriorityPath})
+	cfg, report, err := LoadFiles([]string{lowPriorityPath, highPriorityPath})
 	require.NoError(t, err)
 
 	// High priority should override local_branch.branch_prefix
-	assert.Equal(t, "high/", result.Config.LocalBranch.BranchPrefix)
+	assert.Equal(t, "high/", cfg.LocalBranch.BranchPrefix)
 	// Low priority should still apply for non-overridden fields
-	assert.Equal(t, 100, result.Config.Slugify.MaxLength)
+	assert.Equal(t, 100, cfg.Slugify.MaxLength)
 	// Both paths should be in source paths
-	assert.Equal(t, []string{lowPriorityPath, highPriorityPath}, result.SourcePaths)
+	assert.Equal(t, []string{lowPriorityPath, highPriorityPath}, report.LoadedFiles)
 }
 
 func TestLoad_ZeroValueOverwrite(t *testing.T) {
@@ -571,12 +558,11 @@ max_length = 0
 `
 	require.NoError(t, os.WriteFile(secondPath, []byte(secondContent), 0644))
 
-	loader := NewDefaultLoader()
-	result, err := loader.Load([]string{firstPath, secondPath})
+	cfg, _, err := LoadFiles([]string{firstPath, secondPath})
 	require.NoError(t, err)
 
 	// Zero value from second file should override
-	assert.Equal(t, 0, result.Config.Slugify.MaxLength)
+	assert.Equal(t, 0, cfg.Slugify.MaxLength)
 }
 
 func TestLoad_InvalidTOML(t *testing.T) {
@@ -587,10 +573,25 @@ func TestLoad_InvalidTOML(t *testing.T) {
 branch_prefix = "broken`
 	require.NoError(t, os.WriteFile(configPath, []byte(invalidContent), 0644))
 
-	loader := NewDefaultLoader()
-	_, err := loader.Load([]string{configPath})
+	_, _, err := LoadFiles([]string{configPath})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), configPath)
+}
+
+func TestLoad_UnknownKeys(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "grove.toml")
+
+	content := `[git]
+timeout = "10s"
+unknown = true
+`
+	require.NoError(t, os.WriteFile(configPath, []byte(content), 0644))
+
+	_, _, err := LoadFiles([]string{configPath})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown keys")
+	assert.Contains(t, err.Error(), "git.unknown")
 }
 
 func TestLoad_InvalidConfigValues(t *testing.T) {
@@ -636,15 +637,14 @@ max_length = -1
 		t.Run(tt.name, func(t *testing.T) {
 			require.NoError(t, os.WriteFile(configPath, []byte(tt.content), 0644))
 
-			loader := NewDefaultLoader()
-			_, err := loader.Load([]string{configPath})
+			_, _, err := LoadFiles([]string{configPath})
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantErr)
 		})
 	}
 }
 
-func TestLoad_ReturnsSourcePaths(t *testing.T) {
+func TestLoad_ReturnsLoadedFiles(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create three config files, but only two exist
@@ -655,12 +655,11 @@ func TestLoad_ReturnsSourcePaths(t *testing.T) {
 	require.NoError(t, os.WriteFile(path1, []byte("[local_branch]\nbranch_prefix = \"one/\""), 0644))
 	require.NoError(t, os.WriteFile(path2, []byte("[local_branch]\nbranch_prefix = \"two/\""), 0644))
 
-	loader := NewDefaultLoader()
-	result, err := loader.Load([]string{path1, path3, path2})
+	_, report, err := LoadFiles([]string{path1, path3, path2})
 	require.NoError(t, err)
 
-	// Only existing files should be in source paths
-	assert.Equal(t, []string{path1, path2}, result.SourcePaths)
+	// Only existing files should be in loaded files
+	assert.Equal(t, []string{path1, path2}, report.LoadedFiles)
 }
 
 func TestLoad_PathIsDirectory(t *testing.T) {
@@ -670,42 +669,32 @@ func TestLoad_PathIsDirectory(t *testing.T) {
 	dirPath := filepath.Join(tmpDir, "grove.toml")
 	require.NoError(t, os.Mkdir(dirPath, 0755))
 
-	loader := NewDefaultLoader()
-	result, err := loader.Load([]string{dirPath})
+	cfg, report, err := LoadFiles([]string{dirPath})
 	require.NoError(t, err)
 
 	// Directory should be skipped
-	assert.Empty(t, result.SourcePaths)
-	assert.Equal(t, DefaultConfig(), result.Config)
+	assert.Empty(t, report.LoadedFiles)
+	assert.Equal(t, DefaultConfig(), cfg)
 }
 
-func TestOSFileSystem_Exists(t *testing.T) {
+func TestLoad_Provenance(t *testing.T) {
 	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "grove.toml")
 
-	// Create a real file
-	filePath := filepath.Join(tmpDir, "test.txt")
-	require.NoError(t, os.WriteFile(filePath, []byte("test"), 0644))
+	content := `[git]
+timeout = "10s"
 
-	// Create a directory
-	dirPath := filepath.Join(tmpDir, "testdir")
-	require.NoError(t, os.Mkdir(dirPath, 0755))
+[local_branch]
+branch_prefix = "fix/"
+`
+	require.NoError(t, os.WriteFile(configPath, []byte(content), 0644))
 
-	fs := OSFileSystem{}
+	_, report, err := LoadFiles([]string{configPath})
+	require.NoError(t, err)
 
-	// File should exist
-	assert.True(t, fs.Exists(filePath))
-
-	// Directory should not count as existing file
-	assert.False(t, fs.Exists(dirPath))
-
-	// Nonexistent should not exist
-	assert.False(t, fs.Exists(filepath.Join(tmpDir, "nonexistent")))
-}
-
-func TestNewDefaultLoader(t *testing.T) {
-	loader := NewDefaultLoader()
-	assert.NotNil(t, loader)
-	assert.IsType(t, OSFileSystem{}, loader.fs)
+	assert.Equal(t, configPath, report.Updates["git.timeout"])
+	assert.Equal(t, configPath, report.Updates["localbranch.branchprefix"])
+	assert.Equal(t, configloader.SourceDefault, report.Updates["slugify.maxlength"])
 }
 
 func TestDefaultLogFilePath(t *testing.T) {
@@ -744,10 +733,9 @@ func TestLoad_LogFile(t *testing.T) {
 			configPath := filepath.Join(tmpDir, "grove.toml")
 			require.NoError(t, os.WriteFile(configPath, []byte(tt.toml), 0644))
 
-			loader := NewDefaultLoader()
-			result, err := loader.Load([]string{configPath})
+			cfg, _, err := LoadFiles([]string{configPath})
 			require.NoError(t, err)
-			assert.Equal(t, tt.wantFile, result.Config.Log.File)
+			assert.Equal(t, tt.wantFile, cfg.Log.File)
 		})
 	}
 }
