@@ -21,7 +21,7 @@ brew upgrade --fetch-HEAD grove
 
 ```sh
 make build
-# then copy out/grove to a directory on your PATH
+# then copy ./build/grove to a directory on your PATH
 ```
 
 ## Quickstart
@@ -42,7 +42,7 @@ grove create "add user authentication" --from-remote-primary
 
 ## Reference
 
-For the full command reference, run `grove --help`. Topic pages:
+For command help, run `grove --help`. For a Markdown overview and configuration reference, run `grove docs`. Topic pages:
 
 - `grove help workspace` — workspace layout and requirements
 - `grove help exit-codes` — exit codes and error categories

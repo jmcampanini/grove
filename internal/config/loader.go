@@ -3,7 +3,7 @@ package config
 import (
 	"fmt"
 
-	configloader "github.com/jmcampanini/go-config-loader"
+	"github.com/jmcampanini/go-config-loader/configloader"
 )
 
 // LoadFiles loads and merges TOML config files in low-to-high priority order.
