@@ -5,8 +5,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/lipgloss/table"
+	"charm.land/lipgloss/v2"
+	"charm.land/lipgloss/v2/table"
 	"github.com/dustin/go-humanize"
 	"github.com/jmcampanini/grove-cli/internal/github"
 	"github.com/jmcampanini/grove-cli/internal/naming"
@@ -125,7 +125,7 @@ func outputPRListTable(w io.Writer, matches []pr.Match) error {
 		Headers("#", "Title", "Author", "Branch", "State", "Local", "Updated").
 		Rows(rows...)
 
-	_, err := fmt.Fprintln(w, t)
+	_, err := lipgloss.Fprintln(w, t)
 	return err
 }
 

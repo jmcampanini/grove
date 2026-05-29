@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	clog "github.com/charmbracelet/log"
+	clog "charm.land/log/v2"
 )
 
 // GitCli provides high-level git operations by executing real git commands via the git CLI.

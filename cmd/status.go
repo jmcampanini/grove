@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/lipgloss/table"
+	"charm.land/lipgloss/v2"
+	"charm.land/lipgloss/v2/table"
 	"github.com/jmcampanini/grove-cli/internal/git"
 	"github.com/jmcampanini/grove-cli/internal/github"
 	"github.com/spf13/cobra"
@@ -178,7 +178,7 @@ func renderStatusTable(w io.Writer, statuses []worktreeStatus) error {
 		Headers("Name", "Branch", "Status", "Tracking", "Kind", "PR Info").
 		Rows(rows...)
 
-	_, err := fmt.Fprintln(w, t)
+	_, err := lipgloss.Fprintln(w, t)
 	return err
 }
 

@@ -2,13 +2,15 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
+	"charm.land/lipgloss/v2/compat"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/jmcampanini/grove-cli/internal/github"
-	"github.com/muesli/termenv"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -60,28 +62,44 @@ func detectPreviewWidth() int {
 }
 
 func applyColorMode(mode string) error {
-	// When stdout isn't a TTY (fzf preview, piped output), termenv can't query
+	// When stdout isn't a TTY (fzf preview, piped output), Lip Gloss can't query
 	// the terminal for its background color and defaults to dark. Fall back to
-	// COLORFGBG env var so AdaptiveColor picks the right variant.
+	// COLORFGBG env var so adaptive colors pick the right variant.
 	fi, err := os.Stdout.Stat()
 	if err == nil && fi.Mode()&os.ModeCharDevice == 0 {
 		if dark, ok := detectDarkBackgroundFromEnv(); ok {
-			lipgloss.SetHasDarkBackground(dark)
+			compat.HasDarkBackground = dark
 		}
 	}
 
 	switch mode {
 	case "auto":
+		setPreviewColorProfile(colorprofile.Detect(os.Stdout, os.Environ()))
 		return nil
 	case "always":
-		lipgloss.SetColorProfile(termenv.ANSI256)
+		setPreviewColorProfile(colorprofile.ANSI256)
 		return nil
 	case "never":
-		lipgloss.SetColorProfile(termenv.Ascii)
+		setPreviewColorProfile(colorprofile.ASCII)
 		return nil
 	default:
 		return fmt.Errorf("invalid color mode %q; valid modes: auto, always, never", mode)
 	}
+}
+
+func setPreviewColorProfile(profile colorprofile.Profile) {
+	lipgloss.Writer.Profile = profile
+	compat.Profile = profile
+}
+
+func previewColorsDisabled() bool {
+	return lipgloss.Writer.Profile <= colorprofile.ASCII
+}
+
+func writePreviewLine(w io.Writer, s string) error {
+	profiled := colorprofile.Writer{Forward: w, Profile: lipgloss.Writer.Profile}
+	_, err := fmt.Fprintln(&profiled, s)
+	return err
 }
 
 func detectDarkBackgroundFromEnv() (dark bool, ok bool) {

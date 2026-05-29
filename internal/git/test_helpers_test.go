@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	clog "github.com/charmbracelet/log"
+	clog "charm.land/log/v2"
 	"github.com/stretchr/testify/require"
 )
 

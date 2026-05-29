@@ -1,7 +1,7 @@
 package pr
 
 import (
-	clog "github.com/charmbracelet/log"
+	clog "charm.land/log/v2"
 	"github.com/jmcampanini/grove-cli/internal/git"
 	"github.com/jmcampanini/grove-cli/internal/github"
 	"github.com/jmcampanini/grove-cli/internal/naming"

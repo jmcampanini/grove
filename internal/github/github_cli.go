@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	clog "github.com/charmbracelet/log"
+	clog "charm.land/log/v2"
 	"github.com/jmcampanini/grove-cli/internal/cache"
 )
 

@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"image/color"
 	"io"
 	"maps"
 	"path/filepath"
@@ -12,15 +13,16 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/lipgloss/v2"
+	"charm.land/lipgloss/v2/compat"
+	"charm.land/log/v2"
 	"github.com/charmbracelet/glamour"
-	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/log"
 	"github.com/jmcampanini/grove-cli/internal/github"
 	"github.com/muesli/termenv"
 )
 
 var (
-	colorCyan   = lipgloss.AdaptiveColor{Light: "30", Dark: "44"}
+	colorCyan   = compat.AdaptiveColor{Light: lipgloss.Color("30"), Dark: lipgloss.Color("44")}
 	colorGray   = lipgloss.Color("245")
 	colorGreen  = lipgloss.Color("76")
 	colorPurple = lipgloss.Color("99")
@@ -49,13 +51,13 @@ const (
 )
 
 func hyperlink(url, text string) string {
-	if lipgloss.ColorProfile() == termenv.Ascii {
+	if previewColorsDisabled() {
 		return text
 	}
 	return termenv.Hyperlink(url, text)
 }
 
-func stateColor(state github.PRState) lipgloss.TerminalColor {
+func stateColor(state github.PRState) color.Color {
 	switch state {
 	case github.PRStateOpen:
 		return colorGreen
@@ -70,7 +72,7 @@ func stateColor(state github.PRState) lipgloss.TerminalColor {
 	}
 }
 
-func colorIcon(icon string, color lipgloss.TerminalColor) string {
+func colorIcon(icon string, color color.Color) string {
 	return lipgloss.NewStyle().Foreground(color).Render(icon)
 }
 
@@ -98,7 +100,7 @@ func reviewIcon(state github.ReviewState) string {
 	}
 }
 
-func labelColor(hexColor string) lipgloss.Color {
+func labelColor(hexColor string) color.Color {
 	h := strings.TrimPrefix(hexColor, "#")
 	if len(h) != 6 {
 		return colorGray
@@ -710,6 +712,5 @@ func renderPreview(w io.Writer, pr github.PullRequest, fileComments map[string]i
 		sections = append(sections, boxStyle.Render(timelineContent))
 	}
 
-	_, err := fmt.Fprintln(w, lipgloss.JoinVertical(lipgloss.Left, sections...))
-	return err
+	return writePreviewLine(w, lipgloss.JoinVertical(lipgloss.Left, sections...))
 }
