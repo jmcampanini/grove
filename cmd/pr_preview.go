@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
-	"charm.land/lipgloss/v2/compat"
 	"github.com/charmbracelet/colorprofile"
 	"github.com/jmcampanini/grove-cli/internal/github"
 	"github.com/spf13/cobra"
@@ -16,8 +15,9 @@ import (
 )
 
 var (
-	prPreviewColorFlag string
-	prPreviewFzfFlag   bool
+	prPreviewColorFlag       string
+	prPreviewFzfFlag         bool
+	previewHasDarkBackground = true
 )
 
 var prPreviewCmd = &cobra.Command{
@@ -62,34 +62,42 @@ func detectPreviewWidth() int {
 }
 
 func applyColorMode(mode string) error {
-	// When stdout isn't a TTY (fzf preview, piped output), Lip Gloss can't query
-	// the terminal for its background color and defaults to dark. Fall back to
-	// COLORFGBG env var so adaptive colors pick the right variant.
-	fi, err := os.Stdout.Stat()
-	if err == nil && fi.Mode()&os.ModeCharDevice == 0 {
-		if dark, ok := detectDarkBackgroundFromEnv(); ok {
-			compat.HasDarkBackground = dark
-		}
-	}
-
+	var profile colorprofile.Profile
 	switch mode {
 	case "auto":
-		setPreviewColorProfile(colorprofile.Detect(os.Stdout, os.Environ()))
-		return nil
+		profile = colorprofile.Detect(os.Stdout, os.Environ())
 	case "always":
-		setPreviewColorProfile(colorprofile.ANSI256)
-		return nil
+		profile = colorprofile.ANSI256
 	case "never":
-		setPreviewColorProfile(colorprofile.ASCII)
-		return nil
+		profile = colorprofile.NoTTY
 	default:
 		return fmt.Errorf("invalid color mode %q; valid modes: auto, always, never", mode)
 	}
+
+	setPreviewColorProfile(profile)
+	setPreviewHasDarkBackground(detectPreviewHasDarkBackground(profile))
+	return nil
 }
 
 func setPreviewColorProfile(profile colorprofile.Profile) {
 	lipgloss.Writer.Profile = profile
-	compat.Profile = profile
+}
+
+func setPreviewHasDarkBackground(hasDark bool) {
+	previewHasDarkBackground = hasDark
+}
+
+func detectPreviewHasDarkBackground(profile colorprofile.Profile) bool {
+	if dark, ok := detectDarkBackgroundFromEnv(); ok {
+		return dark
+	}
+	if profile <= colorprofile.ASCII {
+		return true
+	}
+	if term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd())) {
+		return lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
+	}
+	return true
 }
 
 func previewColorsDisabled() bool {

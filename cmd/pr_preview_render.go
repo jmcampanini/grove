@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"charm.land/lipgloss/v2"
-	"charm.land/lipgloss/v2/compat"
 	"charm.land/log/v2"
 	"github.com/charmbracelet/glamour"
 	"github.com/jmcampanini/grove-cli/internal/github"
@@ -22,13 +21,16 @@ import (
 )
 
 var (
-	colorCyan   = compat.AdaptiveColor{Light: lipgloss.Color("30"), Dark: lipgloss.Color("44")}
 	colorGray   = lipgloss.Color("245")
 	colorGreen  = lipgloss.Color("76")
 	colorPurple = lipgloss.Color("99")
 	colorRed    = lipgloss.Color("196")
 	colorYellow = lipgloss.Color("214")
 )
+
+func colorCyan() color.Color {
+	return lipgloss.LightDark(previewHasDarkBackground)(lipgloss.Color("30"), lipgloss.Color("44"))
+}
 
 const (
 	targetHighActivityFiles = 3
@@ -201,7 +203,7 @@ func wrapBody(body string, width int) string {
 }
 
 func sectionHeader(text string) string {
-	return lipgloss.NewStyle().Foreground(colorCyan).Bold(true).Render(text)
+	return lipgloss.NewStyle().Foreground(colorCyan()).Bold(true).Render(text)
 }
 
 func renderChecksLines(checks []github.StatusCheck) string {
@@ -217,7 +219,7 @@ func renderChecksLines(checks []github.StatusCheck) string {
 		)
 		if sc.DetailURL != "" {
 			link := hyperlink(sc.DetailURL, "[↗ details]")
-			line += "  " + lipgloss.NewStyle().Foreground(colorCyan).Render(link)
+			line += "  " + lipgloss.NewStyle().Foreground(colorCyan()).Render(link)
 		}
 		lines = append(lines, line)
 	}
@@ -295,13 +297,13 @@ func timelineEventIcon(eventType github.TimelineEventType, details string) strin
 			return colorIcon(iconComment, colorGray)
 		}
 	case github.TimelineEventCommented:
-		return colorIcon(iconComment, colorCyan)
+		return colorIcon(iconComment, colorCyan())
 	case github.TimelineEventCommitted:
 		return colorIcon(iconGitRef, colorPurple)
 	case github.TimelineEventForcePushed:
 		return colorIcon(iconZap, colorYellow)
 	case github.TimelineEventLabeled:
-		return colorIcon(iconTag, colorCyan)
+		return colorIcon(iconTag, colorCyan())
 	case github.TimelineEventMerged:
 		return colorIcon(iconMerge, colorPurple)
 	case github.TimelineEventClosed:
@@ -313,7 +315,7 @@ func timelineEventIcon(eventType github.TimelineEventType, details string) strin
 	case github.TimelineEventConvertToDraft:
 		return colorIcon(iconDraft, colorYellow)
 	case github.TimelineEventReviewRequested:
-		return colorIcon(iconBell, colorCyan)
+		return colorIcon(iconBell, colorCyan())
 	default:
 		return colorIcon(iconCircle, colorGray)
 	}
@@ -388,7 +390,7 @@ func formatFileEntry(f github.PullRequestFile, comments int, prURL string, conte
 	var linkCol string
 	if prURL != "" {
 		link := hyperlink(fileDiffURL(prURL, f.Path), "[↗]")
-		linkCol = "  " + lipgloss.NewStyle().Foreground(colorCyan).Render(link)
+		linkCol = "  " + lipgloss.NewStyle().Foreground(colorCyan()).Render(link)
 	}
 
 	var right string

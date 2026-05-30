@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"charm.land/lipgloss/v2"
-	"charm.land/lipgloss/v2/compat"
 	"github.com/charmbracelet/colorprofile"
 	"github.com/jmcampanini/grove-cli/internal/github"
 	"github.com/spf13/cobra"
@@ -20,14 +19,12 @@ import (
 func pinTestColorProfile(t *testing.T) {
 	t.Helper()
 	origProfile := lipgloss.Writer.Profile
-	origCompatProfile := compat.Profile
-	origDark := compat.HasDarkBackground
-	setPreviewColorProfile(colorprofile.ASCII)
-	compat.HasDarkBackground = true
+	origDark := previewHasDarkBackground
+	setPreviewColorProfile(colorprofile.NoTTY)
+	setPreviewHasDarkBackground(true)
 	t.Cleanup(func() {
 		lipgloss.Writer.Profile = origProfile
-		compat.Profile = origCompatProfile
-		compat.HasDarkBackground = origDark
+		previewHasDarkBackground = origDark
 	})
 }
 
@@ -101,6 +98,20 @@ func TestDetectPreviewWidth(t *testing.T) {
 		w := detectPreviewWidth()
 		assert.Greater(t, w, 0)
 	})
+}
+
+func TestApplyColorModeNeverStripsANSI(t *testing.T) {
+	pinTestColorProfile(t)
+
+	err := applyColorMode("never")
+	require.NoError(t, err)
+	assert.Equal(t, colorprofile.NoTTY, lipgloss.Writer.Profile)
+
+	styled := lipgloss.NewStyle().Bold(true).Foreground(colorRed).Render("plain")
+	var buf bytes.Buffer
+	require.NoError(t, writePreviewLine(&buf, styled))
+	assert.Equal(t, "plain\n", buf.String())
+	assert.NotContains(t, buf.String(), "\x1b")
 }
 
 func testPRWithExpanded() github.PullRequest {

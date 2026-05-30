@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"charm.land/lipgloss/v2"
-	"charm.land/lipgloss/v2/compat"
 	"charm.land/log/v2"
 	"github.com/jmcampanini/grove-cli/internal/logging"
 	"github.com/spf13/cobra"
@@ -47,29 +46,34 @@ func init() {
 	}
 }
 
+func logHasDarkBackground() bool {
+	if dark, ok := detectDarkBackgroundFromEnv(); ok {
+		return dark
+	}
+	return true
+}
+
 func configureLogStyles() {
 	styles := log.DefaultStyles()
 
 	// Catppuccin Latte (light) / Mocha (dark) palette.
-	adaptive := func(light, dark string) compat.AdaptiveColor {
-		return compat.AdaptiveColor{Light: lipgloss.Color(light), Dark: lipgloss.Color(dark)}
-	}
-	muted := adaptive("#6c6f85", "#7f849c")
+	lightDark := lipgloss.LightDark(logHasDarkBackground())
+	muted := lightDark(lipgloss.Color("#6c6f85"), lipgloss.Color("#7f849c"))
 	styles.Caller = lipgloss.NewStyle().Foreground(muted)
 	styles.Key = lipgloss.NewStyle().Foreground(muted)
 	styles.Prefix = lipgloss.NewStyle().Foreground(muted).Bold(true)
 	styles.Separator = lipgloss.NewStyle().Foreground(muted)
 
 	styles.Levels[log.DebugLevel] = styles.Levels[log.DebugLevel].
-		Foreground(adaptive("#8c8fa1", "#7f849c"))
+		Foreground(lightDark(lipgloss.Color("#8c8fa1"), lipgloss.Color("#7f849c")))
 	styles.Levels[log.InfoLevel] = styles.Levels[log.InfoLevel].
-		Foreground(adaptive("#179299", "#94e2d5"))
+		Foreground(lightDark(lipgloss.Color("#179299"), lipgloss.Color("#94e2d5")))
 	styles.Levels[log.WarnLevel] = styles.Levels[log.WarnLevel].
-		Foreground(adaptive("#df8e1d", "#f9e2af"))
+		Foreground(lightDark(lipgloss.Color("#df8e1d"), lipgloss.Color("#f9e2af")))
 	styles.Levels[log.ErrorLevel] = styles.Levels[log.ErrorLevel].
-		Foreground(adaptive("#d20f39", "#f38ba8"))
+		Foreground(lightDark(lipgloss.Color("#d20f39"), lipgloss.Color("#f38ba8")))
 	styles.Levels[log.FatalLevel] = styles.Levels[log.FatalLevel].
-		Foreground(adaptive("#8839ef", "#cba6f7"))
+		Foreground(lightDark(lipgloss.Color("#8839ef"), lipgloss.Color("#cba6f7")))
 
 	log.SetStyles(styles)
 }
