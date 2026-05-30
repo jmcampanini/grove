@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"charm.land/glamour/v2/styles"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/colorprofile"
 	"github.com/jmcampanini/grove-cli/internal/github"
@@ -487,6 +488,22 @@ func TestRenderPreview(t *testing.T) {
 	}
 }
 
+func TestRenderPreviewColorNeverStripsMarkdownANSI(t *testing.T) {
+	pinTestColorProfile(t)
+	pr := testPRWithExpanded()
+	pr.Body = "## Heading\n\nSome **bold** text."
+	pr.Files = nil
+	pr.FilesChanged = 0
+
+	var buf bytes.Buffer
+	err := renderPreview(&buf, pr, nil, nil, 60, "never")
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "Heading")
+	assert.NotContains(t, output, "\x1b")
+}
+
 func TestRenderHighActivity(t *testing.T) {
 	pinTestColorProfile(t)
 	files := testReviewFiles()
@@ -543,6 +560,32 @@ func TestFormatFileEntryAlignment(t *testing.T) {
 	assert.Contains(t, out2, "+181")
 	assert.Contains(t, out1, " -1")
 	assert.Contains(t, out2, "-42")
+}
+
+func TestPreviewMarkdownStyle(t *testing.T) {
+	pinTestColorProfile(t)
+
+	tests := []struct {
+		name      string
+		colorMode string
+		profile   colorprofile.Profile
+		dark      bool
+		wantStyle string
+	}{
+		{name: "auto without colors uses notty", colorMode: "auto", profile: colorprofile.NoTTY, dark: true, wantStyle: styles.NoTTYStyle},
+		{name: "always keeps dark style even when output profile is notty", colorMode: "always", profile: colorprofile.NoTTY, dark: true, wantStyle: styles.DarkStyle},
+		{name: "always honors light background", colorMode: "always", profile: colorprofile.ANSI256, dark: false, wantStyle: styles.LightStyle},
+		{name: "never uses notty", colorMode: "never", profile: colorprofile.ANSI256, dark: false, wantStyle: styles.NoTTYStyle},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lipgloss.Writer.Profile = tt.profile
+			previewHasDarkBackground = tt.dark
+
+			assert.Equal(t, tt.wantStyle, previewMarkdownStyle(tt.colorMode))
+		})
+	}
 }
 
 func TestRenderBody(t *testing.T) {
