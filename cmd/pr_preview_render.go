@@ -29,7 +29,7 @@ var (
 )
 
 func colorCyan() color.Color {
-	return lipgloss.LightDark(previewHasDarkBackground)(lipgloss.Color("30"), lipgloss.Color("44"))
+	return lightDarkColor(previewHasDarkBackground, "30", "44")
 }
 
 const (

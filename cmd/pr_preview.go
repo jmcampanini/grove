@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 	"strconv"
-	"strings"
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/colorprofile"
@@ -74,30 +73,23 @@ func applyColorMode(mode string) error {
 		return fmt.Errorf("invalid color mode %q; valid modes: auto, always, never", mode)
 	}
 
-	setPreviewColorProfile(profile)
-	setPreviewHasDarkBackground(detectPreviewHasDarkBackground(profile))
-	return nil
-}
-
-func setPreviewColorProfile(profile colorprofile.Profile) {
 	lipgloss.Writer.Profile = profile
-}
-
-func setPreviewHasDarkBackground(hasDark bool) {
-	previewHasDarkBackground = hasDark
+	previewHasDarkBackground = detectPreviewHasDarkBackground(profile)
+	return nil
 }
 
 func detectPreviewHasDarkBackground(profile colorprofile.Profile) bool {
 	if dark, ok := detectDarkBackgroundFromEnv(); ok {
 		return dark
 	}
-	if profile <= colorprofile.ASCII {
+	if profile <= colorprofile.ASCII || !previewCanQueryBackground() {
 		return true
 	}
-	if term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd())) {
-		return lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
-	}
-	return true
+	return lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
+}
+
+func previewCanQueryBackground() bool {
+	return term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
 }
 
 func previewColorsDisabled() bool {
@@ -108,18 +100,6 @@ func writePreviewLine(w io.Writer, s string) error {
 	profiled := colorprofile.Writer{Forward: w, Profile: lipgloss.Writer.Profile}
 	_, err := fmt.Fprintln(&profiled, s)
 	return err
-}
-
-func detectDarkBackgroundFromEnv() (dark bool, ok bool) {
-	parts := strings.Split(os.Getenv("COLORFGBG"), ";")
-	if len(parts) < 2 {
-		return false, false
-	}
-	bg, err := strconv.Atoi(parts[len(parts)-1])
-	if err != nil {
-		return false, false
-	}
-	return bg < 7 || bg == 8, true
 }
 
 func runPRPreview(cmd *cobra.Command, args []string) error {

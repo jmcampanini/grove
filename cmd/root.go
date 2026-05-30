@@ -57,23 +57,23 @@ func configureLogStyles() {
 	styles := log.DefaultStyles()
 
 	// Catppuccin Latte (light) / Mocha (dark) palette.
-	lightDark := lipgloss.LightDark(logHasDarkBackground())
-	muted := lightDark(lipgloss.Color("#6c6f85"), lipgloss.Color("#7f849c"))
+	hasDarkBackground := logHasDarkBackground()
+	muted := lightDarkColor(hasDarkBackground, "#6c6f85", "#7f849c")
 	styles.Caller = lipgloss.NewStyle().Foreground(muted)
 	styles.Key = lipgloss.NewStyle().Foreground(muted)
 	styles.Prefix = lipgloss.NewStyle().Foreground(muted).Bold(true)
 	styles.Separator = lipgloss.NewStyle().Foreground(muted)
 
 	styles.Levels[log.DebugLevel] = styles.Levels[log.DebugLevel].
-		Foreground(lightDark(lipgloss.Color("#8c8fa1"), lipgloss.Color("#7f849c")))
+		Foreground(lightDarkColor(hasDarkBackground, "#8c8fa1", "#7f849c"))
 	styles.Levels[log.InfoLevel] = styles.Levels[log.InfoLevel].
-		Foreground(lightDark(lipgloss.Color("#179299"), lipgloss.Color("#94e2d5")))
+		Foreground(lightDarkColor(hasDarkBackground, "#179299", "#94e2d5"))
 	styles.Levels[log.WarnLevel] = styles.Levels[log.WarnLevel].
-		Foreground(lightDark(lipgloss.Color("#df8e1d"), lipgloss.Color("#f9e2af")))
+		Foreground(lightDarkColor(hasDarkBackground, "#df8e1d", "#f9e2af"))
 	styles.Levels[log.ErrorLevel] = styles.Levels[log.ErrorLevel].
-		Foreground(lightDark(lipgloss.Color("#d20f39"), lipgloss.Color("#f38ba8")))
+		Foreground(lightDarkColor(hasDarkBackground, "#d20f39", "#f38ba8"))
 	styles.Levels[log.FatalLevel] = styles.Levels[log.FatalLevel].
-		Foreground(lightDark(lipgloss.Color("#8839ef"), lipgloss.Color("#cba6f7")))
+		Foreground(lightDarkColor(hasDarkBackground, "#8839ef", "#cba6f7"))
 
 	log.SetStyles(styles)
 }

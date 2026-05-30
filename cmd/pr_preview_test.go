@@ -20,8 +20,8 @@ func pinTestColorProfile(t *testing.T) {
 	t.Helper()
 	origProfile := lipgloss.Writer.Profile
 	origDark := previewHasDarkBackground
-	setPreviewColorProfile(colorprofile.NoTTY)
-	setPreviewHasDarkBackground(true)
+	lipgloss.Writer.Profile = colorprofile.NoTTY
+	previewHasDarkBackground = true
 	t.Cleanup(func() {
 		lipgloss.Writer.Profile = origProfile
 		previewHasDarkBackground = origDark
