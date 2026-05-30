@@ -573,10 +573,16 @@ func renderFileList(files []github.PullRequestFile, fileComments map[string]int,
 	return strings.TrimRight(sb.String(), "\n")
 }
 
-func previewMarkdownStyle(colorMode string) string {
-	if colorMode == "never" || (colorMode == "auto" && previewColorsDisabled()) {
+func previewMarkdownStylePath(colorMode string) string {
+	switch colorMode {
+	case "never":
 		return styles.NoTTYStyle
+	case "auto":
+		if previewColorsDisabled() {
+			return styles.NoTTYStyle
+		}
 	}
+
 	if previewHasDarkBackground {
 		return styles.DarkStyle
 	}
@@ -587,9 +593,12 @@ func renderBody(body string, width int, colorMode string) string {
 	if body == "" {
 		return ""
 	}
+
+	stylePath := previewMarkdownStylePath(colorMode)
+	wrapWidth := max(width-4, 20)
 	renderer, err := glamour.NewTermRenderer(
-		glamour.WithStylePath(previewMarkdownStyle(colorMode)),
-		glamour.WithWordWrap(max(width-4, 20)),
+		glamour.WithStylePath(stylePath),
+		glamour.WithWordWrap(wrapWidth),
 	)
 	if err != nil {
 		log.WithPrefix("pr").Debug("markdown renderer init failed, using plain text fallback", "error", err)

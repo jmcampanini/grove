@@ -562,20 +562,20 @@ func TestFormatFileEntryAlignment(t *testing.T) {
 	assert.Contains(t, out2, "-42")
 }
 
-func TestPreviewMarkdownStyle(t *testing.T) {
+func TestPreviewMarkdownStylePath(t *testing.T) {
 	pinTestColorProfile(t)
 
 	tests := []struct {
-		name      string
 		colorMode string
-		profile   colorprofile.Profile
 		dark      bool
+		name      string
+		profile   colorprofile.Profile
 		wantStyle string
 	}{
-		{name: "auto without colors uses notty", colorMode: "auto", profile: colorprofile.NoTTY, dark: true, wantStyle: styles.NoTTYStyle},
-		{name: "always keeps dark style even when output profile is notty", colorMode: "always", profile: colorprofile.NoTTY, dark: true, wantStyle: styles.DarkStyle},
-		{name: "always honors light background", colorMode: "always", profile: colorprofile.ANSI256, dark: false, wantStyle: styles.LightStyle},
-		{name: "never uses notty", colorMode: "never", profile: colorprofile.ANSI256, dark: false, wantStyle: styles.NoTTYStyle},
+		{colorMode: "auto", dark: true, name: "auto without colors uses notty", profile: colorprofile.NoTTY, wantStyle: styles.NoTTYStyle},
+		{colorMode: "always", dark: true, name: "always keeps dark style even when output profile is notty", profile: colorprofile.NoTTY, wantStyle: styles.DarkStyle},
+		{colorMode: "always", dark: false, name: "always honors light background", profile: colorprofile.ANSI256, wantStyle: styles.LightStyle},
+		{colorMode: "never", dark: false, name: "never uses notty", profile: colorprofile.ANSI256, wantStyle: styles.NoTTYStyle},
 	}
 
 	for _, tt := range tests {
@@ -583,7 +583,7 @@ func TestPreviewMarkdownStyle(t *testing.T) {
 			lipgloss.Writer.Profile = tt.profile
 			previewHasDarkBackground = tt.dark
 
-			assert.Equal(t, tt.wantStyle, previewMarkdownStyle(tt.colorMode))
+			assert.Equal(t, tt.wantStyle, previewMarkdownStylePath(tt.colorMode))
 		})
 	}
 }
