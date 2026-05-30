@@ -6,9 +6,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/charmbracelet/log"
+	"charm.land/log/v2"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/muesli/termenv"
 )
 
 var logFile *os.File
@@ -53,7 +53,7 @@ func Setup(filePath string) error {
 	}
 	logFile = f
 
-	profile := termenv.NewOutput(os.Stderr).ColorProfile()
+	profile := colorprofile.Detect(os.Stderr, os.Environ())
 	log.SetOutput(&teeWriter{
 		terminal: os.Stderr,
 		file:     f,

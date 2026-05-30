@@ -3,13 +3,14 @@ package cmd
 import (
 	"bytes"
 	"fmt"
+	"image/color"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/jmcampanini/grove-cli/internal/github"
-	"github.com/muesli/termenv"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,13 +18,13 @@ import (
 
 func pinTestColorProfile(t *testing.T) {
 	t.Helper()
-	origProfile := lipgloss.ColorProfile()
-	origDark := lipgloss.DefaultRenderer().HasDarkBackground()
-	lipgloss.SetColorProfile(termenv.Ascii)
-	lipgloss.SetHasDarkBackground(true)
+	origProfile := lipgloss.Writer.Profile
+	origDark := previewHasDarkBackground
+	lipgloss.Writer.Profile = colorprofile.NoTTY
+	previewHasDarkBackground = true
 	t.Cleanup(func() {
-		lipgloss.SetColorProfile(origProfile)
-		lipgloss.SetHasDarkBackground(origDark)
+		lipgloss.Writer.Profile = origProfile
+		previewHasDarkBackground = origDark
 	})
 }
 
@@ -97,6 +98,20 @@ func TestDetectPreviewWidth(t *testing.T) {
 		w := detectPreviewWidth()
 		assert.Greater(t, w, 0)
 	})
+}
+
+func TestApplyColorModeNeverStripsANSI(t *testing.T) {
+	pinTestColorProfile(t)
+
+	err := applyColorMode("never")
+	require.NoError(t, err)
+	assert.Equal(t, colorprofile.NoTTY, lipgloss.Writer.Profile)
+
+	styled := lipgloss.NewStyle().Bold(true).Foreground(colorRed).Render("plain")
+	var buf bytes.Buffer
+	require.NoError(t, writePreviewLine(&buf, styled))
+	assert.Equal(t, "plain\n", buf.String())
+	assert.NotContains(t, buf.String(), "\x1b")
 }
 
 func testPRWithExpanded() github.PullRequest {
@@ -238,7 +253,7 @@ func TestLabelColor(t *testing.T) {
 	tests := []struct {
 		hex  string
 		name string
-		want lipgloss.Color
+		want color.Color
 	}{
 		{name: "valid hex", hex: "0e8a16", want: lipgloss.Color("#0e8a16")},
 		{name: "with hash", hex: "#1d76db", want: lipgloss.Color("#1d76db")},

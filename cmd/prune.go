@@ -10,8 +10,8 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/huh/v2"
-	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/lipgloss/table"
+	"charm.land/lipgloss/v2"
+	"charm.land/lipgloss/v2/table"
 	"github.com/jmcampanini/grove-cli/internal/git"
 	"github.com/jmcampanini/grove-cli/internal/github"
 	"github.com/spf13/cobra"
@@ -274,7 +274,7 @@ func renderPruneResults(w io.Writer, results []pruneResult) error {
 		}).
 		Rows(rows...)
 
-	if _, err := fmt.Fprintln(w, t); err != nil {
+	if _, err := lipgloss.Fprintln(w, t); err != nil {
 		return err
 	}
 
@@ -282,7 +282,7 @@ func renderPruneResults(w io.Writer, results []pruneResult) error {
 	if failed > 0 {
 		summary += ", " + failStyle.Render(fmt.Sprintf("%d failed", failed))
 	}
-	if _, err := fmt.Fprintln(w, summary); err != nil {
+	if _, err := lipgloss.Fprintln(w, summary); err != nil {
 		return err
 	}
 

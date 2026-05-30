@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/charmbracelet/log"
+	"charm.land/log/v2"
 	"github.com/jmcampanini/go-config-loader/configloader"
 
 	"github.com/jmcampanini/grove-cli/internal/cache"

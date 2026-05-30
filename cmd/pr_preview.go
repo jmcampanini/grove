@@ -2,20 +2,21 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strconv"
-	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/jmcampanini/grove-cli/internal/github"
-	"github.com/muesli/termenv"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
 
 var (
-	prPreviewColorFlag string
-	prPreviewFzfFlag   bool
+	prPreviewColorFlag       string
+	prPreviewFzfFlag         bool
+	previewHasDarkBackground = true
 )
 
 var prPreviewCmd = &cobra.Command{
@@ -60,40 +61,45 @@ func detectPreviewWidth() int {
 }
 
 func applyColorMode(mode string) error {
-	// When stdout isn't a TTY (fzf preview, piped output), termenv can't query
-	// the terminal for its background color and defaults to dark. Fall back to
-	// COLORFGBG env var so AdaptiveColor picks the right variant.
-	fi, err := os.Stdout.Stat()
-	if err == nil && fi.Mode()&os.ModeCharDevice == 0 {
-		if dark, ok := detectDarkBackgroundFromEnv(); ok {
-			lipgloss.SetHasDarkBackground(dark)
-		}
-	}
-
+	var profile colorprofile.Profile
 	switch mode {
 	case "auto":
-		return nil
+		profile = colorprofile.Detect(os.Stdout, os.Environ())
 	case "always":
-		lipgloss.SetColorProfile(termenv.ANSI256)
-		return nil
+		profile = colorprofile.ANSI256
 	case "never":
-		lipgloss.SetColorProfile(termenv.Ascii)
-		return nil
+		profile = colorprofile.NoTTY
 	default:
 		return fmt.Errorf("invalid color mode %q; valid modes: auto, always, never", mode)
 	}
+
+	lipgloss.Writer.Profile = profile
+	previewHasDarkBackground = detectPreviewHasDarkBackground(profile)
+	return nil
 }
 
-func detectDarkBackgroundFromEnv() (dark bool, ok bool) {
-	parts := strings.Split(os.Getenv("COLORFGBG"), ";")
-	if len(parts) < 2 {
-		return false, false
+func detectPreviewHasDarkBackground(profile colorprofile.Profile) bool {
+	if dark, ok := detectDarkBackgroundFromEnv(); ok {
+		return dark
 	}
-	bg, err := strconv.Atoi(parts[len(parts)-1])
-	if err != nil {
-		return false, false
+	if profile <= colorprofile.ASCII || !previewCanQueryBackground() {
+		return true
 	}
-	return bg < 7 || bg == 8, true
+	return lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
+}
+
+func previewCanQueryBackground() bool {
+	return term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
+}
+
+func previewColorsDisabled() bool {
+	return lipgloss.Writer.Profile <= colorprofile.ASCII
+}
+
+func writePreviewLine(w io.Writer, s string) error {
+	profiled := colorprofile.Writer{Forward: w, Profile: lipgloss.Writer.Profile}
+	_, err := fmt.Fprintln(&profiled, s)
+	return err
 }
 
 func runPRPreview(cmd *cobra.Command, args []string) error {

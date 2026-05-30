@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	clog "github.com/charmbracelet/log"
+	clog "charm.land/log/v2"
 )
 
 type envelope struct {
