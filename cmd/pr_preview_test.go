@@ -77,6 +77,16 @@ func TestHandlePreviewError(t *testing.T) {
 	}
 }
 
+func TestPRPreviewHelpDocumentsClickableMarkdownLinks(t *testing.T) {
+	for _, want := range []string{
+		"Markdown links in the PR body",
+		"clickable terminal hyperlinks",
+		"Only open links from PRs/authors you trust",
+	} {
+		assert.Contains(t, prPreviewCmd.Long, want)
+	}
+}
+
 func TestDetectPreviewWidth(t *testing.T) {
 	t.Run("FZF_PREVIEW_COLUMNS takes precedence", func(t *testing.T) {
 		t.Setenv("FZF_PREVIEW_COLUMNS", "120")
@@ -610,6 +620,11 @@ func TestRenderBody(t *testing.T) {
 			name:         "plain text passes through",
 			body:         "Just some plain text.",
 			wantContains: []string{"plain text"},
+		},
+		{
+			name:         "markdown links render terminal hyperlinks",
+			body:         "See [example](https://example.com).",
+			wantContains: []string{"\x1b]8;", "example", "https://example.com"},
 		},
 	}
 
