@@ -28,6 +28,9 @@ Displays PR metadata (title, author, branch, state), CI checks, review status,
 high-activity files, all changed files with additions/deletions counts, the PR
 body rendered as markdown, and an activity timeline.
 
+Security note: Markdown links in the PR body may be rendered as
+clickable terminal hyperlinks. Only open links from PRs/authors you trust.
+
 With --fzf, errors are printed to stdout instead of returning an error code,
 making it suitable for use in fzf preview panes.`,
 	Args: cobra.ExactArgs(1),

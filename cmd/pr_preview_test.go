@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"charm.land/glamour/v2/styles"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/colorprofile"
 	"github.com/jmcampanini/grove-cli/internal/github"
@@ -73,6 +74,16 @@ func TestHandlePreviewError(t *testing.T) {
 
 			assert.Equal(t, tt.wantOutput, buf.String())
 		})
+	}
+}
+
+func TestPRPreviewHelpDocumentsClickableMarkdownLinks(t *testing.T) {
+	for _, want := range []string{
+		"Markdown links in the PR body",
+		"clickable terminal hyperlinks",
+		"Only open links from PRs/authors you trust",
+	} {
+		assert.Contains(t, prPreviewCmd.Long, want)
 	}
 }
 
@@ -487,6 +498,22 @@ func TestRenderPreview(t *testing.T) {
 	}
 }
 
+func TestRenderPreviewColorNeverStripsMarkdownANSI(t *testing.T) {
+	pinTestColorProfile(t)
+	pr := testPRWithExpanded()
+	pr.Body = "## Heading\n\nSome **bold** text."
+	pr.Files = nil
+	pr.FilesChanged = 0
+
+	var buf bytes.Buffer
+	err := renderPreview(&buf, pr, nil, nil, 60, "never")
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "Heading")
+	assert.NotContains(t, output, "\x1b")
+}
+
 func TestRenderHighActivity(t *testing.T) {
 	pinTestColorProfile(t)
 	files := testReviewFiles()
@@ -545,6 +572,32 @@ func TestFormatFileEntryAlignment(t *testing.T) {
 	assert.Contains(t, out2, "-42")
 }
 
+func TestPreviewMarkdownStylePath(t *testing.T) {
+	pinTestColorProfile(t)
+
+	tests := []struct {
+		colorMode string
+		dark      bool
+		name      string
+		profile   colorprofile.Profile
+		wantStyle string
+	}{
+		{colorMode: "auto", dark: true, name: "auto without colors uses notty", profile: colorprofile.NoTTY, wantStyle: styles.NoTTYStyle},
+		{colorMode: "always", dark: true, name: "always keeps dark style even when output profile is notty", profile: colorprofile.NoTTY, wantStyle: styles.DarkStyle},
+		{colorMode: "always", dark: false, name: "always honors light background", profile: colorprofile.ANSI256, wantStyle: styles.LightStyle},
+		{colorMode: "never", dark: false, name: "never uses notty", profile: colorprofile.ANSI256, wantStyle: styles.NoTTYStyle},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lipgloss.Writer.Profile = tt.profile
+			previewHasDarkBackground = tt.dark
+
+			assert.Equal(t, tt.wantStyle, previewMarkdownStylePath(tt.colorMode))
+		})
+	}
+}
+
 func TestRenderBody(t *testing.T) {
 	pinTestColorProfile(t)
 	tests := []struct {
@@ -567,6 +620,11 @@ func TestRenderBody(t *testing.T) {
 			name:         "plain text passes through",
 			body:         "Just some plain text.",
 			wantContains: []string{"plain text"},
+		},
+		{
+			name:         "markdown links render terminal hyperlinks",
+			body:         "See [example](https://example.com).",
+			wantContains: []string{"\x1b]8;", "example", "https://example.com"},
 		},
 	}
 

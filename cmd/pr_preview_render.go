@@ -13,9 +13,10 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/glamour/v2"
+	"charm.land/glamour/v2/styles"
 	"charm.land/lipgloss/v2"
 	"charm.land/log/v2"
-	"github.com/charmbracelet/glamour"
 	"github.com/jmcampanini/grove-cli/internal/github"
 	"github.com/muesli/termenv"
 )
@@ -572,21 +573,33 @@ func renderFileList(files []github.PullRequestFile, fileComments map[string]int,
 	return strings.TrimRight(sb.String(), "\n")
 }
 
+func previewMarkdownStylePath(colorMode string) string {
+	switch colorMode {
+	case "never":
+		return styles.NoTTYStyle
+	case "auto":
+		if previewColorsDisabled() {
+			return styles.NoTTYStyle
+		}
+	}
+
+	if previewHasDarkBackground {
+		return styles.DarkStyle
+	}
+	return styles.LightStyle
+}
+
 func renderBody(body string, width int, colorMode string) string {
 	if body == "" {
 		return ""
 	}
-	opts := []glamour.TermRendererOption{
-		glamour.WithAutoStyle(),
-		glamour.WithWordWrap(max(width-4, 20)),
-	}
-	switch colorMode {
-	case "always":
-		opts = append(opts, glamour.WithColorProfile(termenv.ANSI256))
-	case "never":
-		opts = append(opts, glamour.WithColorProfile(termenv.Ascii))
-	}
-	renderer, err := glamour.NewTermRenderer(opts...)
+
+	stylePath := previewMarkdownStylePath(colorMode)
+	wrapWidth := max(width-4, 20)
+	renderer, err := glamour.NewTermRenderer(
+		glamour.WithStylePath(stylePath),
+		glamour.WithWordWrap(wrapWidth),
+	)
 	if err != nil {
 		log.WithPrefix("pr").Debug("markdown renderer init failed, using plain text fallback", "error", err)
 		return wrapBody(body, width)
