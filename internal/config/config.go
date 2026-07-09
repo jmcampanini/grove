@@ -62,7 +62,7 @@ type LocalBranchConfig struct {
 	// e.g., branch "feature/add-auth" with ["fix/", "feature/"] -> "add-auth"
 	StripBranchPrefix []string `toml:"strip_branch_prefix"`
 
-	WorktreePrefix string `toml:"worktree_prefix"` // e.g., "wt-"
+	WorktreePrefix string `toml:"worktree_prefix" config:"worktree-prefix" help:"Override the local branch worktree directory prefix (local_branch.worktree_prefix)"` // e.g., "wt-"
 }
 
 // LogConfig configures file logging.

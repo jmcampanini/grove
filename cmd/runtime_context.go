@@ -87,7 +87,7 @@ func loadCommandRuntime() (*commandRuntime, error) {
 	}
 
 	configPaths := config.ConfigPaths(originalCwd, worktreeRoot, mainWorktreePath, homeDir)
-	cfg, report, err := config.LoadFiles(configPaths)
+	cfg, report, err := config.LoadFilesWithFlags(configPaths, rootCmd.PersistentFlags())
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}

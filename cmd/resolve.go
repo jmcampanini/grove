@@ -48,7 +48,7 @@ func runResolve(cmd *cobra.Command, args []string) error {
 	}
 
 	paths := config.BootstrapConfigPaths(targetPath, homeDir)
-	cfg, _, err := config.LoadFiles(paths)
+	cfg, _, err := config.LoadFilesWithFlags(paths, rootCmd.PersistentFlags())
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
