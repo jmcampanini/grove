@@ -57,7 +57,7 @@ func loadNamingConfig() (config.Config, error) {
 		paths = resolveNamerConfigPaths(cwd, homeDir, paths, defaultTimeout)
 	}
 
-	cfg, _, err := config.LoadFiles(paths)
+	cfg, _, err := config.LoadFilesWithFlags(paths, rootCmd.PersistentFlags())
 	if err != nil {
 		return config.Config{}, fmt.Errorf("failed to load config: %w", err)
 	}

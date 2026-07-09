@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/jmcampanini/go-config-loader/configloader"
+	"github.com/jmcampanini/go-config-loader/pflagloader"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -738,4 +740,80 @@ func TestLoad_LogFile(t *testing.T) {
 			assert.Equal(t, tt.wantFile, cfg.Log.File)
 		})
 	}
+}
+
+func TestLoadFilesWithFlags(t *testing.T) {
+	fileTOML := "[local_branch]\nworktree_prefix = \"tree-\"\n"
+
+	tests := []struct {
+		name       string
+		fileTOML   string
+		args       []string
+		wantPrefix string
+		wantSource bool
+	}{
+		{
+			name:       "flag overrides file value",
+			fileTOML:   fileTOML,
+			args:       []string{"--worktree-prefix", "subagent-"},
+			wantPrefix: "subagent-",
+			wantSource: true,
+		},
+		{
+			name:       "unset flag keeps file value",
+			fileTOML:   fileTOML,
+			args:       []string{},
+			wantPrefix: "tree-",
+		},
+		{
+			name:       "flag overrides default when no file sets it",
+			fileTOML:   "",
+			args:       []string{"--worktree-prefix", "subagent-"},
+			wantPrefix: "subagent-",
+			wantSource: true,
+		},
+		{
+			name:       "explicit empty flag value wins",
+			fileTOML:   fileTOML,
+			args:       []string{"--worktree-prefix", ""},
+			wantPrefix: "",
+			wantSource: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var paths []string
+			if tt.fileTOML != "" {
+				configPath := filepath.Join(t.TempDir(), "grove.toml")
+				require.NoError(t, os.WriteFile(configPath, []byte(tt.fileTOML), 0644))
+				paths = []string{configPath}
+			}
+
+			flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
+			require.NoError(t, RegisterFlags(flags))
+			require.NoError(t, flags.Parse(tt.args))
+
+			cfg, report, err := LoadFilesWithFlags(paths, flags)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantPrefix, cfg.LocalBranch.WorktreePrefix)
+
+			if tt.wantSource {
+				assert.Equal(t, pflagloader.SourcePFlag, report.Updates["localbranch.worktreeprefix"])
+			}
+		})
+	}
+}
+
+func TestLoadFilesWithFlags_NilFlagSetMatchesLoadFiles(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "grove.toml")
+	require.NoError(t, os.WriteFile(configPath, []byte("[local_branch]\nworktree_prefix = \"tree-\"\n"), 0644))
+
+	fromFiles, _, err := LoadFiles([]string{configPath})
+	require.NoError(t, err)
+
+	fromNilFlags, _, err := LoadFilesWithFlags([]string{configPath}, nil)
+	require.NoError(t, err)
+
+	assert.Equal(t, fromFiles, fromNilFlags)
 }

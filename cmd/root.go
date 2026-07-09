@@ -3,6 +3,7 @@ package cmd
 import (
 	"charm.land/lipgloss/v2"
 	"charm.land/log/v2"
+	"github.com/jmcampanini/grove-cli/internal/config"
 	"github.com/jmcampanini/grove-cli/internal/logging"
 	"github.com/spf13/cobra"
 )
@@ -27,6 +28,7 @@ Common workflows:
 func init() {
 	rootCmd.Version = Version
 	rootCmd.PersistentFlags().Bool("debug", false, "Enable debug logging")
+	cobra.CheckErr(config.RegisterFlags(rootCmd.PersistentFlags()))
 
 	rootCmd.AddGroup(
 		&cobra.Group{ID: "worktree", Title: "Worktree Commands:"},

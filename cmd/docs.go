@@ -57,6 +57,10 @@ Grove loads TOML config files from lowest to highest priority. Later files overr
 
 Run grove config to inspect the merged effective configuration. Run grove config --provenance to see which file supplied each value.
 
+Some values can also be set with global CLI flags, which take priority over all config files:
+
+- --worktree-prefix: overrides local_branch.worktree_prefix.
+
 ## TOML schema
 
     [git]
