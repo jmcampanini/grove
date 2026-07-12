@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -22,13 +23,14 @@ var errNotGitRepo = errors.New("grove must be run inside a git repository")
 type commandRuntime struct {
 	cfg              config.Config
 	configReport     configloader.LoadReport
+	ctx              context.Context
 	cwd              string
 	gitClient        git.Git
 	mainWorktreePath string
 }
 
 func (rt *commandRuntime) newUncachedGitHubClient() github.GitHub {
-	return github.New(rt.cwd, rt.cfg.Git.Timeout, nil)
+	return github.New(rt.ctx, rt.cwd, rt.cfg.Git.Timeout, nil)
 }
 
 func (rt *commandRuntime) newCachedGitHubClient() (github.GitHub, error) {
@@ -37,10 +39,10 @@ func (rt *commandRuntime) newCachedGitHubClient() (github.GitHub, error) {
 		return nil, err
 	}
 	c := cache.New(dir, rt.cfg.GitHub.PreviewCacheTTL)
-	return github.New(rt.cwd, rt.cfg.Git.Timeout, c), nil
+	return github.New(rt.ctx, rt.cwd, rt.cfg.Git.Timeout, c), nil
 }
 
-func loadCommandRuntime() (*commandRuntime, error) {
+func loadCommandRuntime(ctx context.Context) (*commandRuntime, error) {
 	originalCwd, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current directory: %w", err)
@@ -53,7 +55,7 @@ func loadCommandRuntime() (*commandRuntime, error) {
 
 	defaultTimeout := config.DefaultConfig().Git.Timeout
 	gitDir := originalCwd
-	initGit := git.New(false, gitDir, defaultTimeout)
+	initGit := git.New(ctx, false, gitDir, defaultTimeout)
 
 	worktreeRoot, err := initGit.GetWorktreeRoot()
 	if err != nil {
@@ -70,14 +72,14 @@ func loadCommandRuntime() (*commandRuntime, error) {
 		}
 		log.Debug("bootstrap config loaded", "paths", bootstrapPaths, "sources", bootstrapReport.LoadedFiles)
 
-		worktreeRoot, err = resolveWorkspaceRoot(originalCwd, bootstrapCfg.Workspace.PrimaryBranches, defaultTimeout)
+		worktreeRoot, err = resolveWorkspaceRoot(ctx, originalCwd, bootstrapCfg.Workspace.PrimaryBranches, defaultTimeout)
 		if err != nil {
 			log.Debug("workspace root detection failed", "err", err)
 			return nil, errNotGitRepo
 		}
 
 		gitDir = worktreeRoot
-		initGit = git.New(false, gitDir, defaultTimeout)
+		initGit = git.New(ctx, false, gitDir, defaultTimeout)
 		log.Debug("anchored to worktree from workspace root", "anchor", gitDir, "originalCwd", originalCwd)
 	}
 
@@ -100,15 +102,16 @@ func loadCommandRuntime() (*commandRuntime, error) {
 	return &commandRuntime{
 		cfg:              cfg,
 		configReport:     report,
+		ctx:              ctx,
 		cwd:              gitDir,
-		gitClient:        git.New(false, gitDir, cfg.Git.Timeout),
+		gitClient:        git.New(ctx, false, gitDir, cfg.Git.Timeout),
 		mainWorktreePath: mainWorktreePath,
 	}, nil
 }
 
 // resolveWorkspaceRoot probes immediate children of cwd for a valid git worktree.
 // Returns the worktree root of the first child directory that has a .git marker and is a valid git repo.
-func resolveWorkspaceRoot(cwd string, primaryBranches []string, timeout time.Duration) (string, error) {
+func resolveWorkspaceRoot(ctx context.Context, cwd string, primaryBranches []string, timeout time.Duration) (string, error) {
 	if len(primaryBranches) == 0 {
 		return "", errors.New("no primary branches configured")
 	}
@@ -121,7 +124,7 @@ func resolveWorkspaceRoot(cwd string, primaryBranches []string, timeout time.Dur
 			continue
 		}
 
-		testGit := git.New(false, candidate, timeout)
+		testGit := git.New(ctx, false, candidate, timeout)
 		testRoot, err := testGit.GetWorktreeRoot()
 		if err != nil {
 			log.Debug("candidate git error", "dir", candidate, "err", err)

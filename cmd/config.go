@@ -34,7 +34,7 @@ func init() {
 }
 
 func runConfig(cmd *cobra.Command, _ []string) error {
-	rt, err := loadCommandRuntime()
+	rt, err := loadCommandRuntime(cmd.Context())
 	if err != nil {
 		return err
 	}

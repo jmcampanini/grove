@@ -47,7 +47,7 @@ type removeContext struct {
 }
 
 func runRemove(cmd *cobra.Command, args []string) error {
-	rt, err := loadCommandRuntime()
+	rt, err := loadCommandRuntime(cmd.Context())
 	if err != nil {
 		return err
 	}
@@ -55,7 +55,7 @@ func runRemove(cmd *cobra.Command, args []string) error {
 	// Root the git client at mainWorktreePath so that post-removal commands
 	// (DeleteBranch, PruneWorktrees) still work even when cwd is the removed worktree.
 	ctx := &removeContext{
-		gitClient:        git.New(false, rt.mainWorktreePath, rt.cfg.Git.Timeout),
+		gitClient:        git.New(cmd.Context(), false, rt.mainWorktreePath, rt.cfg.Git.Timeout),
 		mainWorktreePath: rt.mainWorktreePath,
 	}
 

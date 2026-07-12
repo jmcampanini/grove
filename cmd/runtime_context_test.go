@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -127,7 +128,7 @@ func TestResolveWorkspaceRoot(t *testing.T) {
 			root := t.TempDir()
 			tt.setup(t, root)
 
-			result, err := resolveWorkspaceRoot(root, tt.primaryBranches, timeout)
+			result, err := resolveWorkspaceRoot(context.Background(), root, tt.primaryBranches, timeout)
 
 			if tt.wantErr != "" {
 				require.Error(t, err)

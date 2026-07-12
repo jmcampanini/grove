@@ -47,7 +47,7 @@ type prunable struct {
 }
 
 func runPrune(cmd *cobra.Command, _ []string) error {
-	rt, err := loadCommandRuntime()
+	rt, err := loadCommandRuntime(cmd.Context())
 	if err != nil {
 		return err
 	}
@@ -59,7 +59,7 @@ func runPrune(cmd *cobra.Command, _ []string) error {
 
 	ctx := &statusContext{
 		ghClient:         ghClient,
-		gitClient:        git.New(false, rt.mainWorktreePath, rt.cfg.Git.Timeout),
+		gitClient:        git.New(cmd.Context(), false, rt.mainWorktreePath, rt.cfg.Git.Timeout),
 		mainWorktreePath: rt.mainWorktreePath,
 	}
 

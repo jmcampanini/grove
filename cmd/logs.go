@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -41,7 +42,7 @@ func init() {
 	rootCmd.AddCommand(logsCmd)
 }
 
-func loadLogConfig() (config.Config, error) {
+func loadLogConfig(ctx context.Context) (config.Config, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return config.Config{}, fmt.Errorf("failed to get current directory: %w", err)
@@ -53,7 +54,7 @@ func loadLogConfig() (config.Config, error) {
 	}
 
 	defaultTimeout := config.DefaultConfig().Git.Timeout
-	g := git.New(false, cwd, defaultTimeout)
+	g := git.New(ctx, false, cwd, defaultTimeout)
 
 	paths := config.BootstrapConfigPaths(cwd, homeDir)
 	if root, gitErr := g.GetWorktreeRoot(); gitErr == nil && root != "" {
@@ -64,7 +65,7 @@ func loadLogConfig() (config.Config, error) {
 			paths = config.ConfigPaths(cwd, root, root, homeDir)
 		}
 	} else {
-		paths = resolveLogConfigPaths(cwd, homeDir, paths, defaultTimeout)
+		paths = resolveLogConfigPaths(ctx, cwd, homeDir, paths, defaultTimeout)
 	}
 
 	cfg, _, err := config.LoadFilesWithFlags(paths, rootCmd.PersistentFlags())
@@ -75,20 +76,20 @@ func loadLogConfig() (config.Config, error) {
 	return cfg, nil
 }
 
-func resolveLogConfigPaths(cwd, homeDir string, fallback []string, timeout time.Duration) []string {
+func resolveLogConfigPaths(ctx context.Context, cwd, homeDir string, fallback []string, timeout time.Duration) []string {
 	bootstrapCfg, _, err := config.LoadFiles(fallback)
 	if err != nil {
 		log.Debug("logs: failed to load bootstrap config", "err", err)
 		return fallback
 	}
 
-	wsRoot, err := resolveWorkspaceRoot(cwd, bootstrapCfg.Workspace.PrimaryBranches, timeout)
+	wsRoot, err := resolveWorkspaceRoot(ctx, cwd, bootstrapCfg.Workspace.PrimaryBranches, timeout)
 	if err != nil {
 		log.Debug("logs: workspace root detection failed, using bootstrap config", "err", err)
 		return fallback
 	}
 
-	wsGit := git.New(false, wsRoot, timeout)
+	wsGit := git.New(ctx, false, wsRoot, timeout)
 	mainPath, err := wsGit.GetMainWorktreePath()
 	if err != nil {
 		log.Debug("logs: failed to get main worktree path from workspace root", "err", err)
@@ -98,8 +99,8 @@ func resolveLogConfigPaths(cwd, homeDir string, fallback []string, timeout time.
 	return config.ConfigPaths(cwd, wsRoot, mainPath, homeDir)
 }
 
-func resolveLogPath() (string, error) {
-	cfg, err := loadLogConfig()
+func resolveLogPath(ctx context.Context) (string, error) {
+	cfg, err := loadLogConfig(ctx)
 	if err != nil {
 		return "", err
 	}

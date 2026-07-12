@@ -45,7 +45,7 @@ func (c Config) Validate() error {
 
 // GitConfig configures git command execution.
 type GitConfig struct {
-	Timeout time.Duration `toml:"timeout"` // Timeout for git commands (e.g., "5s")
+	Timeout time.Duration `toml:"timeout"` // Timeout for git and gh commands; zero disables the deadline
 }
 
 // GitHubConfig configures GitHub-related behavior.

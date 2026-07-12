@@ -22,7 +22,7 @@ func init() {
 }
 
 func runNamerSlug(cmd *cobra.Command, args []string) error {
-	cfg, err := loadNamingConfig()
+	cfg, err := loadNamingConfig(cmd.Context())
 	if err != nil {
 		return err
 	}

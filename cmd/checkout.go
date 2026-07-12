@@ -58,7 +58,7 @@ func (p parsedRef) isRemote() bool {
 }
 
 func runCheckout(cmd *cobra.Command, args []string) error {
-	rt, err := loadCommandRuntime()
+	rt, err := loadCommandRuntime(cmd.Context())
 	if err != nil {
 		return err
 	}

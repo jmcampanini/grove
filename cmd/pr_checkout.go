@@ -37,7 +37,7 @@ func runPRCheckout(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid PR number: %s", args[0])
 	}
 
-	rt, err := loadCommandRuntime()
+	rt, err := loadCommandRuntime(cmd.Context())
 	if err != nil {
 		return err
 	}
