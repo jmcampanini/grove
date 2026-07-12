@@ -6,7 +6,7 @@ VERSION := $(shell git describe --tags --dirty --always 2>/dev/null || date -u '
 LDFLAGS := -ldflags "-X github.com/jmcampanini/grove-cli/cmd.Version=$(VERSION)"
 
 .DEFAULT_GOAL := help
-.PHONY: help build test lint lint-fix fmt fmt-check tidy tidy-check check clean
+.PHONY: help build test lint lint-fix fmt fmt-check tidy tidy-check vuln check clean
 
 help: ## Show this help.
 	@awk 'BEGIN {FS = ":.*##"; printf "Usage:\n  make <target>\n\nTargets:\n"} /^[a-zA-Z0-9_.-]+:.*##/ { printf "  %-16s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -42,7 +42,10 @@ tidy: ## Apply go mod tidy.
 tidy-check: ## Check go.mod/go.sum without modifying files.
 	go mod tidy -diff
 
-check: fmt-check tidy-check lint test ## Run all non-mutating checks.
+vuln: ## Check for reachable known vulnerabilities.
+	go tool govulncheck ./...
+
+check: fmt-check tidy-check vuln lint test ## Run all non-mutating checks.
 
 clean: ## Remove build artifacts, coverage files, and test cache.
 	rm -rf $(BUILD_DIR) dist
