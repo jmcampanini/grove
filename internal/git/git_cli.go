@@ -1,7 +1,6 @@
 package git
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -12,10 +11,12 @@ import (
 	"time"
 
 	clog "charm.land/log/v2"
+	"github.com/jmcampanini/grove-cli/internal/process"
 )
 
 // GitCli provides high-level git operations by executing real git commands via the git CLI.
 type GitCli struct {
+	ctx        context.Context
 	dryRun     bool
 	log        *clog.Logger
 	timeout    time.Duration
@@ -25,8 +26,12 @@ type GitCli struct {
 var _ Git = &GitCli{}
 
 // New creates a new GitCli instance that executes git commands in the specified working directory.
-func New(dryRun bool, workingDir string, timeout time.Duration) Git {
+func New(ctx context.Context, dryRun bool, workingDir string, timeout time.Duration) Git {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	return &GitCli{
+		ctx:        ctx,
 		dryRun:     dryRun,
 		log:        clog.Default().WithPrefix("git"),
 		timeout:    timeout,
@@ -37,28 +42,37 @@ func New(dryRun bool, workingDir string, timeout time.Duration) Git {
 func (g *GitCli) executeGitCommand(args ...string) (string, error) {
 	g.log.Debug("Executing git command", "cmd", "git", "args", args, "workingDir", g.workingDir)
 
-	ctx, cancel := context.WithTimeout(context.Background(), g.timeout)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, "git", args...)
-	cmd.Dir = g.workingDir
-	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
+	result, err := process.Run(g.ctx, process.Spec{
+		Args: args,
+		Dir:  g.workingDir,
+		Env:  append(os.Environ(), "GIT_TERMINAL_PROMPT=0"),
+		Name: "git",
+	}, g.timeout)
+	if err != nil {
+		command := strings.Join(args, " ")
+		switch {
+		case errors.Is(err, process.ErrTimedOut):
 			g.log.Warn("git command timed out", "args", args, "timeout", g.timeout, "error", err)
-			return "", fmt.Errorf("git %s timed out after %s", strings.Join(args, " "), g.timeout)
+			return "", fmt.Errorf("git %s timed out after %s: %w", command, g.timeout, err)
+		case errors.Is(err, process.ErrCanceled):
+			g.log.Warn("git command canceled", "args", args, "error", err)
+			return "", fmt.Errorf("git %s canceled: %w", command, err)
+		case errors.Is(err, process.ErrOutputLimitExceeded):
+			var limitErr *process.OutputLimitError
+			if errors.As(err, &limitErr) {
+				g.log.Warn("git command output limit exceeded", "args", args, "stream", limitErr.Stream, "limit", limitErr.Limit)
+				return "", fmt.Errorf("git %s %s exceeded %d MiB output limit: %w", command, limitErr.Stream, limitErr.Limit/(1024*1024), err)
+			}
 		}
-		g.log.Debug("Git command failed", "args", args, "stderr", stderr.String(), "error", err)
-		return "", fmt.Errorf("git %s failed: %w: %s", strings.Join(args, " "), err, stderr.String())
+		g.log.Debug("Git command failed", "args", args, "error", err)
+		if stderr := strings.TrimSpace(string(result.Stderr)); stderr != "" {
+			return "", fmt.Errorf("git %s failed: %w: %s", command, err, stderr)
+		}
+		return "", fmt.Errorf("git %s failed: %w", command, err)
 	}
 
-	output := strings.TrimSpace(stdout.String())
-	g.log.Debug("Git command succeeded", "args", args, "output", output)
+	output := strings.TrimSpace(string(result.Stdout))
+	g.log.Debug("Git command succeeded", "args", args, "outputLen", len(output))
 	return output, nil
 }
 

@@ -1,6 +1,7 @@
 package github
 
 import (
+	"context"
 	"os/exec"
 	"testing"
 	"time"
@@ -12,7 +13,7 @@ import (
 const testTimeout = 30 * time.Second
 
 func TestNew(t *testing.T) {
-	gh := New("/some/path", 60*time.Second, nil)
+	gh := New(context.Background(), "/some/path", 60*time.Second, nil)
 
 	require.NotNil(t, gh)
 
@@ -72,7 +73,7 @@ func TestGitHubCli_GetPullRequestByBranch_Integration(t *testing.T) {
 	skipIfGhNotAvailable(t)
 	skipIfNotInGitRepo(t)
 
-	gh := New(".", testTimeout, nil)
+	gh := New(context.Background(), ".", testTimeout, nil)
 
 	// Test with a branch that likely doesn't have a PR
 	pr, err := gh.GetPullRequestByBranch("nonexistent-branch-12345")
@@ -87,7 +88,7 @@ func TestGitHubCli_ListPullRequests_Integration(t *testing.T) {
 	skipIfGhNotAvailable(t)
 	skipIfNotInGitRepo(t)
 
-	gh := New(".", testTimeout, nil)
+	gh := New(context.Background(), ".", testTimeout, nil)
 
 	// List open PRs (may return empty list, which is fine)
 	prs, err := gh.ListPullRequests(PRQuery{State: PRStateOpen}, DefaultPRLimit)

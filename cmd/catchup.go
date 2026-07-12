@@ -40,7 +40,7 @@ func runCatchup(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("failed to get working directory: %w", err)
 	}
 
-	rt, err := loadCommandRuntime()
+	rt, err := loadCommandRuntime(cmd.Context())
 	if err != nil {
 		return err
 	}

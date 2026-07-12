@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -32,6 +33,7 @@ func init() {
 }
 
 type resolveContext struct {
+	ctx             context.Context
 	primaryBranches []string
 	timeout         time.Duration
 }
@@ -54,6 +56,7 @@ func runResolve(cmd *cobra.Command, args []string) error {
 	}
 
 	ctx := &resolveContext{
+		ctx:             cmd.Context(),
 		primaryBranches: cfg.Workspace.PrimaryBranches,
 		timeout:         cfg.Git.Timeout,
 	}
@@ -78,7 +81,7 @@ func executeResolve(w io.Writer, targetPath string, ctx *resolveContext) error {
 		return err
 	}
 
-	g := git.New(false, gitDir, ctx.timeout)
+	g := git.New(ctx.ctx, false, gitDir, ctx.timeout)
 	mainPath, err := g.GetMainWorktreePath()
 	if err != nil {
 		return fmt.Errorf("failed to resolve primary worktree: %w", err)
@@ -89,7 +92,7 @@ func executeResolve(w io.Writer, targetPath string, ctx *resolveContext) error {
 }
 
 func resolveGitDir(targetPath string, ctx *resolveContext) (string, error) {
-	g := git.New(false, targetPath, ctx.timeout)
+	g := git.New(ctx.ctx, false, targetPath, ctx.timeout)
 	worktreeRoot, err := g.GetWorktreeRoot()
 	if err != nil {
 		return "", fmt.Errorf("git error: %w", err)
@@ -101,7 +104,7 @@ func resolveGitDir(targetPath string, ctx *resolveContext) (string, error) {
 	}
 
 	log.Debug("resolve: path is not a worktree, trying workspace discovery", "path", targetPath)
-	wsRoot, err := resolveWorkspaceRoot(targetPath, ctx.primaryBranches, ctx.timeout)
+	wsRoot, err := resolveWorkspaceRoot(ctx.ctx, targetPath, ctx.primaryBranches, ctx.timeout)
 	if err != nil {
 		return "", fmt.Errorf("%s is not a grove workspace or worktree: %w", targetPath, err)
 	}

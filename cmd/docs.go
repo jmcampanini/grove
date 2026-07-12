@@ -92,6 +92,12 @@ Some values can also be set with global CLI flags, which take priority over all 
     [workspace]
     primary_branches = ["main", "develop", "master"]
 
+## External command safety
+
+- git.timeout applies to both git and gh commands. Zero means no configured deadline; commands remain cancellable when Grove is interrupted.
+- Captured stdout and stderr are each limited to 8 MiB. Exceeding either limit stops the command and returns an error without echoing the captured content.
+- Git and GitHub commands disable interactive credential prompts.
+
 ## Validation notes
 
 - git.timeout and github.preview_cache_ttl must be zero or positive durations.

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,7 +18,7 @@ func TestExecuteLogsPath(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", filepath.Join(tmpDir, "state"))
 
 	var buf bytes.Buffer
-	err := executeLogsPath(&buf)
+	err := executeLogsPath(context.Background(), &buf)
 	require.NoError(t, err)
 
 	out := buf.String()
@@ -39,7 +40,7 @@ func TestExecuteLogsPath_DisabledLogging(t *testing.T) {
 	))
 
 	var buf bytes.Buffer
-	err := executeLogsPath(&buf)
+	err := executeLogsPath(context.Background(), &buf)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "file logging is disabled")
 }

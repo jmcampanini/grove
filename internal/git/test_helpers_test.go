@@ -2,6 +2,7 @@ package git
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"os"
 	"os/exec"
@@ -45,7 +46,7 @@ func newTestRepo(t *testing.T) *testRepo {
 	runGit(t, dir, "config", "user.name", "Test User")
 
 	return &testRepo{
-		Git:     New(false, dir, testTimeout).(*GitCli),
+		Git:     New(context.Background(), false, dir, testTimeout).(*GitCli),
 		rootDir: dir,
 		t:       t,
 	}
@@ -62,7 +63,7 @@ func newTestRepoWithDryRun(t *testing.T) *testRepo {
 	runGit(t, dir, "config", "user.name", "Test User")
 
 	return &testRepo{
-		Git:     New(true, dir, testTimeout).(*GitCli),
+		Git:     New(context.Background(), true, dir, testTimeout).(*GitCli),
 		rootDir: dir,
 		t:       t,
 	}

@@ -21,6 +21,8 @@ func TestDocsCommandWritesReference(t *testing.T) {
 	assert.Contains(t, output, "# grove reference")
 	assert.Contains(t, output, "grove config --provenance")
 	assert.Contains(t, output, "[workspace]")
+	assert.Contains(t, output, "Zero means no configured deadline")
+	assert.Contains(t, output, "each limited to 8 MiB")
 }
 
 func TestDocsCommandMetadata(t *testing.T) {

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -28,7 +29,7 @@ type namerContext struct {
 	namer *naming.LocalBranchNamer
 }
 
-func loadNamingConfig() (config.Config, error) {
+func loadNamingConfig(ctx context.Context) (config.Config, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return config.Config{}, fmt.Errorf("failed to get current directory: %w", err)
@@ -40,7 +41,7 @@ func loadNamingConfig() (config.Config, error) {
 	}
 
 	defaultTimeout := config.DefaultConfig().Git.Timeout
-	g := git.New(false, cwd, defaultTimeout)
+	g := git.New(ctx, false, cwd, defaultTimeout)
 
 	// Unlike loadCommandRuntime, git errors (timeout, corrupt index) are treated
 	// the same as "not in a repo" so the namer can degrade gracefully to defaults.
@@ -54,7 +55,7 @@ func loadNamingConfig() (config.Config, error) {
 		}
 	} else {
 		log.Debug("namer: not in a git repository, attempting workspace root detection", "cwd", cwd)
-		paths = resolveNamerConfigPaths(cwd, homeDir, paths, defaultTimeout)
+		paths = resolveNamerConfigPaths(ctx, cwd, homeDir, paths, defaultTimeout)
 	}
 
 	cfg, _, err := config.LoadFilesWithFlags(paths, rootCmd.PersistentFlags())
@@ -65,20 +66,20 @@ func loadNamingConfig() (config.Config, error) {
 	return cfg, nil
 }
 
-func resolveNamerConfigPaths(cwd, homeDir string, fallback []string, timeout time.Duration) []string {
+func resolveNamerConfigPaths(ctx context.Context, cwd, homeDir string, fallback []string, timeout time.Duration) []string {
 	bootstrapCfg, _, err := config.LoadFiles(fallback)
 	if err != nil {
 		log.Debug("namer: failed to load bootstrap config", "err", err)
 		return fallback
 	}
 
-	wsRoot, err := resolveWorkspaceRoot(cwd, bootstrapCfg.Workspace.PrimaryBranches, timeout)
+	wsRoot, err := resolveWorkspaceRoot(ctx, cwd, bootstrapCfg.Workspace.PrimaryBranches, timeout)
 	if err != nil {
 		log.Debug("namer: workspace root detection failed, using bootstrap config", "err", err)
 		return fallback
 	}
 
-	wsGit := git.New(false, wsRoot, timeout)
+	wsGit := git.New(ctx, false, wsRoot, timeout)
 	mainPath, err := wsGit.GetMainWorktreePath()
 	if err != nil {
 		log.Debug("namer: failed to get main worktree path from workspace root", "err", err)

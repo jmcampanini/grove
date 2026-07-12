@@ -89,7 +89,7 @@ func runCreate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	rt, err := loadCommandRuntime()
+	rt, err := loadCommandRuntime(cmd.Context())
 	if err != nil {
 		return err
 	}

@@ -1,6 +1,11 @@
 package cmd
 
 import (
+	"context"
+	"os"
+	"os/signal"
+	"syscall"
+
 	"charm.land/lipgloss/v2"
 	"charm.land/log/v2"
 	"github.com/jmcampanini/grove-cli/internal/config"
@@ -83,5 +88,7 @@ func configureLogStyles() {
 // Execute runs the root command.
 func Execute() error {
 	defer logging.Close()
-	return rootCmd.Execute()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	return rootCmd.ExecuteContext(ctx)
 }

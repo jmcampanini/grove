@@ -1,18 +1,18 @@
 package github
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"slices"
 	"strings"
 	"time"
 
 	clog "charm.land/log/v2"
 	"github.com/jmcampanini/grove-cli/internal/cache"
+	"github.com/jmcampanini/grove-cli/internal/process"
 )
 
 // DefaultPRLimit is the maximum number of pull requests returned by ListPullRequests.
@@ -21,6 +21,7 @@ const DefaultPRLimit = 20
 // GitHubCli provides GitHub operations by executing the gh CLI.
 type GitHubCli struct {
 	cache      *cache.Cache
+	ctx        context.Context
 	log        *clog.Logger
 	timeout    time.Duration
 	workingDir string
@@ -28,9 +29,13 @@ type GitHubCli struct {
 
 var _ GitHub = &GitHubCli{}
 
-func New(workingDir string, timeout time.Duration, c *cache.Cache) GitHub {
+func New(ctx context.Context, workingDir string, timeout time.Duration, c *cache.Cache) GitHub {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	return &GitHubCli{
 		cache:      c,
+		ctx:        ctx,
 		log:        clog.Default().WithPrefix("github"),
 		timeout:    timeout,
 		workingDir: workingDir,
@@ -61,27 +66,36 @@ func (g *GitHubCli) executeGhCommand(args ...string) (string, error) {
 func (g *GitHubCli) runGhProcess(args ...string) (string, error) {
 	g.log.Debug("Executing gh command", "cmd", "gh", "args", args, "workingDir", g.workingDir)
 
-	ctx, cancel := context.WithTimeout(context.Background(), g.timeout)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, "gh", args...)
-	cmd.Dir = g.workingDir
-	cmd.Env = append(os.Environ(), "GH_PROMPT_DISABLED=1")
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
+	result, err := process.Run(g.ctx, process.Spec{
+		Args: args,
+		Dir:  g.workingDir,
+		Env:  append(os.Environ(), "GH_PROMPT_DISABLED=1"),
+		Name: "gh",
+	}, g.timeout)
+	if err != nil {
+		command := strings.Join(args, " ")
+		switch {
+		case errors.Is(err, process.ErrTimedOut):
 			g.log.Warn("gh command timed out", "args", args, "timeout", g.timeout, "error", err)
-			return "", fmt.Errorf("gh %s timed out after %s", strings.Join(args, " "), g.timeout)
+			return "", fmt.Errorf("gh %s timed out after %s: %w", command, g.timeout, err)
+		case errors.Is(err, process.ErrCanceled):
+			g.log.Warn("gh command canceled", "args", args, "error", err)
+			return "", fmt.Errorf("gh %s canceled: %w", command, err)
+		case errors.Is(err, process.ErrOutputLimitExceeded):
+			var limitErr *process.OutputLimitError
+			if errors.As(err, &limitErr) {
+				g.log.Warn("gh command output limit exceeded", "args", args, "stream", limitErr.Stream, "limit", limitErr.Limit)
+				return "", fmt.Errorf("gh %s %s exceeded %d MiB output limit: %w", command, limitErr.Stream, limitErr.Limit/(1024*1024), err)
+			}
 		}
-		g.log.Warn("gh command failed", "args", args, "stderr", stderr.String(), "error", err)
-		return "", fmt.Errorf("gh %s failed: %w: %s", strings.Join(args, " "), err, stderr.String())
+		g.log.Warn("gh command failed", "args", args, "error", err)
+		if stderr := strings.TrimSpace(string(result.Stderr)); stderr != "" {
+			return "", fmt.Errorf("gh %s failed: %w: %s", command, err, stderr)
+		}
+		return "", fmt.Errorf("gh %s failed: %w", command, err)
 	}
 
-	output := strings.TrimSpace(stdout.String())
+	output := strings.TrimSpace(string(result.Stdout))
 	g.log.Debug("gh command succeeded", "args", args, "outputLen", len(output))
 	return output, nil
 }

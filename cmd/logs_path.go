@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"io"
 
@@ -19,11 +20,11 @@ func init() {
 }
 
 func runLogsPath(cmd *cobra.Command, _ []string) error {
-	return executeLogsPath(cmd.OutOrStdout())
+	return executeLogsPath(cmd.Context(), cmd.OutOrStdout())
 }
 
-func executeLogsPath(w io.Writer) error {
-	p, err := resolveLogPath()
+func executeLogsPath(ctx context.Context, w io.Writer) error {
+	p, err := resolveLogPath(ctx)
 	if err != nil {
 		return err
 	}
