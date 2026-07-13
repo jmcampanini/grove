@@ -9,6 +9,7 @@ import (
 type Config struct {
 	Git         GitConfig         `toml:"git"`
 	GitHub      GitHubConfig      `toml:"github"`
+	Issue       IssueConfig       `toml:"issue"`
 	LocalBranch LocalBranchConfig `toml:"local_branch"`
 	Log         LogConfig         `toml:"log"`
 	PullRequest PullRequestConfig `toml:"pull_request"`
@@ -24,6 +25,12 @@ func (c Config) Validate() error {
 	}
 	if c.GitHub.PreviewCacheTTL < 0 {
 		return errors.New("github.preview_cache_ttl cannot be negative")
+	}
+	if c.Issue.TitleSlugMaxLength < 0 {
+		return errors.New("issue.title_slug_max_length cannot be negative")
+	}
+	if c.Issue.WorktreePrefix == "" {
+		return errors.New("issue.worktree_prefix cannot be empty")
 	}
 	if c.PullRequest.WorktreePrefix == "" {
 		return errors.New("pull_request.worktree_prefix cannot be empty")
@@ -51,6 +58,18 @@ type GitConfig struct {
 // GitHubConfig configures GitHub-related behavior.
 type GitHubConfig struct {
 	PreviewCacheTTL time.Duration `toml:"preview_cache_ttl"` // TTL for FZF preview cache (e.g., "5m"); 0 disables
+}
+
+// IssueConfig configures issue worktree naming.
+type IssueConfig struct {
+	BranchTemplate string `toml:"branch_template"` // Template for local branch name (e.g., "issue/{{.Number}}-{{.TitleSlug}}")
+
+	// TitleSlugMaxLength caps the length of {{.TitleSlug}}. Truncation is clean
+	// (no hash suffix) because the issue number already guarantees uniqueness.
+	// 0 disables the cap.
+	TitleSlugMaxLength int `toml:"title_slug_max_length"`
+
+	WorktreePrefix string `toml:"worktree_prefix"` // Prefix for issue worktree directories (e.g., "issue-")
 }
 
 // LocalBranchConfig configures local branch worktree naming.

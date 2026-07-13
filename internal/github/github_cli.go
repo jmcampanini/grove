@@ -15,6 +15,9 @@ import (
 	"github.com/jmcampanini/grove-cli/internal/process"
 )
 
+// DefaultIssueLimit is the maximum number of issues returned by ListIssues.
+const DefaultIssueLimit = 20
+
 // DefaultPRLimit is the maximum number of pull requests returned by ListPullRequests.
 const DefaultPRLimit = 20
 
@@ -102,6 +105,25 @@ func (g *GitHubCli) runGhProcess(args ...string) (string, error) {
 
 func (g *GitHubCli) executeGraphQL(query string) (string, error) {
 	return g.executeGhCommand("api", "graphql", "-f", "query="+query)
+}
+
+func (g *GitHubCli) GetIssue(issueNum int) (Issue, error) {
+	args := []string{
+		"issue", "view", fmt.Sprintf("%d", issueNum),
+		"--json", issueViewJsonFields,
+	}
+
+	output, err := g.executeGhCommand(args...)
+	if err != nil {
+		return Issue{}, fmt.Errorf("failed to get issue #%d: %w", issueNum, err)
+	}
+
+	var issue Issue
+	if err := json.Unmarshal([]byte(output), &issue); err != nil {
+		return Issue{}, fmt.Errorf("failed to parse issue #%d: %w", issueNum, err)
+	}
+
+	return issue, nil
 }
 
 func (g *GitHubCli) GetPullRequest(prNum int) (PullRequest, error) {
@@ -241,6 +263,27 @@ func (g *GitHubCli) GetPullRequestByBranch(branchName string) (*PullRequest, err
 	}
 
 	return &prs[0], nil
+}
+
+func (g *GitHubCli) ListIssues(query IssueQuery, limit int) ([]Issue, error) {
+	args := []string{
+		"issue", "list",
+		"--search", query.ToSearchQuery(),
+		"--json", issueListJsonFields,
+		"--limit", fmt.Sprintf("%d", limit),
+	}
+
+	output, err := g.executeGhCommand(args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list issues: %w", err)
+	}
+
+	var issues []Issue
+	if err := json.Unmarshal([]byte(output), &issues); err != nil {
+		return nil, fmt.Errorf("failed to parse issues: %w", err)
+	}
+
+	return issues, nil
 }
 
 func (g *GitHubCli) ListPullRequests(query PRQuery, limit int) ([]PullRequest, error) {

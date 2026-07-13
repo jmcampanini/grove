@@ -15,6 +15,11 @@ func DefaultConfig() Config {
 		GitHub: GitHubConfig{
 			PreviewCacheTTL: 5 * time.Minute,
 		},
+		Issue: IssueConfig{
+			BranchTemplate:     "issue/{{.Number}}-{{.TitleSlug}}",
+			TitleSlugMaxLength: 40,
+			WorktreePrefix:     "issue-",
+		},
 		LocalBranch: LocalBranchConfig{
 			BranchPrefix:      "feature/",
 			StripBranchPrefix: []string{"feature/"},

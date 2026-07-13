@@ -14,9 +14,18 @@ import (
 )
 
 type mockGitHub struct {
+	getIssueFn               func(issueNum int) (github.Issue, error)
 	getPullRequestByBranchFn func(branchName string) (*github.PullRequest, error)
 	getPullRequestFn         func(prNum int) (github.PullRequest, error)
+	listIssuesFn             func(query github.IssueQuery, limit int) ([]github.Issue, error)
 	listPullRequestsFn       func(query github.PRQuery, limit int) ([]github.PullRequest, error)
+}
+
+func (m *mockGitHub) GetIssue(issueNum int) (github.Issue, error) {
+	if m.getIssueFn != nil {
+		return m.getIssueFn(issueNum)
+	}
+	return github.Issue{}, nil
 }
 
 func (m *mockGitHub) GetPullRequest(prNum int) (github.PullRequest, error) {
@@ -33,6 +42,13 @@ func (m *mockGitHub) GetPullRequestActivity(_, _ string, _ int) ([]github.Review
 func (m *mockGitHub) GetPullRequestByBranch(branchName string) (*github.PullRequest, error) {
 	if m.getPullRequestByBranchFn != nil {
 		return m.getPullRequestByBranchFn(branchName)
+	}
+	return nil, nil
+}
+
+func (m *mockGitHub) ListIssues(query github.IssueQuery, limit int) ([]github.Issue, error) {
+	if m.listIssuesFn != nil {
+		return m.listIssuesFn(query, limit)
 	}
 	return nil, nil
 }

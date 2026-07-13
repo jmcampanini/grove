@@ -1,6 +1,9 @@
 package github
 
 type GitHub interface {
+	// GetIssue returns a single issue by number.
+	GetIssue(issueNum int) (Issue, error)
+
 	// GetPullRequest returns a single pull request by number.
 	GetPullRequest(prNum int) (PullRequest, error)
 
@@ -11,6 +14,10 @@ type GitHub interface {
 	// GetPullRequestByBranch returns the pull request for the given branch name.
 	// Returns nil if no pull request exists for the branch.
 	GetPullRequestByBranch(branchName string) (*PullRequest, error)
+
+	// ListIssues returns a list of issues matching the given query.
+	// Use DefaultIssueLimit for the limit parameter to get the standard number of results.
+	ListIssues(query IssueQuery, limit int) ([]Issue, error)
 
 	// ListPullRequests returns a list of pull requests matching the given query.
 	// Use DefaultPRLimit for the limit parameter to get the standard number of results.

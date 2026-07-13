@@ -22,6 +22,11 @@ func TestDefaultConfig(t *testing.T) {
 	// GitHub defaults
 	assert.Equal(t, 5*time.Minute, cfg.GitHub.PreviewCacheTTL)
 
+	// Issue defaults
+	assert.Equal(t, "issue/{{.Number}}-{{.TitleSlug}}", cfg.Issue.BranchTemplate)
+	assert.Equal(t, 40, cfg.Issue.TitleSlugMaxLength)
+	assert.Equal(t, "issue-", cfg.Issue.WorktreePrefix)
+
 	// Slugify defaults
 	assert.True(t, cfg.Slugify.CollapseDashes)
 	assert.Equal(t, 4, cfg.Slugify.HashLength)
@@ -90,6 +95,28 @@ func TestConfig_Validate(t *testing.T) {
 				c.GitHub.PreviewCacheTTL = 0
 			},
 			wantErr: "",
+		},
+		// Issue
+		{
+			name: "negative issue title slug max length",
+			modify: func(c *Config) {
+				c.Issue.TitleSlugMaxLength = -1
+			},
+			wantErr: "issue.title_slug_max_length cannot be negative",
+		},
+		{
+			name: "zero issue title slug max length is valid",
+			modify: func(c *Config) {
+				c.Issue.TitleSlugMaxLength = 0
+			},
+			wantErr: "",
+		},
+		{
+			name: "empty issue worktree prefix",
+			modify: func(c *Config) {
+				c.Issue.WorktreePrefix = ""
+			},
+			wantErr: "issue.worktree_prefix cannot be empty",
 		},
 		// PullRequest
 		{

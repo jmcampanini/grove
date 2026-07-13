@@ -26,6 +26,10 @@ func TestDefaultPRLimit(t *testing.T) {
 	assert.Equal(t, 20, DefaultPRLimit)
 }
 
+func TestDefaultIssueLimit(t *testing.T) {
+	assert.Equal(t, 20, DefaultIssueLimit)
+}
+
 // skipIfGhNotAvailable skips the test if gh CLI is not installed or not authenticated.
 func skipIfGhNotAvailable(t *testing.T) {
 	t.Helper()
@@ -79,6 +83,35 @@ func TestGitHubCli_GetPullRequestByBranch_Integration(t *testing.T) {
 	pr, err := gh.GetPullRequestByBranch("nonexistent-branch-12345")
 	require.NoError(t, err)
 	assert.Nil(t, pr, "expected nil for nonexistent branch")
+}
+
+func TestGitHubCli_GetIssue_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+	skipIfGhNotAvailable(t)
+	skipIfNotInGitRepo(t)
+
+	// This test requires a known issue number in the repository.
+	// Skip if we can't determine a valid issue to test against.
+	t.Skip("integration test requires a known issue number - run manually with a specific issue")
+}
+
+func TestGitHubCli_ListIssues_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+	skipIfGhNotAvailable(t)
+	skipIfNotInGitRepo(t)
+
+	gh := New(context.Background(), ".", testTimeout, nil)
+
+	// List open issues (may return empty list, which is fine)
+	issues, err := gh.ListIssues(IssueQuery{State: IssueStateOpen}, DefaultIssueLimit)
+	require.NoError(t, err)
+
+	// Verify limit is respected
+	assert.LessOrEqual(t, len(issues), DefaultIssueLimit)
 }
 
 func TestGitHubCli_ListPullRequests_Integration(t *testing.T) {
