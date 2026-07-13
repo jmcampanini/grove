@@ -27,6 +27,7 @@ Common workflows:
   Start new work:       grove create "add user auth"
   Check out a branch:   grove checkout feature/fix-login
   Check out a PR:       grove pr checkout 42
+  Work on an issue:     grove issue start 17
   See all worktrees:    grove status`,
 }
 
@@ -39,6 +40,7 @@ func init() {
 		&cobra.Group{ID: "worktree", Title: "Worktree Commands:"},
 		&cobra.Group{ID: "git", Title: "Git Commands:"},
 		&cobra.Group{ID: "pr", Title: "Pull Request Commands:"},
+		&cobra.Group{ID: "issue", Title: "Issue Commands:"},
 		&cobra.Group{ID: "config", Title: "Configuration Commands:"},
 		&cobra.Group{ID: "utility", Title: "Utility Commands:"},
 	)

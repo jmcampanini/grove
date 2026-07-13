@@ -31,6 +31,7 @@ Common commands:
 - grove create PHRASE: create a branch and sibling worktree from a phrase.
 - grove checkout BRANCH: switch to an existing branch worktree or create it.
 - grove pr checkout NUMBER: check out a pull request as a worktree.
+- grove issue start NUMBER: create a branch and worktree to work on an issue.
 - grove status: list workspace worktrees and branch state.
 - grove sync: update local branch metadata and prune stale refs.
 - grove config: print the effective TOML configuration.
@@ -69,6 +70,11 @@ Some values can also be set with global CLI flags, which take priority over all 
     [github]
     preview_cache_ttl = "5m"
 
+    [issue]
+    branch_template = "issue/{{.Number}}-{{.TitleSlug}}"
+    title_slug_max_length = 40
+    worktree_prefix = "issue-"
+
     [local_branch]
     branch_prefix = "feature/"
     strip_branch_prefix = ["feature/"]
@@ -102,6 +108,9 @@ Some values can also be set with global CLI flags, which take priority over all 
 
 - git.timeout and github.preview_cache_ttl must be zero or positive durations.
 - log.file is used as written; shell shortcuts such as ~ are not expanded. Run grove config to see the computed default.
+- issue.branch_template must reference {{.Number}}; issue matching is anchored on the issue number.
+- issue.worktree_prefix cannot be empty.
+- issue.title_slug_max_length must be zero or positive; the slug is truncated cleanly with no hash suffix.
 - pull_request.worktree_prefix cannot be empty.
 - slugify.hash_length and slugify.max_length must be zero or positive.
 - slugify.hash_length must leave at least two characters when slugify.max_length is set.
