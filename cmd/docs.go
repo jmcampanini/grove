@@ -72,8 +72,9 @@ Some values can also be set with global CLI flags, which take priority over all 
 
     [issue]
     branch_template = "issue/{{.Number}}-{{.TitleSlug}}"
+    strip_branch_prefix = ["issue/"]
     title_slug_max_length = 40
-    worktree_prefix = "issue-"
+    worktree_prefix = "is-"
 
     [local_branch]
     branch_prefix = "feature/"
@@ -109,8 +110,9 @@ Some values can also be set with global CLI flags, which take priority over all 
 - git.timeout and github.preview_cache_ttl must be zero or positive durations.
 - log.file is used as written; shell shortcuts such as ~ are not expanded. Run grove config to see the computed default.
 - issue.branch_template must reference {{.Number}}; issue matching is anchored on the issue number.
-- issue.worktree_prefix cannot be empty.
+- issue.strip_branch_prefix removes the first matching prefix before generating a worktree directory name.
 - issue.title_slug_max_length must be zero or positive; the slug is truncated cleanly with no hash suffix.
+- issue.worktree_prefix cannot be empty.
 - pull_request.worktree_prefix cannot be empty.
 - slugify.hash_length and slugify.max_length must be zero or positive.
 - slugify.hash_length must leave at least two characters when slugify.max_length is set.

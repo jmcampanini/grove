@@ -26,8 +26,9 @@ func defaultSlugifyConfig() config.SlugifyConfig {
 func defaultIssueConfig() config.IssueConfig {
 	return config.IssueConfig{
 		BranchTemplate:     "issue/{{.Number}}-{{.TitleSlug}}",
+		StripBranchPrefix:  []string{"issue/"},
 		TitleSlugMaxLength: 40,
-		WorktreePrefix:     "issue-",
+		WorktreePrefix:     "is-",
 	}
 }
 
@@ -77,7 +78,7 @@ func TestMatcher_FindWorktreeForIssue(t *testing.T) {
 			issue:    createIssue(123, "Fix login crash"),
 			worktrees: []git.Worktree{
 				createWorktree("/workspace/main", "main"),
-				createWorktree("/workspace/issue-123-fix-login-crash", "issue/123-fix-login-crash"),
+				createWorktree("/workspace/is-123-fix-login-crash", "issue/123-fix-login-crash"),
 			},
 			wantMatchIndex: 1,
 		},
@@ -86,7 +87,7 @@ func TestMatcher_FindWorktreeForIssue(t *testing.T) {
 			issueCfg: defaultIssueConfig(),
 			issue:    createIssue(123, "Completely renamed title"),
 			worktrees: []git.Worktree{
-				createWorktree("/workspace/issue-123-fix-login-crash", "issue/123-fix-login-crash"),
+				createWorktree("/workspace/is-123-fix-login-crash", "issue/123-fix-login-crash"),
 			},
 			wantMatchIndex: 0,
 		},
@@ -95,7 +96,7 @@ func TestMatcher_FindWorktreeForIssue(t *testing.T) {
 			issueCfg: defaultIssueConfig(),
 			issue:    createIssue(123, "Fix login crash"),
 			worktrees: []git.Worktree{
-				createWorktree("/workspace/issue-1234-other", "issue/1234-other"),
+				createWorktree("/workspace/is-1234-other", "issue/1234-other"),
 			},
 			wantMatchIndex: -1,
 		},
@@ -103,13 +104,14 @@ func TestMatcher_FindWorktreeForIssue(t *testing.T) {
 			name: "number-only template",
 			issueCfg: config.IssueConfig{
 				BranchTemplate:     "issue/{{.Number}}",
+				StripBranchPrefix:  []string{"issue/"},
 				TitleSlugMaxLength: 40,
-				WorktreePrefix:     "issue-",
+				WorktreePrefix:     "is-",
 			},
 			issue: createIssue(456, "Anything"),
 			worktrees: []git.Worktree{
 				createWorktree("/workspace/main", "main"),
-				createWorktree("/workspace/issue-456", "issue/456"),
+				createWorktree("/workspace/is-456", "issue/456"),
 			},
 			wantMatchIndex: 1,
 		},
@@ -118,11 +120,11 @@ func TestMatcher_FindWorktreeForIssue(t *testing.T) {
 			issueCfg: config.IssueConfig{
 				BranchTemplate:     "{{.TitleSlug}}-{{.Number}}",
 				TitleSlugMaxLength: 40,
-				WorktreePrefix:     "issue-",
+				WorktreePrefix:     "is-",
 			},
 			issue: createIssue(789, "Fix bug"),
 			worktrees: []git.Worktree{
-				createWorktree("/workspace/issue-fix-bug-789", "fix-bug-789"),
+				createWorktree("/workspace/is-fix-bug-789", "fix-bug-789"),
 			},
 			wantMatchIndex: 0,
 		},
@@ -131,11 +133,11 @@ func TestMatcher_FindWorktreeForIssue(t *testing.T) {
 			issueCfg: config.IssueConfig{
 				BranchTemplate:     "{{.TitleSlug}}-{{.Number}}",
 				TitleSlugMaxLength: 40,
-				WorktreePrefix:     "issue-",
+				WorktreePrefix:     "is-",
 			},
 			issue: createIssue(789, "Renamed bug"),
 			worktrees: []git.Worktree{
-				createWorktree("/workspace/issue-fix-bug-789", "fix-bug-789"),
+				createWorktree("/workspace/is-fix-bug-789", "fix-bug-789"),
 			},
 			wantMatchIndex: -1,
 		},
@@ -200,10 +202,10 @@ func TestMatcher_MatchAll(t *testing.T) {
 			},
 			worktrees: []git.Worktree{
 				createWorktree("/workspace/main", "main"),
-				createWorktree("/workspace/issue-123-fix-login-crash", "issue/123-fix-login-crash"),
-				createWorktree("/workspace/issue-789-add-dark-mode", "issue/789-add-dark-mode"),
+				createWorktree("/workspace/is-123-fix-login-crash", "issue/123-fix-login-crash"),
+				createWorktree("/workspace/is-789-add-dark-mode", "issue/789-add-dark-mode"),
 			},
-			wantPaths: []string{"/workspace/issue-123-fix-login-crash", "", "/workspace/issue-789-add-dark-mode"},
+			wantPaths: []string{"/workspace/is-123-fix-login-crash", "", "/workspace/is-789-add-dark-mode"},
 		},
 		{
 			name:      "empty issues list",

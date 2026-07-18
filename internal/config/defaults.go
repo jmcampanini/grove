@@ -17,8 +17,9 @@ func DefaultConfig() Config {
 		},
 		Issue: IssueConfig{
 			BranchTemplate:     "issue/{{.Number}}-{{.TitleSlug}}",
+			StripBranchPrefix:  []string{"issue/"},
 			TitleSlugMaxLength: 40,
-			WorktreePrefix:     "issue-",
+			WorktreePrefix:     "is-",
 		},
 		LocalBranch: LocalBranchConfig{
 			BranchPrefix:      "feature/",

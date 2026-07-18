@@ -24,8 +24,9 @@ func TestDefaultConfig(t *testing.T) {
 
 	// Issue defaults
 	assert.Equal(t, "issue/{{.Number}}-{{.TitleSlug}}", cfg.Issue.BranchTemplate)
+	assert.Equal(t, []string{"issue/"}, cfg.Issue.StripBranchPrefix)
 	assert.Equal(t, 40, cfg.Issue.TitleSlugMaxLength)
-	assert.Equal(t, "issue-", cfg.Issue.WorktreePrefix)
+	assert.Equal(t, "is-", cfg.Issue.WorktreePrefix)
 
 	// Slugify defaults
 	assert.True(t, cfg.Slugify.CollapseDashes)
@@ -480,6 +481,31 @@ preview_cache_ttl = "0s"
 			},
 		},
 		{
+			name: "issue config",
+			content: `[issue]
+branch_template = "ticket/{{.Number}}-{{.TitleSlug}}"
+strip_branch_prefix = ["ticket/", "issue/"]
+title_slug_max_length = 30
+worktree_prefix = "task-"
+`,
+			check: func(t *testing.T, cfg Config) {
+				assert.Equal(t, "ticket/{{.Number}}-{{.TitleSlug}}", cfg.Issue.BranchTemplate)
+				assert.Equal(t, []string{"ticket/", "issue/"}, cfg.Issue.StripBranchPrefix)
+				assert.Equal(t, 30, cfg.Issue.TitleSlugMaxLength)
+				assert.Equal(t, "task-", cfg.Issue.WorktreePrefix)
+			},
+		},
+		{
+			name: "empty issue strip prefix list clears default",
+			content: `[issue]
+strip_branch_prefix = []
+`,
+			check: func(t *testing.T, cfg Config) {
+				assert.Empty(t, cfg.Issue.StripBranchPrefix)
+				assert.Equal(t, "is-", cfg.Issue.WorktreePrefix)
+			},
+		},
+		{
 			name: "local branch config",
 			content: `[local_branch]
 branch_prefix = "fix/"
@@ -573,16 +599,22 @@ branch_prefix = "high/"
 func TestLoad_ZeroValueOverwrite(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// First file sets a value
+	// First file sets values.
 	firstPath := filepath.Join(tmpDir, "first.toml")
-	firstContent := `[slugify]
+	firstContent := `[issue]
+strip_branch_prefix = ["ticket/"]
+
+[slugify]
 max_length = 100
 `
 	require.NoError(t, os.WriteFile(firstPath, []byte(firstContent), 0644))
 
-	// Second file explicitly sets it to 0
+	// Second file explicitly clears them.
 	secondPath := filepath.Join(tmpDir, "second.toml")
-	secondContent := `[slugify]
+	secondContent := `[issue]
+strip_branch_prefix = []
+
+[slugify]
 max_length = 0
 `
 	require.NoError(t, os.WriteFile(secondPath, []byte(secondContent), 0644))
@@ -590,7 +622,7 @@ max_length = 0
 	cfg, _, err := LoadFiles([]string{firstPath, secondPath})
 	require.NoError(t, err)
 
-	// Zero value from second file should override
+	assert.Empty(t, cfg.Issue.StripBranchPrefix)
 	assert.Equal(t, 0, cfg.Slugify.MaxLength)
 }
 
