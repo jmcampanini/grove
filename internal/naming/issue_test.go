@@ -13,8 +13,9 @@ import (
 func defaultIssueConfig() config.IssueConfig {
 	return config.IssueConfig{
 		BranchTemplate:     "issue/{{.Number}}-{{.TitleSlug}}",
+		StripBranchPrefix:  []string{"issue/"},
 		TitleSlugMaxLength: 40,
-		WorktreePrefix:     "issue-",
+		WorktreePrefix:     "is-",
 	}
 }
 
@@ -198,40 +199,102 @@ func TestIssueNamer_GenerateBranchName(t *testing.T) {
 
 func TestIssueNamer_GenerateWorktreeName(t *testing.T) {
 	tests := []struct {
-		name           string
-		branchName     string
-		worktreePrefix string
-		want           string
+		name              string
+		branchName        string
+		stripBranchPrefix []string
+		worktreePrefix    string
+		want              string
 	}{
 		{
-			name:           "smart prefix detection avoids doubling",
-			branchName:     "issue/123-fix-login",
-			worktreePrefix: "issue-",
-			want:           "issue-123-fix-login",
+			name:              "default issue namespace is replaced",
+			branchName:        "issue/123-fix-login",
+			stripBranchPrefix: []string{"issue/"},
+			worktreePrefix:    "is-",
+			want:              "is-123-fix-login",
 		},
 		{
-			name:           "prefix added when slug differs",
-			branchName:     "issue/123-fix-login",
-			worktreePrefix: "task-",
-			want:           "task-issue-123-fix-login",
+			name:              "first matching branch prefix is stripped",
+			branchName:        "ticket/123-fix-login",
+			stripBranchPrefix: []string{"issue/", "ticket/"},
+			worktreePrefix:    "is-",
+			want:              "is-123-fix-login",
 		},
 		{
-			name:           "trailing dash branch slugs cleanly",
-			branchName:     "issue/123-",
-			worktreePrefix: "issue-",
-			want:           "issue-123",
+			name:              "earlier overlapping branch prefix wins",
+			branchName:        "issue/123-fix-login",
+			stripBranchPrefix: []string{"issue/", "issue/123-"},
+			worktreePrefix:    "is-",
+			want:              "is-123-fix-login",
 		},
 		{
-			name:           "empty branch",
-			branchName:     "",
-			worktreePrefix: "issue-",
-			want:           "",
+			name:              "reversing overlapping prefixes changes the result",
+			branchName:        "issue/123-fix-login",
+			stripBranchPrefix: []string{"issue/123-", "issue/"},
+			worktreePrefix:    "is-",
+			want:              "is-fix-login",
+		},
+		{
+			name:              "only one branch prefix is stripped",
+			branchName:        "feature/issue/123-fix-login",
+			stripBranchPrefix: []string{"feature/", "issue/"},
+			worktreePrefix:    "is-",
+			want:              "is-issue-123-fix-login",
+		},
+		{
+			name:              "unmatched branch prefix remains",
+			branchName:        "ticket/123-fix-login",
+			stripBranchPrefix: []string{"issue/"},
+			worktreePrefix:    "is-",
+			want:              "is-ticket-123-fix-login",
+		},
+		{
+			name:              "empty branch prefix list strips nothing",
+			branchName:        "issue/123-fix-login",
+			stripBranchPrefix: nil,
+			worktreePrefix:    "is-",
+			want:              "is-issue-123-fix-login",
+		},
+		{
+			name:              "stripping the entire branch returns empty",
+			branchName:        "issue/",
+			stripBranchPrefix: []string{"issue/"},
+			worktreePrefix:    "is-",
+			want:              "",
+		},
+		{
+			name:              "smart prefix detection avoids doubling",
+			branchName:        "issue/is-123-fix-login",
+			stripBranchPrefix: []string{"issue/"},
+			worktreePrefix:    "is-",
+			want:              "is-123-fix-login",
+		},
+		{
+			name:              "custom worktree prefix",
+			branchName:        "issue/123-fix-login",
+			stripBranchPrefix: []string{"issue/"},
+			worktreePrefix:    "task-",
+			want:              "task-123-fix-login",
+		},
+		{
+			name:              "trailing dash branch slugs cleanly",
+			branchName:        "issue/123-",
+			stripBranchPrefix: []string{"issue/"},
+			worktreePrefix:    "is-",
+			want:              "is-123",
+		},
+		{
+			name:              "empty branch",
+			branchName:        "",
+			stripBranchPrefix: []string{"issue/"},
+			worktreePrefix:    "is-",
+			want:              "",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := defaultIssueConfig()
+			cfg.StripBranchPrefix = tt.stripBranchPrefix
 			cfg.WorktreePrefix = tt.worktreePrefix
 			namer := newIssueNamer(t, cfg)
 			assert.Equal(t, tt.want, namer.GenerateWorktreeName(tt.branchName))

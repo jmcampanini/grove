@@ -52,13 +52,13 @@ func TestStartIssueWorktree(t *testing.T) {
 				},
 				createWorktreeForExistingBranchFn: func(branchName, worktreeAbsPath string) error {
 					assert.Equal(t, "issue/123-add-auth", branchName)
-					assert.Equal(t, "/workspace/issue-123-add-auth", worktreeAbsPath)
+					assert.Equal(t, "/workspace/is-123-add-auth", worktreeAbsPath)
 					return nil
 				},
 			},
 			cfg:        defaultTestConfig(),
 			wantErr:    false,
-			wantStdout: "/workspace/issue-123-add-auth",
+			wantStdout: "/workspace/is-123-add-auth",
 		},
 		{
 			name: "existing branch is reused even after issue title edit",
@@ -76,13 +76,13 @@ func TestStartIssueWorktree(t *testing.T) {
 				},
 				createWorktreeForExistingBranchFn: func(branchName, worktreeAbsPath string) error {
 					assert.Equal(t, "issue/123-add-auth", branchName)
-					assert.Equal(t, "/workspace/issue-123-add-auth", worktreeAbsPath)
+					assert.Equal(t, "/workspace/is-123-add-auth", worktreeAbsPath)
 					return nil
 				},
 			},
 			cfg:        defaultTestConfig(),
 			wantErr:    false,
-			wantStdout: "/workspace/issue-123-add-auth",
+			wantStdout: "/workspace/is-123-add-auth",
 		},
 		{
 			name: "new branch created from fetched remote primary",
@@ -102,14 +102,14 @@ func TestStartIssueWorktree(t *testing.T) {
 				},
 				createWorktreeForNewBranchFromRefFn: func(newBranchName, worktreeAbsPath, baseRef string) error {
 					assert.Equal(t, "issue/123-add-auth", newBranchName)
-					assert.Equal(t, "/workspace/issue-123-add-auth", worktreeAbsPath)
+					assert.Equal(t, "/workspace/is-123-add-auth", worktreeAbsPath)
 					assert.Equal(t, "origin/main", baseRef)
 					return nil
 				},
 			},
 			cfg:        defaultTestConfig(),
 			wantErr:    false,
-			wantStdout: "/workspace/issue-123-add-auth",
+			wantStdout: "/workspace/is-123-add-auth",
 		},
 		{
 			name: "closed issue proceeds with worktree creation",
@@ -126,7 +126,7 @@ func TestStartIssueWorktree(t *testing.T) {
 			},
 			cfg:        defaultTestConfig(),
 			wantErr:    false,
-			wantStdout: "/workspace/issue-123-add-auth",
+			wantStdout: "/workspace/is-123-add-auth",
 		},
 		{
 			name: "long title is capped in branch and worktree names",
@@ -141,13 +141,13 @@ func TestStartIssueWorktree(t *testing.T) {
 				},
 				createWorktreeForNewBranchFromRefFn: func(newBranchName, worktreeAbsPath, baseRef string) error {
 					assert.Equal(t, "issue/7-fix-login-crash-when-the-password-field", newBranchName)
-					assert.Equal(t, "/workspace/issue-7-fix-login-crash-when-the-password-field", worktreeAbsPath)
+					assert.Equal(t, "/workspace/is-7-fix-login-crash-when-the-password-field", worktreeAbsPath)
 					return nil
 				},
 			},
 			cfg:        defaultTestConfig(),
 			wantErr:    false,
-			wantStdout: "/workspace/issue-7-fix-login-crash-when-the-password-field",
+			wantStdout: "/workspace/is-7-fix-login-crash-when-the-password-field",
 		},
 		{
 			name: "number-only template",
@@ -162,7 +162,7 @@ func TestStartIssueWorktree(t *testing.T) {
 				},
 				createWorktreeForNewBranchFromRefFn: func(newBranchName, worktreeAbsPath, baseRef string) error {
 					assert.Equal(t, "issue/456", newBranchName)
-					assert.Equal(t, "/workspace/issue-456", worktreeAbsPath)
+					assert.Equal(t, "/workspace/is-456", worktreeAbsPath)
 					return nil
 				},
 			},
@@ -172,7 +172,7 @@ func TestStartIssueWorktree(t *testing.T) {
 				return cfg
 			}(),
 			wantErr:    false,
-			wantStdout: "/workspace/issue-456",
+			wantStdout: "/workspace/is-456",
 		},
 		{
 			name: "remote default branch unresolved",
@@ -272,7 +272,7 @@ func TestStartIssueWorktree_ExistingWorktree(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			wtPath := filepath.Join(t.TempDir(), "issue-123-add-auth")
+			wtPath := filepath.Join(t.TempDir(), "is-123-add-auth")
 			require.NoError(t, os.MkdirAll(wtPath, 0o755))
 
 			gitMock := &mockGit{
@@ -301,7 +301,7 @@ func TestStartIssueWorktree_ExistingWorktree(t *testing.T) {
 }
 
 func TestStartIssueWorktree_StaleWorktreeEntry(t *testing.T) {
-	stalePath := filepath.Join(t.TempDir(), "issue-123-add-auth") // registered but never created on disk
+	stalePath := filepath.Join(t.TempDir(), "is-123-add-auth") // registered but never created on disk
 
 	pruned := false
 	gitMock := &mockGit{
@@ -314,7 +314,7 @@ func TestStartIssueWorktree_StaleWorktreeEntry(t *testing.T) {
 		},
 		createWorktreeForNewBranchFromRefFn: func(newBranchName, worktreeAbsPath, baseRef string) error {
 			assert.Equal(t, "issue/123-add-auth", newBranchName)
-			assert.Equal(t, "/workspace/issue-123-add-auth", worktreeAbsPath)
+			assert.Equal(t, "/workspace/is-123-add-auth", worktreeAbsPath)
 			return nil
 		},
 	}
@@ -326,12 +326,12 @@ func TestStartIssueWorktree_StaleWorktreeEntry(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.True(t, pruned, "stale worktree entries should be pruned")
-	assert.Equal(t, "/workspace/issue-123-add-auth", strings.TrimSpace(stdout.String()))
+	assert.Equal(t, "/workspace/is-123-add-auth", strings.TrimSpace(stdout.String()))
 }
 
 func TestStartIssueWorktree_WorktreePathCollision(t *testing.T) {
 	workspace := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(workspace, "issue-123-add-auth"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(workspace, "is-123-add-auth"), 0o755))
 
 	gitMock := &mockGit{
 		listWorktreesFn: func() ([]git.Worktree, error) {

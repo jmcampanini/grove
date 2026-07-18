@@ -86,7 +86,7 @@ func TestOutputIssueListFzf(t *testing.T) {
 		{
 			name: "issue with worktree gets checkmark prefix",
 			matches: []issue.Match{
-				issueMatch(7, "Add dark mode", "bob", nil, "/workspace/issue-7-add-dark-mode"),
+				issueMatch(7, "Add dark mode", "bob", nil, "/workspace/is-7-add-dark-mode"),
 			},
 			wantLines: []string{
 				"7\t7 Add dark mode  bob open\t✓ #7 Add dark mode [bob] ",
@@ -132,7 +132,7 @@ func TestOutputIssueListTable(t *testing.T) {
 	t.Run("table contains issue fields", func(t *testing.T) {
 		var buf bytes.Buffer
 		matches := []issue.Match{
-			issueMatch(123, "Fix login crash", "alice", []github.Label{{Name: "bug"}, {Name: "ui"}, {Name: "a11y"}}, "/workspace/issue-123"),
+			issueMatch(123, "Fix login crash", "alice", []github.Label{{Name: "bug"}, {Name: "ui"}, {Name: "a11y"}}, "/workspace/is-123"),
 			issueMatch(456, "Add dark mode", "bob", nil, ""),
 		}
 		require.NoError(t, outputIssueListTable(&buf, matches))

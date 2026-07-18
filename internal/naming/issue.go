@@ -25,6 +25,7 @@ type IssueNamer struct {
 	numberAnchorOK     bool
 	numberBoundary     string
 	slugifyOpts        SlugifyOptions
+	stripBranchPrefix  []string
 	titleSlugMaxLength int
 	worktreePrefix     string
 }
@@ -61,6 +62,7 @@ func NewIssueNamer(issueCfg config.IssueConfig, slugCfg config.SlugifyConfig) (*
 		numberAnchorOK:     anchorOK,
 		numberBoundary:     boundary,
 		slugifyOpts:        SlugifyOptionsFromConfig(slugCfg),
+		stripBranchPrefix:  issueCfg.StripBranchPrefix,
 		titleSlugMaxLength: issueCfg.TitleSlugMaxLength,
 		worktreePrefix:     issueCfg.WorktreePrefix,
 	}, nil
@@ -98,10 +100,18 @@ func (n *IssueNamer) GenerateBranchName(number int, title string) (string, error
 	return buf.String(), nil
 }
 
-// GenerateWorktreeName applies slugify and smart prefix detection to create a worktree directory name.
-// If the slugified name already starts with worktreePrefix, the prefix is not added again.
+// GenerateWorktreeName strips the first configured branch prefix, slugifies
+// the result, and avoids adding the worktree prefix when it is already present.
 func (n *IssueNamer) GenerateWorktreeName(branchName string) string {
-	slug := Slugify(branchName, n.slugifyOpts)
+	name := branchName
+	for _, prefix := range n.stripBranchPrefix {
+		if strings.HasPrefix(name, prefix) {
+			name = strings.TrimPrefix(name, prefix)
+			break
+		}
+	}
+
+	slug := Slugify(name, n.slugifyOpts)
 	if slug == "" {
 		return ""
 	}

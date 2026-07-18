@@ -14,7 +14,7 @@ Example layout:
   ├── main/                     the only full git repository
   ├── wt-add-auth/              worktree for a feature branch
   ├── wt-fix-bug-123/           worktree for a bug-fix branch
-  ├── issue-17-fix-login/       worktree started from a GitHub issue
+  ├── is-17-fix-login/          worktree started from a GitHub issue
   └── pr-456/                   worktree checked out from a pull request
 
 Requirements:

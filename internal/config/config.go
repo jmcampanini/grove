@@ -64,12 +64,16 @@ type GitHubConfig struct {
 type IssueConfig struct {
 	BranchTemplate string `toml:"branch_template"` // Template for local branch name (e.g., "issue/{{.Number}}-{{.TitleSlug}}")
 
+	// StripBranchPrefix is a list of prefixes to strip from branch names.
+	// Only the first matching prefix is stripped (checked in list order).
+	StripBranchPrefix []string `toml:"strip_branch_prefix"`
+
 	// TitleSlugMaxLength caps the length of {{.TitleSlug}}. Truncation is clean
 	// (no hash suffix) because the issue number already guarantees uniqueness.
 	// 0 disables the cap.
 	TitleSlugMaxLength int `toml:"title_slug_max_length"`
 
-	WorktreePrefix string `toml:"worktree_prefix"` // Prefix for issue worktree directories (e.g., "issue-")
+	WorktreePrefix string `toml:"worktree_prefix"` // Prefix for issue worktree directories (e.g., "is-")
 }
 
 // LocalBranchConfig configures local branch worktree naming.
