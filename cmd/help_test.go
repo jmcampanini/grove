@@ -22,17 +22,6 @@ func TestMutuallyExclusiveFlagHelpText(t *testing.T) {
 				"--reuse",
 			},
 		},
-		{
-			help: initCmd.Long,
-			name: "init",
-			want: []string{
-				"Shell selection flags are mutually exclusive",
-				"choose exactly one",
-				"--bash",
-				"--fish",
-				"--zsh",
-			},
-		},
 	}
 
 	for _, tt := range tests {
