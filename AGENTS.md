@@ -5,4 +5,3 @@ Coding Preferences
 - Prefer table-driven tests when applicable for testing multiple input/output combinations
 - Run `make check` to validate that changes work correctly
 - Use `make build` to build the binary (outputs to `build/grove`); never use `go build` directly
-- Shell scripts in `internal/shell/scripts/` must use shell-specific syntax (e.g., fish syntax differs from bash/zsh)

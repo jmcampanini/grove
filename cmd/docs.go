@@ -38,7 +38,6 @@ Common commands:
 - grove config --provenance: print field-level configuration sources.
 - grove logs path: print the fixed log file path.
 - grove logs tail: print recent log lines.
-- grove init --bash, --fish, or --zsh: generate shell integration functions.
 
 Topic help pages:
 
