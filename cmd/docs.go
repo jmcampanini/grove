@@ -36,14 +36,11 @@ Common commands:
 - grove sync: update local branch metadata and prune stale refs.
 - grove config: print the effective TOML configuration.
 - grove config --provenance: print field-level configuration sources.
-- grove logs path: print the fixed log file path.
-- grove logs tail: print recent log lines.
 
 Topic help pages:
 
 - grove help workspace: workspace layout and requirements.
 - grove help exit-codes: exit code and error conventions.
-- grove help logs: log file location and troubleshooting notes.
 
 ## Configuration loading
 
@@ -112,6 +109,24 @@ Some values can also be set with global CLI flags, which take priority over all 
 - slugify.hash_length and slugify.max_length must be zero or positive.
 - slugify.hash_length must leave at least two characters when slugify.max_length is set.
 - workspace.primary_branches must include at least one branch name.
+
+## Logging
+
+Grove appends ANSI-free logs for every invocation to a fixed path:
+
+    $XDG_STATE_HOME/grove/grove.log
+    ~/.local/state/grove/grove.log   (fallback when XDG_STATE_HOME is unset)
+
+Pass --debug on any command to raise the log level to debug for that invocation.
+
+If grove cannot determine the home directory or open the log file, it prints a
+warning to stderr and continues without file logging. Standard output is
+unaffected.
+
+Inspect the file with standard tools:
+
+    tail -n 50 ~/.local/state/grove/grove.log
+    tail -f ~/.local/state/grove/grove.log
 `
 
 func runDocs(cmd *cobra.Command, _ []string) error {
