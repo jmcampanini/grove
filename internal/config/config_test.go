@@ -45,10 +45,6 @@ func TestDefaultConfig(t *testing.T) {
 	assert.Equal(t, "{{.BranchName}}", cfg.PullRequest.BranchTemplate)
 	assert.Equal(t, "pr-", cfg.PullRequest.WorktreePrefix)
 
-	// Log defaults
-	assert.NotEmpty(t, cfg.Log.File)
-	assert.Contains(t, cfg.Log.File, "grove.log")
-
 	// Workspace defaults
 	assert.Equal(t, []string{"main", "develop", "master"}, cfg.Workspace.PrimaryBranches)
 
@@ -756,49 +752,6 @@ branch_prefix = "fix/"
 	assert.Equal(t, configPath, report.Updates["git.timeout"])
 	assert.Equal(t, configPath, report.Updates["localbranch.branchprefix"])
 	assert.Equal(t, configloader.SourceDefault, report.Updates["slugify.maxlength"])
-}
-
-func TestDefaultLogFilePath(t *testing.T) {
-	t.Run("uses XDG_STATE_HOME when set", func(t *testing.T) {
-		t.Setenv("XDG_STATE_HOME", "/custom/state")
-		assert.Equal(t, "/custom/state/grove/grove.log", DefaultLogFilePath())
-	})
-
-	t.Run("falls back to ~/.local/state", func(t *testing.T) {
-		t.Setenv("XDG_STATE_HOME", "")
-		assert.Contains(t, DefaultLogFilePath(), ".local/state/grove/grove.log")
-	})
-}
-
-func TestLoad_LogFile(t *testing.T) {
-	tests := []struct {
-		name     string
-		toml     string
-		wantFile string
-	}{
-		{
-			name:     "custom path",
-			toml:     "[log]\nfile = \"/tmp/custom-grove.log\"\n",
-			wantFile: "/tmp/custom-grove.log",
-		},
-		{
-			name:     "disabled with empty string",
-			toml:     "[log]\nfile = \"\"\n",
-			wantFile: "",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tmpDir := t.TempDir()
-			configPath := filepath.Join(tmpDir, "grove.toml")
-			require.NoError(t, os.WriteFile(configPath, []byte(tt.toml), 0644))
-
-			cfg, _, err := LoadFiles([]string{configPath})
-			require.NoError(t, err)
-			assert.Equal(t, tt.wantFile, cfg.Log.File)
-		})
-	}
 }
 
 func TestLoadFilesWithFlags(t *testing.T) {

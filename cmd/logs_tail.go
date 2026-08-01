@@ -29,7 +29,7 @@ func runLogsTail(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	p, err := resolveLogPath(cmd.Context())
+	p, err := resolveLogPath()
 	if err != nil {
 		return err
 	}

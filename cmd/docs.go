@@ -36,7 +36,7 @@ Common commands:
 - grove sync: update local branch metadata and prune stale refs.
 - grove config: print the effective TOML configuration.
 - grove config --provenance: print field-level configuration sources.
-- grove logs path: print the configured log file path.
+- grove logs path: print the fixed log file path.
 - grove logs tail: print recent log lines.
 
 Topic help pages:
@@ -80,9 +80,6 @@ Some values can also be set with global CLI flags, which take priority over all 
     strip_branch_prefix = ["feature/"]
     worktree_prefix = "wt-"
 
-    [log]
-    file = "/absolute/path/to/grove.log"
-
     [pull_request]
     branch_template = "{{.BranchName}}"
     worktree_prefix = "pr-"
@@ -107,7 +104,6 @@ Some values can also be set with global CLI flags, which take priority over all 
 ## Validation notes
 
 - git.timeout and github.preview_cache_ttl must be zero or positive durations.
-- log.file is used as written; shell shortcuts such as ~ are not expanded. Run grove config to see the computed default.
 - issue.branch_template must reference {{.Number}}; issue matching is anchored on the issue number.
 - issue.strip_branch_prefix removes the first matching prefix before generating a worktree directory name.
 - issue.title_slug_max_length must be zero or positive; the slug is truncated cleanly with no hash suffix.

@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -31,23 +32,39 @@ func (t *teeWriter) Write(p []byte) (n int, err error) {
 	return n, err
 }
 
-// Setup tees the default logger's output to both stderr and the given file
-// path. If filePath is empty, Setup is a no-op. If a previous log file is
-// open, it is closed before the new one is opened. The color profile is
-// captured before swapping the output so that stderr retains its native color
-// support after the tee is installed.
-func Setup(filePath string) error {
+// DefaultLogFilePath returns the log file path following the XDG Base
+// Directory Specification. It uses $XDG_STATE_HOME/grove/grove.log, falling
+// back to ~/.local/state/grove/grove.log. It returns an empty string if the
+// home directory cannot be determined.
+func DefaultLogFilePath() string {
+	stateDir := os.Getenv("XDG_STATE_HOME")
+	if stateDir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return ""
+		}
+		stateDir = filepath.Join(home, ".local", "state")
+	}
+	return filepath.Join(stateDir, "grove", "grove.log")
+}
+
+// Setup tees the default logger's output to stderr and the fixed log file. If
+// a previous log file is open, it is closed before the new one is opened. The
+// color profile is captured before swapping the output so that stderr retains
+// its native color support after the tee is installed.
+func Setup() error {
+	filePath := DefaultLogFilePath()
 	if filePath == "" {
-		return nil
+		return errors.New("could not determine log file path: user home directory is unavailable")
 	}
 
 	Close()
 
-	if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(filePath), 0o700); err != nil {
 		return err
 	}
 
-	f, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err
 	}
