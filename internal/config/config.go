@@ -11,7 +11,6 @@ type Config struct {
 	GitHub      GitHubConfig      `toml:"github"`
 	Issue       IssueConfig       `toml:"issue"`
 	LocalBranch LocalBranchConfig `toml:"local_branch"`
-	Log         LogConfig         `toml:"log"`
 	PullRequest PullRequestConfig `toml:"pull_request"`
 	Slugify     SlugifyConfig     `toml:"slugify"`
 	Workspace   WorkspaceConfig   `toml:"workspace"`
@@ -86,11 +85,6 @@ type LocalBranchConfig struct {
 	StripBranchPrefix []string `toml:"strip_branch_prefix"`
 
 	WorktreePrefix string `toml:"worktree_prefix" config:"worktree-prefix" help:"Override the local branch worktree directory prefix (local_branch.worktree_prefix)"` // e.g., "wt-"
-}
-
-// LogConfig configures file logging.
-type LogConfig struct {
-	File string `toml:"file"` // Path to log file; empty string disables file logging
 }
 
 // PullRequestConfig configures pull request worktree naming.

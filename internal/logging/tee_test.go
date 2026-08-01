@@ -72,42 +72,100 @@ func TestTeeWriter_Write(t *testing.T) {
 	}
 }
 
-func TestSetup_EmptyPath(t *testing.T) {
-	err := Setup("")
-	require.NoError(t, err)
-	assert.Nil(t, logFile)
+func TestDefaultLogFilePath(t *testing.T) {
+	tests := []struct {
+		name   string
+		useXDG bool
+	}{
+		{
+			name:   "uses XDG_STATE_HOME",
+			useXDG: true,
+		},
+		{
+			name: "falls back to the home state directory",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			home := t.TempDir()
+			stateDir := ""
+			if tt.useXDG {
+				stateDir = filepath.Join(t.TempDir(), "state")
+			}
+			t.Setenv("XDG_STATE_HOME", stateDir)
+			t.Setenv("HOME", home)
+
+			wantStateDir := stateDir
+			if wantStateDir == "" {
+				wantStateDir = filepath.Join(home, ".local", "state")
+			}
+			assert.Equal(t, filepath.Join(wantStateDir, "grove", "grove.log"), DefaultLogFilePath())
+		})
+	}
 }
 
-func TestSetup_CreatesFileAndDirs(t *testing.T) {
+func TestSetup_CreatesPrivateFileAndDirectory(t *testing.T) {
 	saveAndRestoreLogger(t)
 
-	dir := t.TempDir()
-	path := filepath.Join(dir, "nested", "dir", "grove.log")
+	stateDir := filepath.Join(t.TempDir(), "state")
+	t.Setenv("XDG_STATE_HOME", stateDir)
+	t.Setenv("HOME", t.TempDir())
 
-	err := Setup(path)
+	require.NoError(t, Setup())
+	log.Info("create log file")
+
+	logDir := filepath.Join(stateDir, "grove")
+	logPath := filepath.Join(logDir, "grove.log")
+	dirInfo, err := os.Stat(logDir)
+	require.NoError(t, err)
+	fileInfo, err := os.Stat(logPath)
 	require.NoError(t, err)
 
-	assert.NotNil(t, logFile)
-	assert.FileExists(t, path)
+	assert.Equal(t, os.FileMode(0o700), dirInfo.Mode().Perm())
+	assert.Equal(t, os.FileMode(0o600), fileInfo.Mode().Perm())
 }
 
-func TestSetup_AppendsToExistingFile(t *testing.T) {
+func TestSetup_AppendsAcrossCycles(t *testing.T) {
 	saveAndRestoreLogger(t)
 
-	dir := t.TempDir()
-	path := filepath.Join(dir, "grove.log")
+	stateDir := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", stateDir)
+	t.Setenv("HOME", t.TempDir())
+	path := filepath.Join(stateDir, "grove", "grove.log")
 
-	require.NoError(t, os.WriteFile(path, []byte("existing\n"), 0644))
-
-	err := Setup(path)
+	require.NoError(t, Setup())
+	_, err := logFile.WriteString("first\n")
 	require.NoError(t, err)
+	Close()
 
-	_, err = logFile.WriteString("new\n")
+	require.NoError(t, Setup())
+	_, err = logFile.WriteString("second\n")
 	require.NoError(t, err)
+	Close()
 
 	content, err := os.ReadFile(path)
 	require.NoError(t, err)
-	assert.Equal(t, "existing\nnew\n", string(content))
+	assert.Equal(t, "first\nsecond\n", string(content))
+}
+
+func TestSetup_FailureLeavesTerminalLogger(t *testing.T) {
+	saveAndRestoreLogger(t)
+
+	stateDir := filepath.Join(t.TempDir(), "state")
+	require.NoError(t, os.WriteFile(stateDir, nil, 0o600))
+	t.Setenv("XDG_STATE_HOME", stateDir)
+	t.Setenv("HOME", t.TempDir())
+
+	var terminal bytes.Buffer
+	log.SetOutput(&terminal)
+
+	err := Setup()
+	require.Error(t, err)
+	assert.Nil(t, logFile)
+
+	log.Info("terminal still works")
+	assert.Contains(t, terminal.String(), "terminal still works")
 }
 
 func TestClose_NilSafe(t *testing.T) {
@@ -155,27 +213,27 @@ func TestTeeWriter_FileError_LogsWarningOnce(t *testing.T) {
 func TestSetup_DoubleCall_ClosesPreviousFile(t *testing.T) {
 	saveAndRestoreLogger(t)
 
-	dir := t.TempDir()
-	pathA := filepath.Join(dir, "a.log")
-	pathB := filepath.Join(dir, "b.log")
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
 
-	require.NoError(t, Setup(pathA))
+	require.NoError(t, Setup())
 	firstFile := logFile
 
-	require.NoError(t, Setup(pathB))
+	require.NoError(t, Setup())
 
 	_, writeErr := firstFile.WriteString("should fail")
 	assert.Error(t, writeErr, "first file should be closed after second Setup call")
-	assert.FileExists(t, pathB)
 }
 
 func TestSetup_Integration_LogReachesFile(t *testing.T) {
 	saveAndRestoreLogger(t)
 
-	dir := t.TempDir()
-	path := filepath.Join(dir, "grove.log")
+	stateDir := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", stateDir)
+	t.Setenv("HOME", t.TempDir())
+	path := filepath.Join(stateDir, "grove", "grove.log")
 
-	require.NoError(t, Setup(path))
+	require.NoError(t, Setup())
 	log.Info("integration test message", "key", "value")
 
 	content, err := os.ReadFile(path)

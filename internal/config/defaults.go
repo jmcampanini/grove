@@ -1,10 +1,6 @@
 package config
 
-import (
-	"os"
-	"path/filepath"
-	"time"
-)
+import "time"
 
 // DefaultConfig returns sensible defaults for all configuration.
 func DefaultConfig() Config {
@@ -26,9 +22,6 @@ func DefaultConfig() Config {
 			StripBranchPrefix: []string{"feature/"},
 			WorktreePrefix:    "wt-",
 		},
-		Log: LogConfig{
-			File: DefaultLogFilePath(),
-		},
 		PullRequest: PullRequestConfig{
 			BranchTemplate: "{{.BranchName}}",
 			WorktreePrefix: "pr-",
@@ -45,20 +38,4 @@ func DefaultConfig() Config {
 			PrimaryBranches: []string{"main", "develop", "master"},
 		},
 	}
-}
-
-// DefaultLogFilePath returns the default log file path following the XDG Base
-// Directory Specification. It uses $XDG_STATE_HOME/grove/grove.log, falling
-// back to ~/.local/state/grove/grove.log. Returns empty string if the home
-// directory cannot be determined, which disables file logging.
-func DefaultLogFilePath() string {
-	stateDir := os.Getenv("XDG_STATE_HOME")
-	if stateDir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return ""
-		}
-		stateDir = filepath.Join(home, ".local", "state")
-	}
-	return filepath.Join(stateDir, "grove", "grove.log")
 }

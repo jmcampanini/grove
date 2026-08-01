@@ -89,7 +89,11 @@ func configureLogStyles() {
 
 // Execute runs the root command.
 func Execute() error {
+	if err := logging.Setup(); err != nil {
+		log.Warn("failed to set up file logging", "error", err)
+	}
 	defer logging.Close()
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	return rootCmd.ExecuteContext(ctx)

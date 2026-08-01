@@ -17,9 +17,9 @@ func TestWriteConfigProvenance(t *testing.T) {
 	var buf bytes.Buffer
 	err := writeConfigProvenance(&buf, []string{"Path", "Source"}, [][]string{
 		{"git.timeout", "<default>"},
-		{"log.file", "/tmp/grove.toml"},
+		{"github.preview_cache_ttl", "/tmp/grove.toml"},
 	})
 	require.NoError(t, err)
 
-	assert.Equal(t, "Path\tSource\ngit.timeout\t<default>\nlog.file\t/tmp/grove.toml\n", buf.String())
+	assert.Equal(t, "Path\tSource\ngit.timeout\t<default>\ngithub.preview_cache_ttl\t/tmp/grove.toml\n", buf.String())
 }
