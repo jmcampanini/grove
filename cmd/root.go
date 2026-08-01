@@ -28,7 +28,11 @@ Common workflows:
   Check out a branch:   grove checkout feature/fix-login
   Check out a PR:       grove pr checkout 42
   Work on an issue:     grove issue start 17
-  See all worktrees:    grove status`,
+  See all worktrees:    grove status
+
+Logs are appended to $XDG_STATE_HOME/grove/grove.log
+(~/.local/state/grove/grove.log when XDG_STATE_HOME is unset).
+Pass --debug on any command for verbose logging.`,
 }
 
 func init() {

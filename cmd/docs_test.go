@@ -20,6 +20,8 @@ func TestDocsCommandWritesReference(t *testing.T) {
 	output := buf.String()
 	assert.Contains(t, output, "# grove reference")
 	assert.Contains(t, output, "grove config --provenance")
+	assert.Contains(t, output, "## Logging")
+	assert.Contains(t, output, "$XDG_STATE_HOME/grove/grove.log")
 	assert.Contains(t, output, "[workspace]")
 	assert.Contains(t, output, `strip_branch_prefix = ["issue/"]`)
 	assert.Contains(t, output, `worktree_prefix = "is-"`)

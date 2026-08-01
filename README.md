@@ -46,4 +46,3 @@ For command help, run `grove --help`. For a Markdown overview and configuration 
 
 - `grove help workspace` — workspace layout and requirements
 - `grove help exit-codes` — exit codes and error categories
-- `grove help logs` — where logs go and how to inspect them

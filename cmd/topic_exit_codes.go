@@ -10,8 +10,9 @@ var exitCodesTopicCmd = &cobra.Command{
   0  success
   1  any error (bad arguments, git failures, config errors, I/O, etc.)
 
-Error detail is reported on stderr. Run 'grove logs tail' to inspect the
-most recent log output when an error is not self-explanatory.`,
+Error detail is reported on stderr. When an error is not self-explanatory,
+inspect the log file at $XDG_STATE_HOME/grove/grove.log
+(~/.local/state/grove/grove.log when XDG_STATE_HOME is unset).`,
 }
 
 func init() {

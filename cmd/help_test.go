@@ -6,6 +6,15 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestRootHelpDocumentsLogPath(t *testing.T) {
+	for _, want := range []string{
+		"$XDG_STATE_HOME/grove/grove.log",
+		"~/.local/state/grove/grove.log",
+	} {
+		assert.Contains(t, rootCmd.Long, want)
+	}
+}
+
 func TestMutuallyExclusiveFlagHelpText(t *testing.T) {
 	t.Run("create", func(t *testing.T) {
 		for _, want := range []string{
