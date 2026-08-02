@@ -62,9 +62,7 @@ to show only errors. The flags are mutually exclusive and do not change stdout.`
 	root.SetHelpCommandGroupID("config")
 	root.SetCompletionCommandGroupID("config")
 
-	root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
-		return applyDiagnosticLevel(cmd)
-	}
+	root.PersistentPreRunE = applyDiagnosticLevel
 
 	root.AddCommand(
 		newCacheCmd(),
@@ -117,7 +115,7 @@ func resolveDiagnosticLevel(flags *pflag.FlagSet) (log.Level, error) {
 	}
 }
 
-func applyDiagnosticLevel(cmd *cobra.Command) error {
+func applyDiagnosticLevel(cmd *cobra.Command, _ []string) error {
 	level, err := resolveDiagnosticLevel(cmd.Root().PersistentFlags())
 	if err != nil {
 		return err

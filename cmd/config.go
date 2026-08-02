@@ -24,8 +24,8 @@ The output can be redirected to a file to create a new configuration:
 Use --provenance to print the source that supplied each configuration value.`,
 		Args:    cobra.NoArgs,
 		GroupID: "config",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runConfig(cmd, args, provenance)
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runConfig(cmd, provenance)
 		},
 	}
 	cmd.Flags().BoolVar(&provenance, "provenance", false, "Print field-level configuration provenance")
@@ -33,7 +33,7 @@ Use --provenance to print the source that supplied each configuration value.`,
 	return cmd
 }
 
-func runConfig(cmd *cobra.Command, _ []string, provenance bool) error {
+func runConfig(cmd *cobra.Command, provenance bool) error {
 	rt, err := loadCommandRuntime(cmd)
 	if err != nil {
 		return err

@@ -27,8 +27,8 @@ If the worktree has uncommitted changes, you will be prompted before
 they are discarded. Use --force to skip the prompt.`,
 		Args:    cobra.NoArgs,
 		GroupID: "git",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSync(cmd, args, force)
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runSync(cmd, force)
 		},
 	}
 	cmd.Flags().BoolVar(&force, "force", false, "Skip the dirty-state prompt and discard changes")
@@ -39,7 +39,7 @@ type syncContext struct {
 	gitClient git.Git
 }
 
-func runSync(cmd *cobra.Command, _ []string, force bool) error {
+func runSync(cmd *cobra.Command, force bool) error {
 	originalCwd, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("failed to get working directory: %w", err)

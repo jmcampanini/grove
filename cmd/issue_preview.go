@@ -34,17 +34,9 @@ making it suitable for use in fzf preview panes.`,
 	return cmd
 }
 
-func handleIssuePreviewError(cmd *cobra.Command, err error, fzf bool) error {
-	if fzf {
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Error: %v\n", err)
-		return nil
-	}
-	return err
-}
-
 func runIssuePreview(cmd *cobra.Command, args []string, colorMode string, fzf bool) error {
 	handleError := func(err error) error {
-		return handleIssuePreviewError(cmd, err, fzf)
+		return handlePreviewError(cmd, err, fzf)
 	}
 
 	if err := applyColorMode(colorMode); err != nil {

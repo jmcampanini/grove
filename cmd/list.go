@@ -32,8 +32,8 @@ Or for older fzf versions:
   grove list --fzf | fzf --delimiter '\t' --with-nth 2 | cut -f1`,
 		Args:    cobra.NoArgs,
 		GroupID: "worktree",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runList(cmd, args, fzf)
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runList(cmd, fzf)
 		},
 	}
 	cmd.Flags().BoolVar(&fzf, "fzf", false, "Output in fzf-compatible format")
@@ -46,7 +46,7 @@ type listContext struct {
 	mainWorktreePath string
 }
 
-func runList(cmd *cobra.Command, _ []string, fzf bool) error {
+func runList(cmd *cobra.Command, fzf bool) error {
 	rt, err := loadCommandRuntime(cmd)
 	if err != nil {
 		return err
