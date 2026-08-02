@@ -13,12 +13,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var fzfFlag bool
-
-var listCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List all worktrees",
-	Long: `List all git worktrees in the workspace.
+func newListCmd() *cobra.Command {
+	var fzf bool
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List all worktrees",
+		Long: `List all git worktrees in the workspace.
 
 By default, outputs one absolute path per line to stdout.
 
@@ -30,14 +30,14 @@ Example with fzf:
 
 Or for older fzf versions:
   grove list --fzf | fzf --delimiter '\t' --with-nth 2 | cut -f1`,
-	Args: cobra.NoArgs,
-	RunE: runList,
-}
-
-func init() {
-	listCmd.GroupID = "worktree"
-	listCmd.Flags().BoolVar(&fzfFlag, "fzf", false, "Output in fzf-compatible format")
-	rootCmd.AddCommand(listCmd)
+		Args:    cobra.NoArgs,
+		GroupID: "worktree",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runList(cmd, args, fzf)
+		},
+	}
+	cmd.Flags().BoolVar(&fzf, "fzf", false, "Output in fzf-compatible format")
+	return cmd
 }
 
 type listContext struct {
@@ -46,8 +46,8 @@ type listContext struct {
 	mainWorktreePath string
 }
 
-func runList(cmd *cobra.Command, _ []string) error {
-	rt, err := loadCommandRuntime(cmd.Context())
+func runList(cmd *cobra.Command, _ []string, fzf bool) error {
+	rt, err := loadCommandRuntime(cmd)
 	if err != nil {
 		return err
 	}
@@ -58,7 +58,7 @@ func runList(cmd *cobra.Command, _ []string) error {
 		mainWorktreePath: rt.mainWorktreePath,
 	}
 
-	return executeList(cmd.OutOrStdout(), ctx, fzfFlag)
+	return executeList(cmd.OutOrStdout(), ctx, fzf)
 }
 
 func executeList(w io.Writer, ctx *listContext, fzf bool) error {

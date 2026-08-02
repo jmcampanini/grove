@@ -11,15 +11,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	removeForceFlag      bool
-	removeKeepBranchFlag bool
-)
-
-var removeCmd = &cobra.Command{
-	Use:   "remove <target>",
-	Short: "Remove a worktree and its branch",
-	Long: `Remove removes a worktree and optionally deletes its local branch.
+func newRemoveCmd() *cobra.Command {
+	var force, keepBranch bool
+	cmd := &cobra.Command{
+		Use:   "remove <target>",
+		Short: "Remove a worktree and its branch",
+		Long: `Remove removes a worktree and optionally deletes its local branch.
 
 The target can be:
   - An absolute path to a worktree
@@ -30,15 +27,15 @@ By default, removes both the worktree and its local branch.
 Use --keep-branch to preserve the branch after removing the worktree.
 
 The main worktree cannot be removed.`,
-	Args: cobra.ExactArgs(1),
-	RunE: runRemove,
-}
-
-func init() {
-	removeCmd.GroupID = "worktree"
-	removeCmd.Flags().BoolVar(&removeForceFlag, "force", false, "Force removal even with uncommitted changes")
-	removeCmd.Flags().BoolVar(&removeKeepBranchFlag, "keep-branch", false, "Keep the local branch after removing the worktree")
-	rootCmd.AddCommand(removeCmd)
+		Args:    cobra.ExactArgs(1),
+		GroupID: "worktree",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runRemove(cmd, args, force, keepBranch)
+		},
+	}
+	cmd.Flags().BoolVar(&force, "force", false, "Force removal even with uncommitted changes")
+	cmd.Flags().BoolVar(&keepBranch, "keep-branch", false, "Keep the local branch after removing the worktree")
+	return cmd
 }
 
 type removeContext struct {
@@ -46,8 +43,8 @@ type removeContext struct {
 	mainWorktreePath string
 }
 
-func runRemove(cmd *cobra.Command, args []string) error {
-	rt, err := loadCommandRuntime(cmd.Context())
+func runRemove(cmd *cobra.Command, args []string, force, keepBranch bool) error {
+	rt, err := loadCommandRuntime(cmd)
 	if err != nil {
 		return err
 	}
@@ -59,7 +56,7 @@ func runRemove(cmd *cobra.Command, args []string) error {
 		mainWorktreePath: rt.mainWorktreePath,
 	}
 
-	return executeRemove(cmd.OutOrStdout(), ctx, args[0], removeForceFlag, removeKeepBranchFlag)
+	return executeRemove(cmd.OutOrStdout(), ctx, args[0], force, keepBranch)
 }
 
 func executeRemove(w io.Writer, ctx *removeContext, target string, force, keepBranch bool) error {

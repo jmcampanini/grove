@@ -7,14 +7,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var cacheClearCmd = &cobra.Command{
-	Use:   "clear",
-	Short: "Remove all cached data",
-	RunE:  runCacheClear,
-}
-
-func init() {
-	cacheCmd.AddCommand(cacheClearCmd)
+func newCacheClearCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "clear",
+		Short: "Remove all cached data",
+		RunE:  runCacheClear,
+	}
 }
 
 func runCacheClear(cmd *cobra.Command, _ []string) error {

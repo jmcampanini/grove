@@ -17,18 +17,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var prCheckoutCmd = &cobra.Command{
-	Use:   "checkout [number]",
-	Short: "Check out a pull request into a local worktree",
-	Long: `Check out a pull request into a local worktree.
+func newPRCheckoutCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "checkout [number]",
+		Short: "Check out a pull request into a local worktree",
+		Long: `Check out a pull request into a local worktree.
 
 To start new local work (not from a PR), use 'grove create' instead.`,
-	Args: cobra.ExactArgs(1),
-	RunE: runPRCheckout,
-}
-
-func init() {
-	prCmd.AddCommand(prCheckoutCmd)
+		Args: cobra.ExactArgs(1),
+		RunE: runPRCheckout,
+	}
 }
 
 func runPRCheckout(cmd *cobra.Command, args []string) error {
@@ -37,7 +35,7 @@ func runPRCheckout(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid PR number: %s", args[0])
 	}
 
-	rt, err := loadCommandRuntime(cmd.Context())
+	rt, err := loadCommandRuntime(cmd)
 	if err != nil {
 		return err
 	}

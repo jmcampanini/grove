@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/signal"
 	"syscall"
@@ -16,12 +17,15 @@ import (
 // Version is set at build time via ldflags.
 var Version = "n/a"
 
-var rootCmd = &cobra.Command{
-	Use:           "grove",
-	Short:         "Git worktree workspace manager",
-	SilenceErrors: true,
-	SilenceUsage:  true,
-	Long: `Grove manages git worktrees in a workspace structure.
+func newRootCmd() *cobra.Command {
+	log.SetLevel(log.InfoLevel)
+
+	root := &cobra.Command{
+		Use:           "grove",
+		Short:         "Git worktree workspace manager",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		Long: `Grove manages git worktrees in a workspace structure.
 
 Common workflows:
   Start new work:       grove create "add user auth"
@@ -32,15 +36,17 @@ Common workflows:
 
 Logs are appended to $XDG_STATE_HOME/grove/grove.log
 (~/.local/state/grove/grove.log when XDG_STATE_HOME is unset).
-Pass --debug on any command for verbose logging.`,
-}
+Diagnostic logging defaults to info. Pass --debug for debug logging or --quiet
+to show only errors. The flags are mutually exclusive and do not change stdout.`,
+		Version: Version,
+	}
 
-func init() {
-	rootCmd.Version = Version
-	rootCmd.PersistentFlags().Bool("debug", false, "Enable debug logging")
-	cobra.CheckErr(config.RegisterFlags(rootCmd.PersistentFlags()))
+	root.PersistentFlags().Bool("debug", false, "Set diagnostic log level to debug")
+	root.PersistentFlags().Bool("quiet", false, "Set diagnostic log level to error")
+	root.MarkFlagsMutuallyExclusive("debug", "quiet")
+	cobra.CheckErr(config.RegisterFlags(root.PersistentFlags()))
 
-	rootCmd.AddGroup(
+	root.AddGroup(
 		&cobra.Group{ID: "worktree", Title: "Worktree Commands:"},
 		&cobra.Group{ID: "git", Title: "Git Commands:"},
 		&cobra.Group{ID: "pr", Title: "Pull Request Commands:"},
@@ -48,15 +54,59 @@ func init() {
 		&cobra.Group{ID: "config", Title: "Configuration Commands:"},
 		&cobra.Group{ID: "utility", Title: "Utility Commands:"},
 	)
-	rootCmd.SetHelpCommandGroupID("config")
-	rootCmd.SetCompletionCommandGroupID("config")
-	configureLogStyles()
+	root.SetHelpCommandGroupID("config")
+	root.SetCompletionCommandGroupID("config")
 
-	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
-		if debug, _ := cmd.Flags().GetBool("debug"); debug {
-			log.SetLevel(log.DebugLevel)
-		}
+	root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
+		return applyDiagnosticLevel(cmd)
 	}
+
+	root.AddCommand(
+		newCacheCmd(),
+		newCatchupCmd(),
+		newCheckoutCmd(),
+		newConfigCmd(),
+		newCreateCmd(),
+		newDocsCmd(),
+		newExitCodesTopicCmd(),
+		newIssueCmd(),
+		newListCmd(),
+		newNamerCmd(),
+		newPRCmd(),
+		newPruneCmd(),
+		newRemoveCmd(),
+		newResolveCmd(),
+		newStatusCmd(),
+		newSyncCmd(),
+		newWorkspaceTopicCmd(),
+	)
+
+	return root
+}
+
+func applyDiagnosticLevel(cmd *cobra.Command) error {
+	flags := cmd.Root().PersistentFlags()
+	debug, err := flags.GetBool("debug")
+	if err != nil {
+		return err
+	}
+	quiet, err := flags.GetBool("quiet")
+	if err != nil {
+		return err
+	}
+	if debug && quiet {
+		return errors.New("--debug and --quiet cannot be used together; choose one diagnostic level")
+	}
+
+	switch {
+	case debug:
+		log.SetLevel(log.DebugLevel)
+	case quiet:
+		log.SetLevel(log.ErrorLevel)
+	default:
+		log.SetLevel(log.InfoLevel)
+	}
+	return nil
 }
 
 func logHasDarkBackground() bool {
@@ -91,14 +141,45 @@ func configureLogStyles() {
 	log.SetStyles(styles)
 }
 
-// Execute runs the root command.
-func Execute() error {
-	if err := logging.Setup(); err != nil {
-		log.Warn("failed to set up file logging", "error", err)
-	}
+func executeRoot(root *cobra.Command) error {
+	configureLogStyles()
+
+	setupErr := logging.Setup()
 	defer logging.Close()
+
+	setupWarningPending := setupErr != nil
+	reportSetupWarning := func() {
+		if setupWarningPending {
+			log.Warn("failed to set up file logging", "error", setupErr)
+			setupWarningPending = false
+		}
+	}
+	if setupWarningPending {
+		preRun := root.PersistentPreRunE
+		root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+			if preRun != nil {
+				if err := preRun(cmd, args); err != nil {
+					return err
+				}
+			}
+			reportSetupWarning()
+			return nil
+		}
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	return rootCmd.ExecuteContext(ctx)
+	err := root.ExecuteContext(ctx)
+
+	if setupWarningPending {
+		if levelErr := applyDiagnosticLevel(root); levelErr == nil {
+			reportSetupWarning()
+		}
+	}
+	return err
+}
+
+// Execute runs the root command.
+func Execute() error {
+	return executeRoot(newRootCmd())
 }

@@ -22,6 +22,10 @@ func TestDocsCommandWritesReference(t *testing.T) {
 	assert.Contains(t, output, "grove config --provenance")
 	assert.Contains(t, output, "## Logging")
 	assert.Contains(t, output, "$XDG_STATE_HOME/grove/grove.log")
+	assert.Contains(t, output, "By default, Grove emits info, warning, and error diagnostics.")
+	assert.Contains(t, output, "Pass --debug to also emit debug diagnostics.")
+	assert.Contains(t, output, "Pass --quiet to emit only error diagnostics.")
+	assert.Contains(t, output, "Command failures remain visible on")
 	assert.Contains(t, output, "[workspace]")
 	assert.Contains(t, output, `strip_branch_prefix = ["issue/"]`)
 	assert.Contains(t, output, `worktree_prefix = "is-"`)
@@ -30,6 +34,7 @@ func TestDocsCommandWritesReference(t *testing.T) {
 }
 
 func TestDocsCommandMetadata(t *testing.T) {
-	assert.Equal(t, "utility", docsCmd.GroupID)
-	assert.Equal(t, "docs", docsCmd.Use)
+	cmd := newDocsCmd()
+	assert.Equal(t, "utility", cmd.GroupID)
+	assert.Equal(t, "docs", cmd.Use)
 }

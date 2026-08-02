@@ -2,10 +2,11 @@ package cmd
 
 import "github.com/spf13/cobra"
 
-var workspaceTopicCmd = &cobra.Command{
-	Use:   "workspace",
-	Short: "Workspace layout and requirements",
-	Long: `A workspace is a directory whose subdirectories are git repository roots
+func newWorkspaceTopicCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "workspace",
+		Short: "Workspace layout and requirements",
+		Long: `A workspace is a directory whose subdirectories are git repository roots
 (the main repo and its worktrees). Grove operates on this layout.
 
 Example layout:
@@ -25,8 +26,5 @@ Requirements:
      inside one of its worktrees (at any depth).
   3. The workspace only contains git repository or worktree roots as
      subdirectories.`,
-}
-
-func init() {
-	rootCmd.AddCommand(workspaceTopicCmd)
+	}
 }

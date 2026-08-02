@@ -13,18 +13,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var statusCmd = &cobra.Command{
-	Use:   "status",
-	Short: "Show worktree status dashboard",
-	Long: `Status shows a rich dashboard of all worktrees with branch tracking,
+func newStatusCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "status",
+		Short: "Show worktree status dashboard",
+		Long: `Status shows a rich dashboard of all worktrees with branch tracking,
 dirty state, and PR information for worktrees associated with pull requests.`,
-	Args: cobra.NoArgs,
-	RunE: runStatus,
-}
-
-func init() {
-	statusCmd.GroupID = "worktree"
-	rootCmd.AddCommand(statusCmd)
+		Args:    cobra.NoArgs,
+		GroupID: "worktree",
+		RunE:    runStatus,
+	}
 }
 
 type statusContext struct {
@@ -50,7 +48,7 @@ type worktreeStatus struct {
 }
 
 func runStatus(cmd *cobra.Command, _ []string) error {
-	rt, err := loadCommandRuntime(cmd.Context())
+	rt, err := loadCommandRuntime(cmd)
 	if err != nil {
 		return err
 	}

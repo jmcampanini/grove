@@ -10,10 +10,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var catchupCmd = &cobra.Command{
-	Use:   "catchup",
-	Short: "Merge the latest remote root branch into the current feature branch",
-	Long: `Catchup fetches the remote root branch (e.g., origin/main) and merges it
+func newCatchupCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "catchup",
+		Short: "Merge the latest remote root branch into the current feature branch",
+		Long: `Catchup fetches the remote root branch (e.g., origin/main) and merges it
 into the current feature branch. This keeps your feature branch up to date
 with the latest changes from the main line of development.
 
@@ -21,13 +22,10 @@ The root branch is determined by querying the remote's HEAD reference.
 
 The worktree must be in a clean state (no uncommitted changes). If it is
 dirty, commit, stash, or reset your changes before running catchup.`,
-	Args: cobra.NoArgs,
-	RunE: runCatchup,
-}
-
-func init() {
-	catchupCmd.GroupID = "git"
-	rootCmd.AddCommand(catchupCmd)
+		Args:    cobra.NoArgs,
+		RunE:    runCatchup,
+		GroupID: "git",
+	}
 }
 
 type catchupContext struct {
@@ -40,7 +38,7 @@ func runCatchup(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("failed to get working directory: %w", err)
 	}
 
-	rt, err := loadCommandRuntime(cmd.Context())
+	rt, err := loadCommandRuntime(cmd)
 	if err != nil {
 		return err
 	}

@@ -17,10 +17,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var pruneCmd = &cobra.Command{
-	Use:   "prune",
-	Short: "Interactively remove stale worktrees",
-	Long: `Prune identifies worktrees that are likely no longer needed and lets you
+func newPruneCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "prune",
+		Short: "Interactively remove stale worktrees",
+		Long: `Prune identifies worktrees that are likely no longer needed and lets you
 remove them interactively.
 
 A worktree is considered prunable if:
@@ -30,13 +31,10 @@ A worktree is considered prunable if:
   - Its directory no longer exists on disk (orphaned)
 
 The main worktree is never prunable.`,
-	Args: cobra.NoArgs,
-	RunE: runPrune,
-}
-
-func init() {
-	pruneCmd.GroupID = "worktree"
-	rootCmd.AddCommand(pruneCmd)
+		Args:    cobra.NoArgs,
+		GroupID: "worktree",
+		RunE:    runPrune,
+	}
 }
 
 type prunable struct {
@@ -47,7 +45,7 @@ type prunable struct {
 }
 
 func runPrune(cmd *cobra.Command, _ []string) error {
-	rt, err := loadCommandRuntime(cmd.Context())
+	rt, err := loadCommandRuntime(cmd)
 	if err != nil {
 		return err
 	}

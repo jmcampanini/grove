@@ -14,12 +14,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var issueListFzfFlag bool
+func newIssueListCmd() *cobra.Command {
+	var fzf bool
 
-var issueListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List open issues",
-	Long: `List open issues for the current repository.
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List open issues",
+		Long: `List open issues for the current repository.
 
 By default, outputs a formatted table with issue details.
 
@@ -27,17 +28,17 @@ With --fzf, outputs tab-separated format suitable for fzf integration:
   <number>\t<searchable>\t<display>
 
 The "Local" column shows a checkmark when a worktree exists for the issue.`,
-	Args: cobra.NoArgs,
-	RunE: runIssueList,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runIssueList(cmd, fzf)
+		},
+	}
+	cmd.Flags().BoolVar(&fzf, "fzf", false, "Output in fzf-compatible format")
+	return cmd
 }
 
-func init() {
-	issueListCmd.Flags().BoolVar(&issueListFzfFlag, "fzf", false, "Output in fzf-compatible format")
-	issueCmd.AddCommand(issueListCmd)
-}
-
-func runIssueList(cmd *cobra.Command, _ []string) error {
-	rt, err := loadCommandRuntime(cmd.Context())
+func runIssueList(cmd *cobra.Command, fzf bool) error {
+	rt, err := loadCommandRuntime(cmd)
 	if err != nil {
 		return err
 	}
@@ -67,7 +68,7 @@ func runIssueList(cmd *cobra.Command, _ []string) error {
 	matcher := issue.NewMatcher(namer)
 	matches := matcher.MatchAll(issues, worktrees)
 
-	if issueListFzfFlag {
+	if fzf {
 		return outputIssueListFzf(cmd.OutOrStdout(), matches)
 	}
 	return outputIssueListTable(cmd.OutOrStdout(), matches)

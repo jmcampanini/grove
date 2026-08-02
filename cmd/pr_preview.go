@@ -13,16 +13,16 @@ import (
 	"golang.org/x/term"
 )
 
-var (
-	prPreviewColorFlag       string
-	prPreviewFzfFlag         bool
-	previewHasDarkBackground = true
-)
+var previewHasDarkBackground = true
 
-var prPreviewCmd = &cobra.Command{
-	Use:   "preview [number]",
-	Short: "Show pull request details",
-	Long: `Show detailed information about a pull request.
+func newPRPreviewCmd() *cobra.Command {
+	var colorMode string
+	var fzf bool
+
+	cmd := &cobra.Command{
+		Use:   "preview [number]",
+		Short: "Show pull request details",
+		Long: `Show detailed information about a pull request.
 
 Displays PR metadata (title, author, branch, state), CI checks, review status,
 high-activity files, all changed files with additions/deletions counts, the PR
@@ -33,18 +33,18 @@ clickable terminal hyperlinks. Only open links from PRs/authors you trust.
 
 With --fzf, errors are printed to stdout instead of returning an error code,
 making it suitable for use in fzf preview panes.`,
-	Args: cobra.ExactArgs(1),
-	RunE: runPRPreview,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runPRPreview(cmd, args, colorMode, fzf)
+		},
+	}
+	cmd.Flags().StringVar(&colorMode, "color", "auto", "Color output: auto, always, never")
+	cmd.Flags().BoolVar(&fzf, "fzf", false, "Print errors to stdout instead of returning error (for fzf preview)")
+	return cmd
 }
 
-func init() {
-	prPreviewCmd.Flags().StringVar(&prPreviewColorFlag, "color", "auto", "Color output: auto, always, never")
-	prPreviewCmd.Flags().BoolVar(&prPreviewFzfFlag, "fzf", false, "Print errors to stdout instead of returning error (for fzf preview)")
-	prCmd.AddCommand(prPreviewCmd)
-}
-
-func handlePreviewError(cmd *cobra.Command, err error) error {
-	if prPreviewFzfFlag {
+func handlePreviewError(cmd *cobra.Command, err error, fzf bool) error {
+	if fzf {
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Error: %v\n", err)
 		return nil
 	}
@@ -105,39 +105,43 @@ func writePreviewLine(w io.Writer, s string) error {
 	return err
 }
 
-func runPRPreview(cmd *cobra.Command, args []string) error {
-	if err := applyColorMode(prPreviewColorFlag); err != nil {
-		return handlePreviewError(cmd, err)
+func runPRPreview(cmd *cobra.Command, args []string, colorMode string, fzf bool) error {
+	handleError := func(err error) error {
+		return handlePreviewError(cmd, err, fzf)
+	}
+
+	if err := applyColorMode(colorMode); err != nil {
+		return handleError(err)
 	}
 
 	prNum, err := strconv.Atoi(args[0])
 	if err != nil {
-		return handlePreviewError(cmd, fmt.Errorf("invalid PR number: %s", args[0]))
+		return handleError(fmt.Errorf("invalid PR number: %s", args[0]))
 	}
 
-	rt, err := loadCommandRuntime(cmd.Context())
+	rt, err := loadCommandRuntime(cmd)
 	if err != nil {
-		return handlePreviewError(cmd, err)
+		return handleError(err)
 	}
 
 	gh, err := rt.newCachedGitHubClient()
 	if err != nil {
-		return handlePreviewError(cmd, err)
+		return handleError(err)
 	}
 
 	pr, err := gh.GetPullRequest(prNum)
 	if err != nil {
-		return handlePreviewError(cmd, err)
+		return handleError(err)
 	}
 
 	owner, repo, err := github.ParseRepoFromURL(pr.URL)
 	if err != nil {
-		return handlePreviewError(cmd, err)
+		return handleError(err)
 	}
 
 	threads, timeline, err := gh.GetPullRequestActivity(owner, repo, prNum)
 	if err != nil {
-		return handlePreviewError(cmd, err)
+		return handleError(err)
 	}
 
 	fileComments := make(map[string]int, len(threads))
@@ -148,5 +152,5 @@ func runPRPreview(cmd *cobra.Command, args []string) error {
 	w := cmd.OutOrStdout()
 	width := detectPreviewWidth()
 
-	return renderPreview(w, pr, fileComments, timeline, width, prPreviewColorFlag)
+	return renderPreview(w, pr, fileComments, timeline, width, colorMode)
 }
