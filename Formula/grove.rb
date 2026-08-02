@@ -1,6 +1,7 @@
 class Grove < Formula
   desc "Git worktree workspace manager"
   homepage "https://github.com/jmcampanini/grove-cli"
+  license "MIT"
   head "https://github.com/jmcampanini/grove-cli.git", branch: "main"
 
   depends_on "go" => :build
