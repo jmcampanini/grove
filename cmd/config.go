@@ -9,12 +9,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var configProvenance bool
-
-var configCmd = &cobra.Command{
-	Use:   "config",
-	Short: "Print current configuration in TOML format",
-	Long: `Print the current effective configuration in TOML format.
+func newConfigCmd() *cobra.Command {
+	var provenance bool
+	cmd := &cobra.Command{
+		Use:   "config",
+		Short: "Print current configuration in TOML format",
+		Long: `Print the current effective configuration in TOML format.
 
 This outputs the merged configuration (defaults with any user overrides applied).
 The output can be redirected to a file to create a new configuration:
@@ -22,25 +22,25 @@ The output can be redirected to a file to create a new configuration:
   grove config > grove.toml
 
 Use --provenance to print the source that supplied each configuration value.`,
-	Args: cobra.NoArgs,
-	RunE: runConfig,
+		Args:    cobra.NoArgs,
+		GroupID: "config",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runConfig(cmd, provenance)
+		},
+	}
+	cmd.Flags().BoolVar(&provenance, "provenance", false, "Print field-level configuration provenance")
+	cmd.Flags().BoolVar(&provenance, "sources", false, "Alias for --provenance")
+	return cmd
 }
 
-func init() {
-	configCmd.GroupID = "config"
-	configCmd.Flags().BoolVar(&configProvenance, "provenance", false, "Print field-level configuration provenance")
-	configCmd.Flags().BoolVar(&configProvenance, "sources", false, "Alias for --provenance")
-	rootCmd.AddCommand(configCmd)
-}
-
-func runConfig(cmd *cobra.Command, _ []string) error {
-	rt, err := loadCommandRuntime(cmd.Context())
+func runConfig(cmd *cobra.Command, provenance bool) error {
+	rt, err := loadCommandRuntime(cmd)
 	if err != nil {
 		return err
 	}
 
 	reporter := configreporter.New(rt.cfg, rt.configReport)
-	if configProvenance {
+	if provenance {
 		return writeConfigProvenance(cmd.OutOrStdout(), reporter.ProvenanceHeaders(), reporter.ProvenanceRows())
 	}
 

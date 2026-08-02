@@ -2,10 +2,12 @@ package cmd
 
 import "github.com/spf13/cobra"
 
-var prCmd = &cobra.Command{
-	Use:   "pr",
-	Short: "Browse and check out GitHub pull requests",
-	Long: `Browse and check out GitHub pull requests into local worktrees.
+func newPRCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "pr",
+		Short:   "Browse and check out GitHub pull requests",
+		GroupID: "pr",
+		Long: `Browse and check out GitHub pull requests into local worktrees.
 
 Subcommands:
   checkout  Check out a pull request into a local worktree
@@ -13,9 +15,11 @@ Subcommands:
   preview   Preview a pull request
 
 To start new local work (not from a PR), use 'grove create' instead.`,
-}
-
-func init() {
-	prCmd.GroupID = "pr"
-	rootCmd.AddCommand(prCmd)
+	}
+	cmd.AddCommand(
+		newPRCheckoutCmd(),
+		newPRListCmd(),
+		newPRPreviewCmd(),
+	)
+	return cmd
 }

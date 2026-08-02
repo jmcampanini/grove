@@ -56,15 +56,11 @@ func TestHandlePreviewError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			oldFlag := prPreviewFzfFlag
-			prPreviewFzfFlag = tt.fzfMode
-			defer func() { prPreviewFzfFlag = oldFlag }()
-
 			var buf bytes.Buffer
 			cmd := &cobra.Command{}
 			cmd.SetOut(&buf)
 
-			resultErr := handlePreviewError(cmd, tt.err)
+			resultErr := handlePreviewError(cmd, tt.err, tt.fzfMode)
 
 			if tt.wantErr {
 				assert.Error(t, resultErr)
@@ -79,12 +75,13 @@ func TestHandlePreviewError(t *testing.T) {
 }
 
 func TestPRPreviewHelpDocumentsClickableMarkdownLinks(t *testing.T) {
+	cmd := newPRPreviewCmd()
 	for _, want := range []string{
 		"Markdown links in the PR body",
 		"clickable terminal hyperlinks",
 		"Only open links from PRs/authors you trust",
 	} {
-		assert.Contains(t, prPreviewCmd.Long, want)
+		assert.Contains(t, cmd.Long, want)
 	}
 }
 

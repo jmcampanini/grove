@@ -6,17 +6,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var docsCmd = &cobra.Command{
-	Use:   "docs",
-	Short: "Print Grove reference documentation",
-	Long:  "Print a Markdown reference for Grove commands, configuration loading, and the TOML config schema.",
-	Args:  cobra.NoArgs,
-	RunE:  runDocs,
-}
-
-func init() {
-	docsCmd.GroupID = "utility"
-	rootCmd.AddCommand(docsCmd)
+func newDocsCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:     "docs",
+		Short:   "Print Grove reference documentation",
+		Long:    "Print a Markdown reference for Grove commands, configuration loading, and the TOML config schema.",
+		Args:    cobra.NoArgs,
+		GroupID: "utility",
+		RunE:    runDocs,
+	}
 }
 
 const docsMarkdown = `# grove reference
@@ -117,11 +115,19 @@ Grove appends ANSI-free logs for every invocation to a fixed path:
     $XDG_STATE_HOME/grove/grove.log
     ~/.local/state/grove/grove.log   (fallback when XDG_STATE_HOME is unset)
 
-Pass --debug on any command to raise the log level to debug for that invocation.
+Grove uses the same diagnostic level for stderr and the log file:
 
-If grove cannot determine the home directory or open the log file, it prints a
-warning to stderr and continues without file logging. Standard output is
-unaffected.
+- By default, Grove emits info, warning, and error diagnostics.
+- Pass --debug to also emit debug diagnostics.
+- Pass --quiet to emit only error diagnostics.
+
+The --debug and --quiet flags are mutually exclusive. Neither flag changes
+standard output or machine-readable formats. Command failures remain visible on
+stderr in quiet mode.
+
+If grove cannot determine the home directory or open the log file, it emits a
+warning unless --quiet is active and continues without file logging. Standard
+output is unaffected.
 
 Inspect the file with standard tools:
 

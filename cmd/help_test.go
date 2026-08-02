@@ -6,12 +6,18 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestRootHelpDocumentsLogPath(t *testing.T) {
+func TestRootHelpDocumentsLogging(t *testing.T) {
+	root := newRootCmd()
 	for _, want := range []string{
 		"$XDG_STATE_HOME/grove/grove.log",
 		"~/.local/state/grove/grove.log",
+		"defaults to info",
+		"--debug",
+		"--quiet",
+		"mutually exclusive",
+		"do not change stdout",
 	} {
-		assert.Contains(t, rootCmd.Long, want)
+		assert.Contains(t, root.Long, want)
 	}
 }
 
@@ -23,7 +29,7 @@ func TestMutuallyExclusiveFlagHelpText(t *testing.T) {
 			"--from-remote-primary",
 			"--reuse",
 		} {
-			assert.Contains(t, createCmd.Long, want)
+			assert.Contains(t, newCreateCmd().Long, want)
 		}
 	})
 }

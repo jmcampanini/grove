@@ -14,12 +14,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var prListFzfFlag bool
+func newPRListCmd() *cobra.Command {
+	var fzf bool
 
-var prListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List open pull requests",
-	Long: `List open pull requests for the current repository.
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List open pull requests",
+		Long: `List open pull requests for the current repository.
 
 By default, outputs a formatted table with PR details.
 
@@ -27,17 +28,17 @@ With --fzf, outputs tab-separated format suitable for fzf integration:
   <number>\t<searchable>\t<display>
 
 The "Local" column shows a checkmark when a worktree exists for the PR.`,
-	Args: cobra.NoArgs,
-	RunE: runPRList,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runPRList(cmd, fzf)
+		},
+	}
+	cmd.Flags().BoolVar(&fzf, "fzf", false, "Output in fzf-compatible format")
+	return cmd
 }
 
-func init() {
-	prListCmd.Flags().BoolVar(&prListFzfFlag, "fzf", false, "Output in fzf-compatible format")
-	prCmd.AddCommand(prListCmd)
-}
-
-func runPRList(cmd *cobra.Command, _ []string) error {
-	rt, err := loadCommandRuntime(cmd.Context())
+func runPRList(cmd *cobra.Command, fzf bool) error {
+	rt, err := loadCommandRuntime(cmd)
 	if err != nil {
 		return err
 	}
@@ -67,7 +68,7 @@ func runPRList(cmd *cobra.Command, _ []string) error {
 	matcher := pr.NewMatcher(namer)
 	matches := matcher.MatchAll(prs, worktrees)
 
-	if prListFzfFlag {
+	if fzf {
 		return outputPRListFzf(cmd.OutOrStdout(), matches)
 	}
 	return outputPRListTable(cmd.OutOrStdout(), matches)

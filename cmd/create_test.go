@@ -570,7 +570,7 @@ func TestExecuteCreate_FromRemotePrimary(t *testing.T) {
 }
 
 func TestCreateCommandHasFromRemotePrimaryFlag(t *testing.T) {
-	assert.NotNil(t, createCmd.Flags().Lookup("from-remote-primary"))
+	assert.NotNil(t, newCreateCmd().Flags().Lookup("from-remote-primary"))
 }
 
 func TestExecuteCreate_ReuseVerifiesGitArgs(t *testing.T) {

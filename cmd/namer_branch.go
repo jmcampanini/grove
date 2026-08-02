@@ -8,19 +8,17 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var namerBranchCmd = &cobra.Command{
-	Use:   "branch <phrase>",
-	Short: "Generate a branch name from a phrase",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runNamerBranch,
-}
-
-func init() {
-	namerCmd.AddCommand(namerBranchCmd)
+func newNamerBranchCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "branch <phrase>",
+		Short: "Generate a branch name from a phrase",
+		Args:  cobra.ExactArgs(1),
+		RunE:  runNamerBranch,
+	}
 }
 
 func runNamerBranch(cmd *cobra.Command, args []string) error {
-	cfg, err := loadNamingConfig(cmd.Context())
+	cfg, err := loadNamingConfig(cmd)
 	if err != nil {
 		return err
 	}

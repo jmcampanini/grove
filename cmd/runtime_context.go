@@ -15,6 +15,7 @@ import (
 	"github.com/jmcampanini/grove-cli/internal/config"
 	"github.com/jmcampanini/grove-cli/internal/git"
 	"github.com/jmcampanini/grove-cli/internal/github"
+	"github.com/spf13/cobra"
 )
 
 var errNotGitRepo = errors.New("grove must be run inside a git repository")
@@ -41,7 +42,8 @@ func (rt *commandRuntime) newCachedGitHubClient() (github.GitHub, error) {
 	return github.New(rt.ctx, rt.cwd, rt.cfg.Git.Timeout, c), nil
 }
 
-func loadCommandRuntime(ctx context.Context) (*commandRuntime, error) {
+func loadCommandRuntime(cmd *cobra.Command) (*commandRuntime, error) {
+	ctx := cmd.Context()
 	originalCwd, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current directory: %w", err)
@@ -88,7 +90,7 @@ func loadCommandRuntime(ctx context.Context) (*commandRuntime, error) {
 	}
 
 	configPaths := config.ConfigPaths(originalCwd, worktreeRoot, mainWorktreePath, homeDir)
-	cfg, report, err := config.LoadFilesWithFlags(configPaths, rootCmd.PersistentFlags())
+	cfg, report, err := config.LoadFilesWithFlags(configPaths, cmd.Root().PersistentFlags())
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}

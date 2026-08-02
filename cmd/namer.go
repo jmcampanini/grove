@@ -15,21 +15,28 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var namerCmd = &cobra.Command{
-	Use:   "namer",
-	Short: "Generate branch and worktree names from a phrase",
-}
+func newNamerCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "namer",
+		Short:   "Generate branch and worktree names from a phrase",
+		GroupID: "utility",
+	}
 
-func init() {
-	namerCmd.GroupID = "utility"
-	rootCmd.AddCommand(namerCmd)
+	cmd.AddCommand(
+		newNamerBranchCmd(),
+		newNamerSlugCmd(),
+		newNamerWorktreeCmd(),
+	)
+
+	return cmd
 }
 
 type namerContext struct {
 	namer *naming.LocalBranchNamer
 }
 
-func loadNamingConfig(ctx context.Context) (config.Config, error) {
+func loadNamingConfig(cmd *cobra.Command) (config.Config, error) {
+	ctx := cmd.Context()
 	cwd, err := os.Getwd()
 	if err != nil {
 		return config.Config{}, fmt.Errorf("failed to get current directory: %w", err)
@@ -58,7 +65,7 @@ func loadNamingConfig(ctx context.Context) (config.Config, error) {
 		paths = resolveNamerConfigPaths(ctx, cwd, homeDir, paths, defaultTimeout)
 	}
 
-	cfg, _, err := config.LoadFilesWithFlags(paths, rootCmd.PersistentFlags())
+	cfg, _, err := config.LoadFilesWithFlags(paths, cmd.Root().PersistentFlags())
 	if err != nil {
 		return config.Config{}, fmt.Errorf("failed to load config: %w", err)
 	}

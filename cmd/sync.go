@@ -13,39 +13,39 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var syncForceFlag bool
-
-var syncCmd = &cobra.Command{
-	Use:   "sync",
-	Short: "Sync the current branch to match its remote tracking branch",
-	Long: `Sync fetches from the remote and hard-resets the current branch to match
+func newSyncCmd() *cobra.Command {
+	var force bool
+	cmd := &cobra.Command{
+		Use:   "sync",
+		Short: "Sync the current branch to match its remote tracking branch",
+		Long: `Sync fetches from the remote and hard-resets the current branch to match
 its remote tracking branch exactly. This is the worktree equivalent of:
 
   git fetch --prune && git reset --hard origin/<branch>
 
 If the worktree has uncommitted changes, you will be prompted before
 they are discarded. Use --force to skip the prompt.`,
-	Args: cobra.NoArgs,
-	RunE: runSync,
-}
-
-func init() {
-	syncCmd.GroupID = "git"
-	syncCmd.Flags().BoolVar(&syncForceFlag, "force", false, "Skip the dirty-state prompt and discard changes")
-	rootCmd.AddCommand(syncCmd)
+		Args:    cobra.NoArgs,
+		GroupID: "git",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runSync(cmd, force)
+		},
+	}
+	cmd.Flags().BoolVar(&force, "force", false, "Skip the dirty-state prompt and discard changes")
+	return cmd
 }
 
 type syncContext struct {
 	gitClient git.Git
 }
 
-func runSync(cmd *cobra.Command, _ []string) error {
+func runSync(cmd *cobra.Command, force bool) error {
 	originalCwd, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("failed to get working directory: %w", err)
 	}
 
-	rt, err := loadCommandRuntime(cmd.Context())
+	rt, err := loadCommandRuntime(cmd)
 	if err != nil {
 		return err
 	}
@@ -58,7 +58,7 @@ func runSync(cmd *cobra.Command, _ []string) error {
 		gitClient: rt.gitClient,
 	}
 
-	return executeSync(cmd.OutOrStdout(), ctx, syncForceFlag)
+	return executeSync(cmd.OutOrStdout(), ctx, force)
 }
 
 func executeSync(w io.Writer, ctx *syncContext, force bool) error {

@@ -14,22 +14,20 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var resolveCmd = &cobra.Command{
-	Use:   "resolve [path]",
-	Short: "Print the absolute path of the primary worktree",
-	Long: `Resolve and print the absolute path of the primary worktree for a workspace.
+func newResolveCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "resolve [path]",
+		Short: "Print the absolute path of the primary worktree",
+		Long: `Resolve and print the absolute path of the primary worktree for a workspace.
 
 The path argument can be:
   - A worktree directory (returns the primary worktree for that workspace)
   - A workspace directory (parent of worktrees; discovers the primary among children)
   - Omitted (defaults to the current directory)`,
-	Args: cobra.MaximumNArgs(1),
-	RunE: runResolve,
-}
-
-func init() {
-	resolveCmd.GroupID = "utility"
-	rootCmd.AddCommand(resolveCmd)
+		Args:    cobra.MaximumNArgs(1),
+		RunE:    runResolve,
+		GroupID: "utility",
+	}
 }
 
 type resolveContext struct {
@@ -50,7 +48,7 @@ func runResolve(cmd *cobra.Command, args []string) error {
 	}
 
 	paths := config.BootstrapConfigPaths(targetPath, homeDir)
-	cfg, _, err := config.LoadFilesWithFlags(paths, rootCmd.PersistentFlags())
+	cfg, _, err := config.LoadFilesWithFlags(paths, cmd.Root().PersistentFlags())
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}

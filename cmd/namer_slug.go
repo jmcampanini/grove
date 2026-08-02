@@ -10,19 +10,17 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var namerSlugCmd = &cobra.Command{
-	Use:   "slug <phrase>",
-	Short: "Slugify a phrase using the configured slug settings",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runNamerSlug,
-}
-
-func init() {
-	namerCmd.AddCommand(namerSlugCmd)
+func newNamerSlugCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "slug <phrase>",
+		Short: "Slugify a phrase using the configured slug settings",
+		Args:  cobra.ExactArgs(1),
+		RunE:  runNamerSlug,
+	}
 }
 
 func runNamerSlug(cmd *cobra.Command, args []string) error {
-	cfg, err := loadNamingConfig(cmd.Context())
+	cfg, err := loadNamingConfig(cmd)
 	if err != nil {
 		return err
 	}

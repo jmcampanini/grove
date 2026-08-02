@@ -16,10 +16,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var checkoutCmd = &cobra.Command{
-	Use:   "checkout <branch>",
-	Short: "Check out an existing branch into a new worktree",
-	Long: `Check out an existing local or remote branch into a new worktree.
+func newCheckoutCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "checkout <branch>",
+		Short: "Check out an existing branch into a new worktree",
+		Long: `Check out an existing local or remote branch into a new worktree.
 
 For local branches, specify the branch name directly:
   grove checkout feature/fix-login
@@ -34,13 +35,10 @@ a remote, the branch is fetched from that remote and a worktree is created.
 
 To start new work (create a new branch), use 'grove create' instead.
 To check out a pull request by number, use 'grove pr checkout' instead.`,
-	Args: cobra.ExactArgs(1),
-	RunE: runCheckout,
-}
-
-func init() {
-	checkoutCmd.GroupID = "worktree"
-	rootCmd.AddCommand(checkoutCmd)
+		Args:    cobra.ExactArgs(1),
+		RunE:    runCheckout,
+		GroupID: "worktree",
+	}
 }
 
 type checkoutContext struct {
@@ -58,7 +56,7 @@ func (p parsedRef) isRemote() bool {
 }
 
 func runCheckout(cmd *cobra.Command, args []string) error {
-	rt, err := loadCommandRuntime(cmd.Context())
+	rt, err := loadCommandRuntime(cmd)
 	if err != nil {
 		return err
 	}

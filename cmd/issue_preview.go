@@ -7,15 +7,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	issuePreviewColorFlag string
-	issuePreviewFzfFlag   bool
-)
+func newIssuePreviewCmd() *cobra.Command {
+	var colorMode string
+	var fzf bool
 
-var issuePreviewCmd = &cobra.Command{
-	Use:   "preview [number]",
-	Short: "Show issue details",
-	Long: `Show detailed information about an issue.
+	cmd := &cobra.Command{
+		Use:   "preview [number]",
+		Short: "Show issue details",
+		Long: `Show detailed information about an issue.
 
 Displays issue metadata (title, author, state, labels, assignees, milestone),
 the issue body rendered as markdown, and the most recent comments.
@@ -25,51 +24,47 @@ as clickable terminal hyperlinks. Only open links from issues/authors you trust.
 
 With --fzf, errors are printed to stdout instead of returning an error code,
 making it suitable for use in fzf preview panes.`,
-	Args: cobra.ExactArgs(1),
-	RunE: runIssuePreview,
-}
-
-func init() {
-	issuePreviewCmd.Flags().StringVar(&issuePreviewColorFlag, "color", "auto", "Color output: auto, always, never")
-	issuePreviewCmd.Flags().BoolVar(&issuePreviewFzfFlag, "fzf", false, "Print errors to stdout instead of returning error (for fzf preview)")
-	issueCmd.AddCommand(issuePreviewCmd)
-}
-
-func handleIssuePreviewError(cmd *cobra.Command, err error) error {
-	if issuePreviewFzfFlag {
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Error: %v\n", err)
-		return nil
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runIssuePreview(cmd, args, colorMode, fzf)
+		},
 	}
-	return err
+	cmd.Flags().StringVar(&colorMode, "color", "auto", "Color output: auto, always, never")
+	cmd.Flags().BoolVar(&fzf, "fzf", false, "Print errors to stdout instead of returning error (for fzf preview)")
+	return cmd
 }
 
-func runIssuePreview(cmd *cobra.Command, args []string) error {
-	if err := applyColorMode(issuePreviewColorFlag); err != nil {
-		return handleIssuePreviewError(cmd, err)
+func runIssuePreview(cmd *cobra.Command, args []string, colorMode string, fzf bool) error {
+	handleError := func(err error) error {
+		return handlePreviewError(cmd, err, fzf)
+	}
+
+	if err := applyColorMode(colorMode); err != nil {
+		return handleError(err)
 	}
 
 	issueNum, err := strconv.Atoi(args[0])
 	if err != nil {
-		return handleIssuePreviewError(cmd, fmt.Errorf("invalid issue number: %s", args[0]))
+		return handleError(fmt.Errorf("invalid issue number: %s", args[0]))
 	}
 
-	rt, err := loadCommandRuntime(cmd.Context())
+	rt, err := loadCommandRuntime(cmd)
 	if err != nil {
-		return handleIssuePreviewError(cmd, err)
+		return handleError(err)
 	}
 
 	gh, err := rt.newCachedGitHubClient()
 	if err != nil {
-		return handleIssuePreviewError(cmd, err)
+		return handleError(err)
 	}
 
 	issueInfo, err := gh.GetIssue(issueNum)
 	if err != nil {
-		return handleIssuePreviewError(cmd, err)
+		return handleError(err)
 	}
 
 	w := cmd.OutOrStdout()
 	width := detectPreviewWidth()
 
-	return renderIssuePreview(w, issueInfo, width, issuePreviewColorFlag)
+	return renderIssuePreview(w, issueInfo, width, colorMode)
 }

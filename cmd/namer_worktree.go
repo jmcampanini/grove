@@ -8,19 +8,17 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var namerWorktreeCmd = &cobra.Command{
-	Use:   "worktree <phrase>",
-	Short: "Generate a worktree directory name from a phrase",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runNamerWorktree,
-}
-
-func init() {
-	namerCmd.AddCommand(namerWorktreeCmd)
+func newNamerWorktreeCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "worktree <phrase>",
+		Short: "Generate a worktree directory name from a phrase",
+		Args:  cobra.ExactArgs(1),
+		RunE:  runNamerWorktree,
+	}
 }
 
 func runNamerWorktree(cmd *cobra.Command, args []string) error {
-	cfg, err := loadNamingConfig(cmd.Context())
+	cfg, err := loadNamingConfig(cmd)
 	if err != nil {
 		return err
 	}

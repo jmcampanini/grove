@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/signal"
 	"syscall"
@@ -11,17 +12,26 @@ import (
 	"github.com/jmcampanini/grove-cli/internal/config"
 	"github.com/jmcampanini/grove-cli/internal/logging"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 // Version is set at build time via ldflags.
 var Version = "n/a"
 
-var rootCmd = &cobra.Command{
-	Use:           "grove",
-	Short:         "Git worktree workspace manager",
-	SilenceErrors: true,
-	SilenceUsage:  true,
-	Long: `Grove manages git worktrees in a workspace structure.
+const (
+	diagnosticDebugFlag = "debug"
+	diagnosticQuietFlag = "quiet"
+)
+
+func newRootCmd() *cobra.Command {
+	log.SetLevel(log.InfoLevel)
+
+	root := &cobra.Command{
+		Use:           "grove",
+		Short:         "Git worktree workspace manager",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		Long: `Grove manages git worktrees in a workspace structure.
 
 Common workflows:
   Start new work:       grove create "add user auth"
@@ -32,15 +42,16 @@ Common workflows:
 
 Logs are appended to $XDG_STATE_HOME/grove/grove.log
 (~/.local/state/grove/grove.log when XDG_STATE_HOME is unset).
-Pass --debug on any command for verbose logging.`,
-}
+Diagnostic logging defaults to info. Pass --debug for debug logging or --quiet
+to show only errors. The flags are mutually exclusive and do not change stdout.`,
+		Version: Version,
+	}
 
-func init() {
-	rootCmd.Version = Version
-	rootCmd.PersistentFlags().Bool("debug", false, "Enable debug logging")
-	cobra.CheckErr(config.RegisterFlags(rootCmd.PersistentFlags()))
+	registerDiagnosticFlags(root.PersistentFlags())
+	root.MarkFlagsMutuallyExclusive(diagnosticDebugFlag, diagnosticQuietFlag)
+	cobra.CheckErr(config.RegisterFlags(root.PersistentFlags()))
 
-	rootCmd.AddGroup(
+	root.AddGroup(
 		&cobra.Group{ID: "worktree", Title: "Worktree Commands:"},
 		&cobra.Group{ID: "git", Title: "Git Commands:"},
 		&cobra.Group{ID: "pr", Title: "Pull Request Commands:"},
@@ -48,15 +59,83 @@ func init() {
 		&cobra.Group{ID: "config", Title: "Configuration Commands:"},
 		&cobra.Group{ID: "utility", Title: "Utility Commands:"},
 	)
-	rootCmd.SetHelpCommandGroupID("config")
-	rootCmd.SetCompletionCommandGroupID("config")
-	configureLogStyles()
+	root.SetHelpCommandGroupID("config")
+	root.SetCompletionCommandGroupID("config")
 
-	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
-		if debug, _ := cmd.Flags().GetBool("debug"); debug {
-			log.SetLevel(log.DebugLevel)
-		}
+	root.PersistentPreRunE = applyDiagnosticLevel
+
+	root.AddCommand(
+		newCacheCmd(),
+		newCatchupCmd(),
+		newCheckoutCmd(),
+		newConfigCmd(),
+		newCreateCmd(),
+		newDocsCmd(),
+		newExitCodesTopicCmd(),
+		newIssueCmd(),
+		newListCmd(),
+		newNamerCmd(),
+		newPRCmd(),
+		newPruneCmd(),
+		newRemoveCmd(),
+		newResolveCmd(),
+		newStatusCmd(),
+		newSyncCmd(),
+		newWorkspaceTopicCmd(),
+	)
+
+	return root
+}
+
+func registerDiagnosticFlags(flags *pflag.FlagSet) {
+	flags.Bool(diagnosticDebugFlag, false, "Set diagnostic log level to debug")
+	flags.Bool(diagnosticQuietFlag, false, "Set diagnostic log level to error")
+}
+
+func resolveDiagnosticLevel(flags *pflag.FlagSet) (log.Level, error) {
+	debug, err := flags.GetBool(diagnosticDebugFlag)
+	if err != nil {
+		return log.InfoLevel, err
 	}
+	quiet, err := flags.GetBool(diagnosticQuietFlag)
+	if err != nil {
+		return log.InfoLevel, err
+	}
+	if debug && quiet {
+		return log.InfoLevel, errors.New("--debug and --quiet cannot be used together; choose one diagnostic level")
+	}
+
+	switch {
+	case debug:
+		return log.DebugLevel, nil
+	case quiet:
+		return log.ErrorLevel, nil
+	default:
+		return log.InfoLevel, nil
+	}
+}
+
+func applyDiagnosticLevel(cmd *cobra.Command, _ []string) error {
+	level, err := resolveDiagnosticLevel(cmd.Root().PersistentFlags())
+	if err != nil {
+		return err
+	}
+	log.SetLevel(level)
+	return nil
+}
+
+func preparseDiagnosticLevel(args []string) log.Level {
+	flags := pflag.NewFlagSet("diagnostic", pflag.ContinueOnError)
+	flags.ParseErrorsAllowlist.UnknownFlags = true
+	flags.Usage = func() {}
+	registerDiagnosticFlags(flags)
+	flags.BoolP("help", "h", false, "")
+	_ = flags.Parse(args)
+	level, err := resolveDiagnosticLevel(flags)
+	if err != nil {
+		return log.InfoLevel
+	}
+	return level
 }
 
 func logHasDarkBackground() bool {
@@ -91,8 +170,11 @@ func configureLogStyles() {
 	log.SetStyles(styles)
 }
 
-// Execute runs the root command.
-func Execute() error {
+func executeRoot(root *cobra.Command, args []string) error {
+	root.SetArgs(args)
+	log.SetLevel(preparseDiagnosticLevel(args))
+	configureLogStyles()
+
 	if err := logging.Setup(); err != nil {
 		log.Warn("failed to set up file logging", "error", err)
 	}
@@ -100,5 +182,10 @@ func Execute() error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	return rootCmd.ExecuteContext(ctx)
+	return root.ExecuteContext(ctx)
+}
+
+// Execute runs the root command.
+func Execute() error {
+	return executeRoot(newRootCmd(), os.Args[1:])
 }

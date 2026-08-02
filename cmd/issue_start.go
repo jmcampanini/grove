@@ -17,10 +17,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var issueStartCmd = &cobra.Command{
-	Use:   "start [number]",
-	Short: "Create a branch and worktree to work on an issue",
-	Long: `Create a new branch and worktree to start work on a GitHub issue.
+func newIssueStartCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "start [number]",
+		Short: "Create a branch and worktree to work on an issue",
+		Long: `Create a new branch and worktree to start work on a GitHub issue.
 
 The branch is named from the issue via issue.branch_template. If a worktree
 already exists for the issue, its path is printed and nothing new is created.
@@ -29,12 +30,9 @@ checked out into a new worktree as-is. Otherwise a new branch is created from
 the latest primary branch of the default remote (fetched first).
 
 To check out an existing pull request instead, use 'grove pr checkout'.`,
-	Args: cobra.ExactArgs(1),
-	RunE: runIssueStart,
-}
-
-func init() {
-	issueCmd.AddCommand(issueStartCmd)
+		Args: cobra.ExactArgs(1),
+		RunE: runIssueStart,
+	}
 }
 
 func runIssueStart(cmd *cobra.Command, args []string) error {
@@ -43,7 +41,7 @@ func runIssueStart(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid issue number: %s", args[0])
 	}
 
-	rt, err := loadCommandRuntime(cmd.Context())
+	rt, err := loadCommandRuntime(cmd)
 	if err != nil {
 		return err
 	}

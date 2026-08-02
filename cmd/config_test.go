@@ -9,8 +9,9 @@ import (
 )
 
 func TestConfigCommandHasProvenanceFlags(t *testing.T) {
-	assert.NotNil(t, configCmd.Flags().Lookup("provenance"))
-	assert.NotNil(t, configCmd.Flags().Lookup("sources"))
+	cmd := newConfigCmd()
+	assert.NotNil(t, cmd.Flags().Lookup("provenance"))
+	assert.NotNil(t, cmd.Flags().Lookup("sources"))
 }
 
 func TestWriteConfigProvenance(t *testing.T) {
