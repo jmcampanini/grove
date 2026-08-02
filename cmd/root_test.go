@@ -96,7 +96,7 @@ func TestRootLoggingModesPreserveStdout(t *testing.T) {
 	}
 }
 
-func TestExecuteRootAppliesQuietBeforeSetupWarning(t *testing.T) {
+func TestExecuteRootAppliesDiagnosticLevelBeforeSetupWarning(t *testing.T) {
 	restoreDefaultLogger(t)
 
 	blockedStateDir := filepath.Join(t.TempDir(), "state")
@@ -106,15 +106,66 @@ func TestExecuteRootAppliesQuietBeforeSetupWarning(t *testing.T) {
 	tests := []struct {
 		args        []string
 		name        string
+		wantErr     string
+		wantLevel   log.Level
 		wantWarning bool
 	}{
 		{
+			args:        []string{"docs"},
 			name:        "default reports setup warning",
+			wantLevel:   log.InfoLevel,
 			wantWarning: true,
 		},
 		{
-			args: []string{"--quiet"},
-			name: "quiet suppresses setup warning",
+			args:        []string{"--debug", "docs"},
+			name:        "debug reports setup warning",
+			wantLevel:   log.DebugLevel,
+			wantWarning: true,
+		},
+		{
+			args:      []string{"--quiet", "docs"},
+			name:      "quiet suppresses setup warning",
+			wantLevel: log.ErrorLevel,
+		},
+		{
+			args:        []string{"--help"},
+			name:        "help reports setup warning",
+			wantLevel:   log.InfoLevel,
+			wantWarning: true,
+		},
+		{
+			args:      []string{"--quiet", "--help"},
+			name:      "quiet before help suppresses setup warning",
+			wantLevel: log.ErrorLevel,
+		},
+		{
+			args:      []string{"--help", "--quiet"},
+			name:      "quiet after help suppresses setup warning",
+			wantLevel: log.ErrorLevel,
+		},
+		{
+			args:      []string{"-h", "--quiet"},
+			name:      "quiet after shorthand help suppresses setup warning",
+			wantLevel: log.ErrorLevel,
+		},
+		{
+			args:      []string{"bogus", "--quiet"},
+			name:      "quiet invalid command suppresses setup warning",
+			wantErr:   "unknown command",
+			wantLevel: log.ErrorLevel,
+		},
+		{
+			args:      []string{"--nope", "--quiet", "docs"},
+			name:      "quiet after unknown flag suppresses setup warning",
+			wantErr:   "unknown flag",
+			wantLevel: log.ErrorLevel,
+		},
+		{
+			args:        []string{"--debug", "--quiet", "docs"},
+			name:        "conflict reports setup warning at default level",
+			wantErr:     "cannot be used together",
+			wantLevel:   log.InfoLevel,
+			wantWarning: true,
 		},
 	}
 
@@ -124,10 +175,15 @@ func TestExecuteRootAppliesQuietBeforeSetupWarning(t *testing.T) {
 			log.SetOutput(&diagnostics)
 
 			root := newRootCmd()
-			root.SetArgs(append(tt.args, "docs"))
 			root.SetOut(io.Discard)
 
-			require.NoError(t, executeRoot(root))
+			err := executeRoot(root, tt.args)
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, err, tt.wantErr)
+			}
+			assert.Equal(t, tt.wantLevel, log.GetLevel())
 			assert.Equal(t, tt.wantWarning, bytes.Contains(diagnostics.Bytes(), []byte("failed to set up file logging")))
 		})
 	}
@@ -143,8 +199,7 @@ func TestRootRejectsConflictingLoggingFlagsBeforeCommandRun(t *testing.T) {
 
 	err := root.Execute()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "debug")
-	assert.Contains(t, err.Error(), "quiet")
+	assert.Contains(t, err.Error(), "cannot be used together")
 	assert.False(t, ran)
 	assert.Equal(t, log.InfoLevel, log.GetLevel())
 }

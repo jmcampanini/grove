@@ -12,10 +12,16 @@ import (
 	"github.com/jmcampanini/grove-cli/internal/config"
 	"github.com/jmcampanini/grove-cli/internal/logging"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 // Version is set at build time via ldflags.
 var Version = "n/a"
+
+const (
+	diagnosticDebugFlag = "debug"
+	diagnosticQuietFlag = "quiet"
+)
 
 func newRootCmd() *cobra.Command {
 	log.SetLevel(log.InfoLevel)
@@ -41,9 +47,8 @@ to show only errors. The flags are mutually exclusive and do not change stdout.`
 		Version: Version,
 	}
 
-	root.PersistentFlags().Bool("debug", false, "Set diagnostic log level to debug")
-	root.PersistentFlags().Bool("quiet", false, "Set diagnostic log level to error")
-	root.MarkFlagsMutuallyExclusive("debug", "quiet")
+	registerDiagnosticFlags(root.PersistentFlags())
+	root.MarkFlagsMutuallyExclusive(diagnosticDebugFlag, diagnosticQuietFlag)
 	cobra.CheckErr(config.RegisterFlags(root.PersistentFlags()))
 
 	root.AddGroup(
@@ -84,29 +89,55 @@ to show only errors. The flags are mutually exclusive and do not change stdout.`
 	return root
 }
 
-func applyDiagnosticLevel(cmd *cobra.Command) error {
-	flags := cmd.Root().PersistentFlags()
-	debug, err := flags.GetBool("debug")
+func registerDiagnosticFlags(flags *pflag.FlagSet) {
+	flags.Bool(diagnosticDebugFlag, false, "Set diagnostic log level to debug")
+	flags.Bool(diagnosticQuietFlag, false, "Set diagnostic log level to error")
+}
+
+func resolveDiagnosticLevel(flags *pflag.FlagSet) (log.Level, error) {
+	debug, err := flags.GetBool(diagnosticDebugFlag)
 	if err != nil {
-		return err
+		return log.InfoLevel, err
 	}
-	quiet, err := flags.GetBool("quiet")
+	quiet, err := flags.GetBool(diagnosticQuietFlag)
 	if err != nil {
-		return err
+		return log.InfoLevel, err
 	}
 	if debug && quiet {
-		return errors.New("--debug and --quiet cannot be used together; choose one diagnostic level")
+		return log.InfoLevel, errors.New("--debug and --quiet cannot be used together; choose one diagnostic level")
 	}
 
 	switch {
 	case debug:
-		log.SetLevel(log.DebugLevel)
+		return log.DebugLevel, nil
 	case quiet:
-		log.SetLevel(log.ErrorLevel)
+		return log.ErrorLevel, nil
 	default:
-		log.SetLevel(log.InfoLevel)
+		return log.InfoLevel, nil
 	}
+}
+
+func applyDiagnosticLevel(cmd *cobra.Command) error {
+	level, err := resolveDiagnosticLevel(cmd.Root().PersistentFlags())
+	if err != nil {
+		return err
+	}
+	log.SetLevel(level)
 	return nil
+}
+
+func preparseDiagnosticLevel(args []string) log.Level {
+	flags := pflag.NewFlagSet("diagnostic", pflag.ContinueOnError)
+	flags.ParseErrorsAllowlist.UnknownFlags = true
+	flags.Usage = func() {}
+	registerDiagnosticFlags(flags)
+	flags.BoolP("help", "h", false, "")
+	_ = flags.Parse(args)
+	level, err := resolveDiagnosticLevel(flags)
+	if err != nil {
+		return log.InfoLevel
+	}
+	return level
 }
 
 func logHasDarkBackground() bool {
@@ -141,45 +172,22 @@ func configureLogStyles() {
 	log.SetStyles(styles)
 }
 
-func executeRoot(root *cobra.Command) error {
+func executeRoot(root *cobra.Command, args []string) error {
+	root.SetArgs(args)
+	log.SetLevel(preparseDiagnosticLevel(args))
 	configureLogStyles()
 
-	setupErr := logging.Setup()
+	if err := logging.Setup(); err != nil {
+		log.Warn("failed to set up file logging", "error", err)
+	}
 	defer logging.Close()
-
-	setupWarningPending := setupErr != nil
-	reportSetupWarning := func() {
-		if setupWarningPending {
-			log.Warn("failed to set up file logging", "error", setupErr)
-			setupWarningPending = false
-		}
-	}
-	if setupWarningPending {
-		preRun := root.PersistentPreRunE
-		root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
-			if preRun != nil {
-				if err := preRun(cmd, args); err != nil {
-					return err
-				}
-			}
-			reportSetupWarning()
-			return nil
-		}
-	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	err := root.ExecuteContext(ctx)
-
-	if setupWarningPending {
-		if levelErr := applyDiagnosticLevel(root); levelErr == nil {
-			reportSetupWarning()
-		}
-	}
-	return err
+	return root.ExecuteContext(ctx)
 }
 
 // Execute runs the root command.
 func Execute() error {
-	return executeRoot(newRootCmd())
+	return executeRoot(newRootCmd(), os.Args[1:])
 }
