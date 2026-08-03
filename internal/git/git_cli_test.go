@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // =============================================================================
@@ -876,12 +877,13 @@ func TestParseWorktreeBlock(t *testing.T) {
 	}
 
 	tests := []struct {
-		name      string
-		input     []string
-		branchMap map[string]LocalBranch
-		tagMap    map[string]Tag
-		wantPath  string
-		wantErr   bool
+		name       string
+		input      []string
+		branchMap  map[string]LocalBranch
+		tagMap     map[string]Tag
+		wantPath   string
+		wantLocked bool
+		wantErr    bool
 	}{
 		{
 			name: "worktree with branch",
@@ -894,6 +896,34 @@ func TestParseWorktreeBlock(t *testing.T) {
 			tagMap:    tagMap,
 			wantPath:  "/home/user/project",
 			wantErr:   false,
+		},
+		{
+			name: "locked worktree without reason",
+			input: []string{
+				"worktree /home/user/project",
+				"HEAD abc1234567890abcdef1234567890abcdef12345",
+				"branch refs/heads/main",
+				"locked",
+			},
+			branchMap:  branchMap,
+			tagMap:     tagMap,
+			wantPath:   "/home/user/project",
+			wantLocked: true,
+			wantErr:    false,
+		},
+		{
+			name: "locked worktree with reason",
+			input: []string{
+				"worktree /home/user/project",
+				"HEAD abc1234567890abcdef1234567890abcdef12345",
+				"branch refs/heads/main",
+				"locked worktree is on a removable device",
+			},
+			branchMap:  branchMap,
+			tagMap:     tagMap,
+			wantPath:   "/home/user/project",
+			wantLocked: true,
+			wantErr:    false,
 		},
 		{
 			name: "worktree with different branch",
@@ -961,8 +991,27 @@ func TestParseWorktreeBlock(t *testing.T) {
 			}
 			assert.NoError(t, err)
 			assert.Equal(t, tt.wantPath, got.AbsolutePath)
+			assert.Equal(t, tt.wantLocked, got.Locked)
 		})
 	}
+}
+
+func TestParseWorktreeBlockUsesPorcelainHead(t *testing.T) {
+	g := newTestGitCli()
+	branchCommit := NewCommit("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "Earlier", time.Time{}, "Jane")
+	branch := NewLocalBranch("feature", "", "/home/user/feature", true, 0, 0, branchCommit)
+	porcelainHead := "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+
+	worktree, err := g.parseWorktreeBlock([]string{
+		"worktree /home/user/feature",
+		"HEAD " + porcelainHead,
+		"branch refs/heads/feature",
+	}, map[string]LocalBranch{"feature": branch}, nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, porcelainHead, worktree.HeadSHA)
+	assert.Equal(t, porcelainHead, worktree.CommitSHA())
+	assert.Equal(t, branchCommit.SHA, worktree.Ref.Commit().SHA)
 }
 
 // =============================================================================

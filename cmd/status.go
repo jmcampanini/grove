@@ -41,8 +41,10 @@ type worktreeStatus struct {
 	absPath    string
 	branchName string
 	dirty      bool
+	headSHA    string
 	isMain     bool
 	kind       string
+	locked     bool
 	pr         *github.PullRequest
 	tracking   trackingInfo
 }
@@ -98,23 +100,9 @@ func gatherStatuses(ctx *statusContext) ([]worktreeStatus, error) {
 }
 
 func buildWorktreeStatus(ctx *statusContext, wt git.Worktree, branchMap map[string]git.LocalBranch) worktreeStatus {
-	ws := worktreeStatus{
-		absPath: wt.AbsolutePath,
-		isMain:  wt.AbsolutePath == ctx.mainWorktreePath,
-	}
-
-	ws.branchName = extractBranchName(&wt)
-
+	ws := newWorktreeStatus(ctx, wt, branchMap)
 	if ws.branchName == "" {
 		return ws
-	}
-
-	if b, ok := branchMap[ws.branchName]; ok {
-		ws.tracking = trackingInfo{
-			ahead:    b.Ahead,
-			behind:   b.Behind,
-			upstream: b.UpstreamName,
-		}
 	}
 
 	dirty, err := ctx.gitClient.IsWorktreeDirty(wt.AbsolutePath)
@@ -130,6 +118,24 @@ func buildWorktreeStatus(ctx *statusContext, wt git.Worktree, branchMap map[stri
 		ws.kind = "local"
 	}
 
+	return ws
+}
+
+func newWorktreeStatus(ctx *statusContext, wt git.Worktree, branchMap map[string]git.LocalBranch) worktreeStatus {
+	ws := worktreeStatus{
+		absPath: wt.AbsolutePath,
+		isMain:  wt.AbsolutePath == ctx.mainWorktreePath,
+		locked:  wt.Locked,
+	}
+	ws.branchName = extractBranchName(&wt)
+	ws.headSHA = wt.CommitSHA()
+	if b, ok := branchMap[ws.branchName]; ok {
+		ws.tracking = trackingInfo{
+			ahead:    b.Ahead,
+			behind:   b.Behind,
+			upstream: b.UpstreamName,
+		}
+	}
 	return ws
 }
 

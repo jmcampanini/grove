@@ -68,7 +68,9 @@ func (e pruneEvidence) String() string {
 
 type prunable struct {
 	branchName string
+	dirty      bool
 	evidence   pruneEvidence
+	headSHA    string
 	name       string
 	path       string
 }
@@ -89,8 +91,11 @@ func runPrune(cmd *cobra.Command, _ []string) error {
 }
 
 func executePrune(w io.Writer, ctx *statusContext) error {
-	statuses, err := gatherStatuses(ctx)
+	statuses, err := gatherPruneStatuses(ctx)
 	if err != nil {
+		return err
+	}
+	if err := renderLockedWorktrees(w, statuses); err != nil {
 		return err
 	}
 
@@ -134,6 +139,93 @@ func executePrune(w io.Writer, ctx *statusContext) error {
 	})
 }
 
+func gatherPruneStatuses(ctx *statusContext) ([]worktreeStatus, error) {
+	worktrees, err := ctx.gitClient.ListWorktrees()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list worktrees: %w", err)
+	}
+	branches, err := ctx.gitClient.ListLocalBranches()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list branches: %w", err)
+	}
+
+	branchMap := make(map[string]git.LocalBranch, len(branches))
+	for _, branch := range branches {
+		branchMap[branch.Name] = branch
+	}
+
+	statuses := make([]worktreeStatus, 0, len(worktrees))
+	for _, worktree := range worktrees {
+		status, err := buildPruneWorktreeStatus(ctx, worktree, branchMap)
+		if err != nil {
+			return nil, err
+		}
+		statuses = append(statuses, status)
+	}
+	return statuses, nil
+}
+
+func buildPruneWorktreeStatus(ctx *statusContext, worktree git.Worktree, branchMap map[string]git.LocalBranch) (worktreeStatus, error) {
+	status := newWorktreeStatus(ctx, worktree, branchMap)
+	if status.isMain || status.locked {
+		return status, nil
+	}
+
+	if _, err := os.Stat(status.absPath); err != nil {
+		if os.IsNotExist(err) {
+			return status, nil
+		}
+		return worktreeStatus{}, fmt.Errorf("failed to inspect worktree %q: %w", filepath.Base(status.absPath), err)
+	}
+	if status.branchName == "" {
+		return status, nil
+	}
+
+	dirty, err := ctx.gitClient.IsWorktreeDirty(status.absPath)
+	if err != nil {
+		return worktreeStatus{}, fmt.Errorf("failed to inspect dirty state for worktree %q: %w", filepath.Base(status.absPath), err)
+	}
+	status.dirty = dirty
+
+	pr, err := ctx.ghClient.GetPullRequestByBranch(status.branchName)
+	if err != nil {
+		return worktreeStatus{}, fmt.Errorf("failed to get PR state for branch %q: %w", status.branchName, err)
+	}
+	status.pr = pr
+	if pr != nil {
+		status.kind = "PR"
+	} else {
+		status.kind = "local"
+	}
+	return status, nil
+}
+
+func renderLockedWorktrees(w io.Writer, statuses []worktreeStatus) error {
+	var locked []worktreeStatus
+	for _, status := range statuses {
+		if status.locked && !status.isMain {
+			locked = append(locked, status)
+		}
+	}
+	if len(locked) == 0 {
+		return nil
+	}
+
+	if _, err := fmt.Fprintln(w, "Locked worktrees excluded from prune:"); err != nil {
+		return err
+	}
+	for _, status := range locked {
+		branch := status.branchName
+		if branch == "" {
+			branch = "detached"
+		}
+		if _, err := fmt.Fprintf(w, "  %s  %s  (locked)\n", filepath.Base(status.absPath), branch); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func buildRemoteBranchSet(gitClient git.Git) (map[string]bool, error) {
 	remotes, err := gitClient.ListRemotes()
 	if err != nil {
@@ -156,14 +248,16 @@ func buildRemoteBranchSet(gitClient git.Git) (map[string]bool, error) {
 func findPrunable(statuses []worktreeStatus, remoteBranches map[string]bool) []prunable {
 	var result []prunable
 	for _, ws := range statuses {
-		if ws.isMain {
+		if ws.isMain || ws.locked {
 			continue
 		}
 
 		if evidence, ok := classifyPrunable(ws, remoteBranches); ok {
 			result = append(result, prunable{
 				branchName: ws.branchName,
+				dirty:      ws.dirty,
 				evidence:   evidence,
+				headSHA:    ws.headSHA,
 				name:       filepath.Base(ws.absPath),
 				path:       ws.absPath,
 			})
@@ -196,14 +290,6 @@ func classifyPrunable(ws worktreeStatus, remoteBranches map[string]bool) (pruneE
 	}
 
 	return pruneEvidence{}, false
-}
-
-func pruneReason(ws worktreeStatus, remoteBranches map[string]bool) string {
-	evidence, ok := classifyPrunable(ws, remoteBranches)
-	if !ok {
-		return ""
-	}
-	return evidence.String()
 }
 
 type pruneState struct {
@@ -258,15 +344,41 @@ func revalidatePrunableIdentity(ctx *statusContext, candidate prunable) (string,
 	if current.AbsolutePath == ctx.mainWorktreePath {
 		return "path is now the main worktree", nil
 	}
+	if current.Locked {
+		return "worktree is locked", nil
+	}
 
 	branchName := extractBranchName(current)
-	if branchName == candidate.branchName {
+	if branchName != candidate.branchName {
+		if branchName == "" {
+			return "path is now detached", nil
+		}
+		return fmt.Sprintf("path now maps to branch %q", branchName), nil
+	}
+
+	currentHead := current.CommitSHA()
+	if currentHead != candidate.headSHA {
+		return fmt.Sprintf(
+			"HEAD changed from %s to %s",
+			shortSHASafe(candidate.headSHA, 7),
+			shortSHASafe(currentHead, 7),
+		), nil
+	}
+	if candidate.evidence.kind == pruneEvidenceOrphaned {
 		return "", nil
 	}
-	if branchName == "" {
-		return "path is now detached", nil
+
+	dirty, err := ctx.gitClient.IsWorktreeDirty(candidate.path)
+	if err != nil {
+		return "", fmt.Errorf("failed to inspect dirty state for worktree %q: %w", candidate.name, err)
 	}
-	return fmt.Sprintf("path now maps to branch %q", branchName), nil
+	if dirty != candidate.dirty {
+		if dirty {
+			return "worktree has uncommitted changes", nil
+		}
+		return "worktree is now clean", nil
+	}
+	return "", nil
 }
 
 func revalidateLocalBarrier(ctx *statusContext, candidate prunable) (string, error) {
@@ -457,7 +569,7 @@ func executeRemovals(w io.Writer, gitClient git.Git, selected []prunable, revali
 			results[i] = pruneResult{
 				prunable: p,
 				skipReason: fmt.Sprintf(
-					"skipped: was %s, now %s; rerun grove prune",
+					"skipped: was %s; current: %s; rerun grove prune",
 					p.evidence.String(),
 					current,
 				),
@@ -531,12 +643,17 @@ func renderPruneResults(w io.Writer, results []pruneResult) error {
 	}
 
 	if failed > 0 {
-		return fmt.Errorf("%d removal(s) failed", failed)
+		noun := "worktree"
+		if failed != 1 {
+			noun = "worktrees"
+		}
+		return fmt.Errorf("prune failed for %d selected %s", failed, noun)
 	}
 	return nil
 }
 
 func removeOrphanedWorktree(gitClient git.Git, path, branchName string) error {
+	// Targeted stale-worktree removal requires force; revalidation narrows but cannot eliminate path-recreation races.
 	if err := gitClient.RemoveWorktree(path, true); err != nil {
 		return fmt.Errorf("failed to remove orphaned worktree %q: %w", filepath.Base(path), err)
 	}

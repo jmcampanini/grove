@@ -101,6 +101,18 @@ func TestFindPrunable(t *testing.T) {
 			wantCount: 0,
 		},
 		{
+			name: "locked worktree is never prunable",
+			statuses: []worktreeStatus{
+				{
+					absPath:    filepath.Join(workspace, "wt-merged"),
+					branchName: "feature/merged",
+					locked:     true,
+					pr:         &github.PullRequest{Number: 10, State: github.PRStateMerged},
+				},
+			},
+			wantCount: 0,
+		},
+		{
 			name: "main worktree is never prunable",
 			statuses: []worktreeStatus{
 				{
@@ -173,80 +185,82 @@ func TestFindPrunable(t *testing.T) {
 	}
 }
 
-func TestPruneReason(t *testing.T) {
-	wtDir := t.TempDir()
+func TestFindPrunableCapturesLocalState(t *testing.T) {
+	path := t.TempDir()
+	prunables := findPrunable([]worktreeStatus{
+		{
+			absPath:    path,
+			branchName: "feature/test",
+			dirty:      true,
+			headSHA:    "abc123",
+			pr:         &github.PullRequest{Number: 10, State: github.PRStateMerged},
+		},
+	}, nil)
 
-	remoteBranches := map[string]bool{
-		"origin/main": true,
-	}
+	require.Len(t, prunables, 1)
+	assert.True(t, prunables[0].dirty)
+	assert.Equal(t, "abc123", prunables[0].headSHA)
+}
 
-	tests := []struct {
-		name   string
-		status worktreeStatus
-		want   string
-	}{
-		{
-			name: "merged PR",
-			status: worktreeStatus{
-				absPath: wtDir,
-				pr:      &github.PullRequest{Number: 5, State: github.PRStateMerged},
-			},
-			want: "PR #5 merged",
+func TestExecutePruneFailsBeforePromptWhenGitHubUnavailable(t *testing.T) {
+	path := t.TempDir()
+	commit := git.NewCommit("abc123", "test", time.Unix(0, 0), "tester")
+	branch := git.NewLocalBranch("feature/test", "origin/feature/test", path, true, 0, 0, commit)
+	gitMock := &mockGit{
+		isWorktreeDirtyFn: func(string) (bool, error) { return false, nil },
+		listLocalBranchesFn: func() ([]git.LocalBranch, error) {
+			return []git.LocalBranch{branch}, nil
 		},
-		{
-			name: "closed PR",
-			status: worktreeStatus{
-				absPath: wtDir,
-				pr:      &github.PullRequest{Number: 7, State: github.PRStateClosed},
-			},
-			want: "PR #7 closed",
-		},
-		{
-			name: "open PR not prunable",
-			status: worktreeStatus{
-				absPath: wtDir,
-				pr:      &github.PullRequest{Number: 8, State: github.PRStateOpen},
-			},
-			want: "",
-		},
-		{
-			name: "upstream gone",
-			status: worktreeStatus{
-				absPath:  wtDir,
-				tracking: trackingInfo{upstream: "origin/feature/gone"},
-			},
-			want: "upstream gone",
-		},
-		{
-			name: "upstream exists",
-			status: worktreeStatus{
-				absPath:  wtDir,
-				tracking: trackingInfo{upstream: "origin/main"},
-			},
-			want: "",
-		},
-		{
-			name: "no tracking no PR",
-			status: worktreeStatus{
-				absPath: wtDir,
-			},
-			want: "",
-		},
-		{
-			name: "orphaned directory",
-			status: worktreeStatus{
-				absPath: "/nonexistent/wt-orphaned",
-			},
-			want: "orphaned",
+		listWorktreesFn: func() ([]git.Worktree, error) {
+			return []git.Worktree{{AbsolutePath: path, Ref: &branch}}, nil
 		},
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := pruneReason(tt.status, remoteBranches)
-			assert.Equal(t, tt.want, got)
-		})
+	ghMock := &mockGitHub{
+		getPullRequestByBranchFn: func(string) (*github.PullRequest, error) {
+			return nil, errors.New("gh unavailable")
+		},
 	}
+	ctx := &statusContext{
+		ghClient:         ghMock,
+		gitClient:        gitMock,
+		mainWorktreePath: filepath.Join(filepath.Dir(path), "main"),
+	}
+
+	err := executePrune(&bytes.Buffer{}, ctx)
+	require.ErrorContains(t, err, `failed to get PR state for branch "feature/test": gh unavailable`)
+}
+
+func TestExecutePruneReportsLockedWorktree(t *testing.T) {
+	path := t.TempDir()
+	commit := git.NewCommit("abc123", "test", time.Unix(0, 0), "tester")
+	branch := git.NewLocalBranch("feature/test", "", path, true, 0, 0, commit)
+	gitMock := &mockGit{
+		listLocalBranchesFn: func() ([]git.LocalBranch, error) {
+			return []git.LocalBranch{branch}, nil
+		},
+		listWorktreesFn: func() ([]git.Worktree, error) {
+			return []git.Worktree{{AbsolutePath: path, Locked: true, Ref: &branch}}, nil
+		},
+	}
+	ghCalls := 0
+	ghMock := &mockGitHub{
+		getPullRequestByBranchFn: func(string) (*github.PullRequest, error) {
+			ghCalls++
+			return nil, nil
+		},
+	}
+	ctx := &statusContext{
+		ghClient:         ghMock,
+		gitClient:        gitMock,
+		mainWorktreePath: filepath.Join(filepath.Dir(path), "main"),
+	}
+
+	var output bytes.Buffer
+	require.NoError(t, executePrune(&output, ctx))
+	assert.Zero(t, ghCalls)
+	assert.Contains(t, output.String(), "Locked worktrees excluded from prune:")
+	assert.Contains(t, output.String(), filepath.Base(path)+"  feature/test  (locked)")
+	assert.Contains(t, output.String(), "Nothing to prune.")
 }
 
 func TestRevalidatePrunable(t *testing.T) {
@@ -254,9 +268,14 @@ func TestRevalidatePrunable(t *testing.T) {
 		branchAfterGitHub   string
 		candidateEvidence   pruneEvidence
 		currentBranch       string
+		currentDirty        bool
+		currentHead         string
 		currentPR           *github.PullRequest
 		currentUpstream     string
+		dirtyAfterGitHub    bool
 		ghErr               error
+		headAfterGitHub     string
+		lockedAfterGitHub   bool
 		name                string
 		pathMissing         bool
 		registered          bool
@@ -366,6 +385,49 @@ func TestRevalidatePrunable(t *testing.T) {
 			upstreamAfterGitHub: "origin/replacement",
 			wantCurrent:         `upstream is now "origin/replacement"`,
 		},
+		{
+			candidateEvidence: pruneEvidence{kind: pruneEvidencePR, prNumber: 10, prState: github.PRStateMerged},
+			currentBranch:     "feature/test",
+			currentDirty:      true,
+			name:              "worktree becomes dirty before revalidation",
+			registered:        true,
+			wantCurrent:       "worktree has uncommitted changes",
+		},
+		{
+			candidateEvidence: pruneEvidence{kind: pruneEvidencePR, prNumber: 10, prState: github.PRStateMerged},
+			currentBranch:     "feature/test",
+			currentPR:         &github.PullRequest{Number: 10, State: github.PRStateMerged},
+			dirtyAfterGitHub:  true,
+			name:              "worktree becomes dirty during GitHub lookup",
+			registered:        true,
+			wantCurrent:       "worktree has uncommitted changes",
+		},
+		{
+			candidateEvidence: pruneEvidence{kind: pruneEvidencePR, prNumber: 10, prState: github.PRStateMerged},
+			currentBranch:     "feature/test",
+			currentHead:       "def456",
+			name:              "HEAD changes before revalidation",
+			registered:        true,
+			wantCurrent:       "HEAD changed from abc123 to def456",
+		},
+		{
+			candidateEvidence: pruneEvidence{kind: pruneEvidencePR, prNumber: 10, prState: github.PRStateMerged},
+			currentBranch:     "feature/test",
+			currentPR:         &github.PullRequest{Number: 10, State: github.PRStateMerged},
+			headAfterGitHub:   "def456",
+			name:              "HEAD changes during GitHub lookup",
+			registered:        true,
+			wantCurrent:       "HEAD changed from abc123 to def456",
+		},
+		{
+			candidateEvidence: pruneEvidence{kind: pruneEvidencePR, prNumber: 10, prState: github.PRStateMerged},
+			currentBranch:     "feature/test",
+			currentPR:         &github.PullRequest{Number: 10, State: github.PRStateMerged},
+			lockedAfterGitHub: true,
+			name:              "worktree is locked during GitHub lookup",
+			registered:        true,
+			wantCurrent:       "worktree is locked",
+		},
 	}
 
 	for _, tt := range tests {
@@ -377,20 +439,31 @@ func TestRevalidatePrunable(t *testing.T) {
 				require.NoError(t, os.Remove(path))
 			}
 
-			commit := git.NewCommit("abc123", "test", time.Unix(0, 0), "tester")
 			currentBranch := tt.currentBranch
+			currentDirty := tt.currentDirty
+			currentHead := tt.currentHead
+			if currentHead == "" {
+				currentHead = "abc123"
+			}
+			currentLocked := false
 			currentUpstream := tt.currentUpstream
+			makeCommit := func() git.Commit {
+				return git.NewCommit(currentHead, "test", time.Unix(0, 0), "tester")
+			}
 			makeBranch := func() git.LocalBranch {
-				return git.NewLocalBranch(currentBranch, currentUpstream, path, true, 0, 0, commit)
+				return git.NewLocalBranch(currentBranch, currentUpstream, path, true, 0, 0, makeCommit())
 			}
 
 			gitMock := &mockGit{
+				isWorktreeDirtyFn: func(string) (bool, error) {
+					return currentDirty, nil
+				},
 				listLocalBranchesFn: func() ([]git.LocalBranch, error) {
 					return []git.LocalBranch{makeBranch()}, nil
 				},
 				listRemoteBranchesFn: func(remote string) ([]git.RemoteBranch, error) {
 					if tt.remoteExists && remote == "origin" {
-						return []git.RemoteBranch{git.NewRemoteBranch("feature/test", "origin", commit)}, nil
+						return []git.RemoteBranch{git.NewRemoteBranch("feature/test", "origin", makeCommit())}, nil
 					}
 					return nil, nil
 				},
@@ -399,13 +472,22 @@ func TestRevalidatePrunable(t *testing.T) {
 						return nil, nil
 					}
 					branch := makeBranch()
-					return []git.Worktree{{AbsolutePath: path, Ref: &branch}}, nil
+					return []git.Worktree{{AbsolutePath: path, Locked: currentLocked, Ref: &branch}}, nil
 				},
 			}
 			ghMock := &mockGitHub{
 				getPullRequestByBranchFn: func(string) (*github.PullRequest, error) {
 					if tt.branchAfterGitHub != "" {
 						currentBranch = tt.branchAfterGitHub
+					}
+					if tt.dirtyAfterGitHub {
+						currentDirty = true
+					}
+					if tt.headAfterGitHub != "" {
+						currentHead = tt.headAfterGitHub
+					}
+					if tt.lockedAfterGitHub {
+						currentLocked = true
 					}
 					if tt.upstreamAfterGitHub != "" {
 						currentUpstream = tt.upstreamAfterGitHub
@@ -421,6 +503,7 @@ func TestRevalidatePrunable(t *testing.T) {
 			candidate := prunable{
 				branchName: "feature/test",
 				evidence:   tt.candidateEvidence,
+				headSHA:    "abc123",
 				name:       "wt-test",
 				path:       path,
 			}
@@ -492,7 +575,7 @@ func TestExecuteRemovals(t *testing.T) {
 				{branchName: "feature/keep", evidence: upstreamEvidence("feature/keep"), name: "wt-keep", path: "/workspace/wt-keep"},
 			},
 			wantContains: []string{
-				"skipped: was PR #10 merged, now PR #10 open; rerun grove prune",
+				"skipped: was PR #10 merged; current: PR #10 open; rerun grove prune",
 				"1 removed",
 				"1 skipped",
 			},
@@ -509,7 +592,7 @@ func TestExecuteRemovals(t *testing.T) {
 			},
 			wantContains:     []string{"wt-fail", "revalidation failed: gh timed out", "1 removed", "1 failed"},
 			wantErr:          true,
-			wantErrContain:   "1 removal(s) failed",
+			wantErrContain:   "prune failed for 1 selected worktree",
 			wantRemovedPaths: []string{"/workspace/wt-keep"},
 		},
 		{
@@ -522,7 +605,7 @@ func TestExecuteRemovals(t *testing.T) {
 			},
 			wantContains:   []string{"wt-fail", "permission denied", "1 failed"},
 			wantErr:        true,
-			wantErrContain: "1 removal(s) failed",
+			wantErrContain: "prune failed for 1 selected worktree",
 		},
 		{
 			name: "orphaned worktree uses targeted removal",
