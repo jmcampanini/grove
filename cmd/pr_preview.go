@@ -7,13 +7,30 @@ import (
 	"strconv"
 
 	"charm.land/lipgloss/v2"
+	"charm.land/log/v2"
 	"github.com/charmbracelet/colorprofile"
 	"github.com/jmcampanini/grove-cli/internal/github"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
 
-var previewHasDarkBackground = true
+// previewTheme is the per-execution color state for preview rendering,
+// resolved from the --color flag and the injected streams.
+type previewTheme struct {
+	hasDarkBackground bool
+	profile           colorprofile.Profile
+}
+
+func (t previewTheme) colorsDisabled() bool {
+	return t.profile <= colorprofile.ASCII
+}
+
+// previewRenderer renders PR and issue previews with a fixed theme and
+// diagnostic logger for one execution.
+type previewRenderer struct {
+	logger *log.Logger
+	theme  previewTheme
+}
 
 func newPRPreviewCmd() *cobra.Command {
 	var colorMode string
@@ -51,56 +68,58 @@ func handlePreviewError(cmd *cobra.Command, err error, fzf bool) error {
 	return err
 }
 
-func detectPreviewWidth() int {
+func detectPreviewWidth(out io.Writer) int {
 	if cols := os.Getenv("FZF_PREVIEW_COLUMNS"); cols != "" {
 		if n, err := strconv.Atoi(cols); err == nil && n > 0 {
 			return n
 		}
 	}
-	if w, _, err := term.GetSize(int(os.Stdout.Fd())); err == nil && w > 0 {
-		return w
+	if f, ok := out.(*os.File); ok {
+		if w, _, err := term.GetSize(int(f.Fd())); err == nil && w > 0 {
+			return w
+		}
 	}
 	return 80
 }
 
-func applyColorMode(mode string) error {
+// resolvePreviewTheme derives the color profile and background for one
+// execution from the --color mode and the injected streams. Streams that are
+// not terminals get the no-color profile and the dark-background default.
+func resolvePreviewTheme(mode string, in io.Reader, out io.Writer) (previewTheme, error) {
 	var profile colorprofile.Profile
 	switch mode {
 	case "auto":
-		profile = colorprofile.Detect(os.Stdout, os.Environ())
+		profile = colorprofile.Detect(out, os.Environ())
 	case "always":
 		profile = colorprofile.ANSI256
 	case "never":
 		profile = colorprofile.NoTTY
 	default:
-		return fmt.Errorf("invalid color mode %q; valid modes: auto, always, never", mode)
+		return previewTheme{}, fmt.Errorf("invalid color mode %q; valid modes: auto, always, never", mode)
 	}
 
-	lipgloss.Writer.Profile = profile
-	previewHasDarkBackground = detectPreviewHasDarkBackground(profile)
-	return nil
+	return previewTheme{
+		hasDarkBackground: detectPreviewHasDarkBackground(profile, in, out),
+		profile:           profile,
+	}, nil
 }
 
-func detectPreviewHasDarkBackground(profile colorprofile.Profile) bool {
+func detectPreviewHasDarkBackground(profile colorprofile.Profile, in io.Reader, out io.Writer) bool {
 	if dark, ok := detectDarkBackgroundFromEnv(); ok {
 		return dark
 	}
-	if profile <= colorprofile.ASCII || !previewCanQueryBackground() {
+	inFile, inOK := in.(*os.File)
+	outFile, outOK := out.(*os.File)
+	canQuery := inOK && outOK &&
+		term.IsTerminal(int(inFile.Fd())) && term.IsTerminal(int(outFile.Fd()))
+	if profile <= colorprofile.ASCII || !canQuery {
 		return true
 	}
-	return lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
+	return lipgloss.HasDarkBackground(inFile, outFile)
 }
 
-func previewCanQueryBackground() bool {
-	return term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
-}
-
-func previewColorsDisabled() bool {
-	return lipgloss.Writer.Profile <= colorprofile.ASCII
-}
-
-func writePreviewLine(w io.Writer, s string) error {
-	profiled := colorprofile.Writer{Forward: w, Profile: lipgloss.Writer.Profile}
+func (r *previewRenderer) writePreviewLine(w io.Writer, s string) error {
+	profiled := colorprofile.Writer{Forward: w, Profile: r.theme.profile}
 	_, err := fmt.Fprintln(&profiled, s)
 	return err
 }
@@ -110,7 +129,8 @@ func runPRPreview(cmd *cobra.Command, args []string, colorMode string, fzf bool)
 		return handlePreviewError(cmd, err, fzf)
 	}
 
-	if err := applyColorMode(colorMode); err != nil {
+	theme, err := resolvePreviewTheme(colorMode, cmd.InOrStdin(), cmd.OutOrStdout())
+	if err != nil {
 		return handleError(err)
 	}
 
@@ -150,7 +170,8 @@ func runPRPreview(cmd *cobra.Command, args []string, colorMode string, fzf bool)
 	}
 
 	w := cmd.OutOrStdout()
-	width := detectPreviewWidth()
+	width := detectPreviewWidth(w)
 
-	return renderPreview(w, pr, fileComments, timeline, width, colorMode)
+	renderer := &previewRenderer{logger: rt.logger, theme: theme}
+	return renderer.renderPreview(w, pr, fileComments, timeline, width)
 }

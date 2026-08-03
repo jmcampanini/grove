@@ -55,13 +55,13 @@ func TestRenderIssueComments(t *testing.T) {
 	}
 
 	t.Run("no comments renders nothing", func(t *testing.T) {
-		assert.Empty(t, renderIssueComments(nil, 80, "never"))
+		assert.Empty(t, noTTYPreviewRenderer().renderIssueComments(nil, 80))
 	})
 
 	t.Run("renders author and body", func(t *testing.T) {
-		got := renderIssueComments([]github.IssueComment{
+		got := noTTYPreviewRenderer().renderIssueComments([]github.IssueComment{
 			comment("bob", "Reproduced on macOS.", 10),
-		}, 80, "never")
+		}, 80)
 		assert.Contains(t, got, "Comments (1)")
 		assert.Contains(t, got, "@bob")
 		assert.Contains(t, got, "Reproduced on macOS.")
@@ -77,7 +77,7 @@ func TestRenderIssueComments(t *testing.T) {
 			comment("f", "sixth comment", 20),
 			comment("g", "seventh comment", 10),
 		}
-		got := renderIssueComments(comments, 80, "never")
+		got := noTTYPreviewRenderer().renderIssueComments(comments, 80)
 		assert.Contains(t, got, "Comments (7)")
 		assert.Contains(t, got, "2 earlier comments not shown")
 		assert.NotContains(t, got, "first comment")

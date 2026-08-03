@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"os/signal"
 	"syscall"
@@ -23,9 +24,10 @@ const (
 	diagnosticQuietFlag = "quiet"
 )
 
-func newRootCmd() *cobra.Command {
-	log.SetLevel(log.InfoLevel)
-
+// NewRootCommand builds a fresh grove command tree wired to the given
+// streams. Every execution gets its own tree; no state is shared across
+// constructions.
+func NewRootCommand(in io.Reader, out, errOut io.Writer) *cobra.Command {
 	root := &cobra.Command{
 		Use:           "grove",
 		Short:         "Git worktree workspace manager",
@@ -46,10 +48,15 @@ Diagnostic logging defaults to info. Pass --debug for debug logging or --quiet
 to show only errors. The flags are mutually exclusive and do not change stdout.`,
 		Version: Version,
 	}
+	root.SetIn(in)
+	root.SetOut(out)
+	root.SetErr(errOut)
 
 	registerDiagnosticFlags(root.PersistentFlags())
 	root.MarkFlagsMutuallyExclusive(diagnosticDebugFlag, diagnosticQuietFlag)
-	cobra.CheckErr(config.RegisterFlags(root.PersistentFlags()))
+	if err := config.RegisterFlags(root.PersistentFlags()); err != nil {
+		panic(err)
+	}
 
 	root.AddGroup(
 		&cobra.Group{ID: "worktree", Title: "Worktree Commands:"},
@@ -61,8 +68,6 @@ to show only errors. The flags are mutually exclusive and do not change stdout.`
 	)
 	root.SetHelpCommandGroupID("config")
 	root.SetCompletionCommandGroupID("config")
-
-	root.PersistentPreRunE = applyDiagnosticLevel
 
 	root.AddCommand(
 		newCacheCmd(),
@@ -115,15 +120,6 @@ func resolveDiagnosticLevel(flags *pflag.FlagSet) (log.Level, error) {
 	}
 }
 
-func applyDiagnosticLevel(cmd *cobra.Command, _ []string) error {
-	level, err := resolveDiagnosticLevel(cmd.Root().PersistentFlags())
-	if err != nil {
-		return err
-	}
-	log.SetLevel(level)
-	return nil
-}
-
 func preparseDiagnosticLevel(args []string) log.Level {
 	flags := pflag.NewFlagSet("diagnostic", pflag.ContinueOnError)
 	flags.ParseErrorsAllowlist.UnknownFlags = true
@@ -138,6 +134,26 @@ func preparseDiagnosticLevel(args []string) log.Level {
 	return level
 }
 
+// commandLogger builds the diagnostic logger for one command execution,
+// writing to the command's stderr at the level selected by the diagnostic
+// flags.
+func commandLogger(cmd *cobra.Command) *log.Logger {
+	level, err := resolveDiagnosticLevel(cmd.Root().PersistentFlags())
+	if err != nil {
+		level = log.InfoLevel
+	}
+	return newDiagnosticLogger(cmd.ErrOrStderr(), level)
+}
+
+func newDiagnosticLogger(w io.Writer, level log.Level) *log.Logger {
+	logger := log.NewWithOptions(w, log.Options{Level: level, ReportTimestamp: true})
+	if tee, ok := w.(*logging.Tee); ok {
+		logger.SetColorProfile(tee.Profile)
+	}
+	logger.SetStyles(diagnosticLogStyles())
+	return logger
+}
+
 func logHasDarkBackground() bool {
 	if dark, ok := detectDarkBackgroundFromEnv(); ok {
 		return dark
@@ -145,7 +161,7 @@ func logHasDarkBackground() bool {
 	return true
 }
 
-func configureLogStyles() {
+func diagnosticLogStyles() *log.Styles {
 	styles := log.DefaultStyles()
 
 	// Catppuccin Latte (light) / Mocha (dark) palette.
@@ -167,25 +183,35 @@ func configureLogStyles() {
 	styles.Levels[log.FatalLevel] = styles.Levels[log.FatalLevel].
 		Foreground(lightDarkColor(hasDarkBackground, "#8839ef", "#cba6f7"))
 
-	log.SetStyles(styles)
+	return styles
 }
 
 func executeRoot(root *cobra.Command, args []string) error {
 	root.SetArgs(args)
-	log.SetLevel(preparseDiagnosticLevel(args))
-	configureLogStyles()
-
-	if err := logging.Setup(); err != nil {
-		log.Warn("failed to set up file logging", "error", err)
-	}
-	defer logging.Close()
-
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	return root.ExecuteContext(ctx)
 }
 
-// Execute runs the root command.
+// executeWithFileLogging builds a fresh tree on the given streams, teeing
+// diagnostics (and everything else written to stderr) into the grove log
+// file, and runs it. When the log file cannot be opened, a warning is logged
+// and execution proceeds with stderr alone.
+func executeWithFileLogging(in io.Reader, out, stderr io.Writer, args []string) error {
+	errOut := stderr
+	tee, err := logging.NewTee(stderr)
+	if err != nil {
+		newDiagnosticLogger(stderr, preparseDiagnosticLevel(args)).
+			Warn("failed to set up file logging", "error", err)
+	} else {
+		errOut = tee
+		defer func() { _ = tee.Close() }()
+	}
+
+	return executeRoot(NewRootCommand(in, out, errOut), args)
+}
+
+// Execute runs the root command on the process streams.
 func Execute() error {
-	return executeRoot(newRootCmd(), os.Args[1:])
+	return executeWithFileLogging(os.Stdin, os.Stdout, os.Stderr, os.Args[1:])
 }

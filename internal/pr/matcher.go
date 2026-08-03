@@ -24,9 +24,13 @@ type Matcher struct {
 }
 
 // NewMatcher creates a new Matcher with the given PullRequestNamer.
-func NewMatcher(namer *naming.PullRequestNamer) *Matcher {
+// A nil logger falls back to the default logger.
+func NewMatcher(namer *naming.PullRequestNamer, logger *clog.Logger) *Matcher {
+	if logger == nil {
+		logger = clog.Default()
+	}
 	return &Matcher{
-		log:   clog.Default().WithPrefix("pr"),
+		log:   logger.WithPrefix("pr"),
 		namer: namer,
 	}
 }

@@ -44,6 +44,7 @@ To check out a pull request by number, use 'grove pr checkout' instead.`,
 type checkoutContext struct {
 	cfg       config.Config
 	gitClient git.Git
+	logger    *log.Logger
 }
 
 type parsedRef struct {
@@ -64,6 +65,7 @@ func runCheckout(cmd *cobra.Command, args []string) error {
 	ctx := &checkoutContext{
 		cfg:       rt.cfg,
 		gitClient: rt.gitClient,
+		logger:    rt.logger,
 	}
 
 	return executeCheckout(cmd.OutOrStdout(), ctx, args[0])
@@ -132,7 +134,7 @@ func checkoutRemoteBranch(stdout io.Writer, ctx *checkoutContext, parsed parsedR
 	}
 
 	if !exists {
-		log.WithPrefix("checkout").Info("fetching branch from remote", "remote", parsed.remoteName, "branch", parsed.branchName)
+		ctx.logger.WithPrefix("checkout").Info("fetching branch from remote", "remote", parsed.remoteName, "branch", parsed.branchName)
 		if err := ctx.gitClient.FetchRemoteBranch(parsed.remoteName, parsed.branchName, parsed.branchName); err != nil {
 			return fmt.Errorf("failed to fetch branch %q from remote %q: %w", parsed.branchName, parsed.remoteName, err)
 		}

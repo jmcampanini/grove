@@ -130,7 +130,7 @@ func TestCache_GetSet(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := t.TempDir()
 			tt.setup(t, dir)
-			c := New(dir, tt.ttl)
+			c := New(dir, tt.ttl, nil)
 
 			val, hit := c.Get(tt.key)
 			assert.Equal(t, tt.wantHit, hit)
@@ -141,7 +141,7 @@ func TestCache_GetSet(t *testing.T) {
 
 func TestCache_Set_CreatesDirectory(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "nested", "dir")
-	c := New(dir, 5*time.Minute)
+	c := New(dir, 5*time.Minute, nil)
 
 	c.Set("k", "v")
 
@@ -152,7 +152,7 @@ func TestCache_Set_CreatesDirectory(t *testing.T) {
 
 func TestCache_Set_ZeroTTL_IsNoop(t *testing.T) {
 	dir := t.TempDir()
-	c := New(dir, 0)
+	c := New(dir, 0, nil)
 
 	c.Set("k", "v")
 
@@ -163,7 +163,7 @@ func TestCache_Set_ZeroTTL_IsNoop(t *testing.T) {
 
 func TestCache_Clear(t *testing.T) {
 	dir := t.TempDir()
-	c := New(dir, 5*time.Minute)
+	c := New(dir, 5*time.Minute, nil)
 
 	c.Set("a", "1")
 	c.Set("b", "2")
@@ -176,7 +176,7 @@ func TestCache_Clear(t *testing.T) {
 
 func TestCache_Clear_EmptyDir(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "does-not-exist")
-	c := New(dir, 5*time.Minute)
+	c := New(dir, 5*time.Minute, nil)
 
 	assert.NoError(t, c.Clear())
 }

@@ -57,7 +57,7 @@ func runPrune(cmd *cobra.Command, _ []string) error {
 
 	ctx := &statusContext{
 		ghClient:         ghClient,
-		gitClient:        git.New(cmd.Context(), false, rt.mainWorktreePath, rt.cfg.Git.Timeout),
+		gitClient:        git.New(cmd.Context(), false, rt.mainWorktreePath, rt.cfg.Git.Timeout, rt.logger),
 		mainWorktreePath: rt.mainWorktreePath,
 	}
 

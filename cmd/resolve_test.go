@@ -117,6 +117,7 @@ func TestExecuteResolve(t *testing.T) {
 			var buf bytes.Buffer
 
 			ctx := &resolveContext{
+				logger:          testLogger(),
 				primaryBranches: []string{"main", "develop", "master"},
 				timeout:         timeout,
 			}

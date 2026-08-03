@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"image/color"
+	"io"
 	"os"
 	"strings"
 	"testing"
@@ -18,16 +19,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func pinTestColorProfile(t *testing.T) {
-	t.Helper()
-	origProfile := lipgloss.Writer.Profile
-	origDark := previewHasDarkBackground
-	lipgloss.Writer.Profile = colorprofile.NoTTY
-	previewHasDarkBackground = true
-	t.Cleanup(func() {
-		lipgloss.Writer.Profile = origProfile
-		previewHasDarkBackground = origDark
-	})
+func noTTYPreviewRenderer() *previewRenderer {
+	return &previewRenderer{
+		logger: testLogger(),
+		theme:  previewTheme{hasDarkBackground: true, profile: colorprofile.NoTTY},
+	}
 }
 
 func TestHandlePreviewError(t *testing.T) {
@@ -88,37 +84,61 @@ func TestPRPreviewHelpDocumentsClickableMarkdownLinks(t *testing.T) {
 func TestDetectPreviewWidth(t *testing.T) {
 	t.Run("FZF_PREVIEW_COLUMNS takes precedence", func(t *testing.T) {
 		t.Setenv("FZF_PREVIEW_COLUMNS", "120")
-		assert.Equal(t, 120, detectPreviewWidth())
+		assert.Equal(t, 120, detectPreviewWidth(io.Discard))
 	})
 
 	t.Run("invalid env falls through to terminal or default", func(t *testing.T) {
 		t.Setenv("FZF_PREVIEW_COLUMNS", "abc")
-		w := detectPreviewWidth()
+		w := detectPreviewWidth(io.Discard)
 		assert.Greater(t, w, 0)
 	})
 
 	t.Run("zero env falls through to terminal or default", func(t *testing.T) {
 		t.Setenv("FZF_PREVIEW_COLUMNS", "0")
-		w := detectPreviewWidth()
+		w := detectPreviewWidth(io.Discard)
 		assert.Greater(t, w, 0)
 	})
 
 	t.Run("no env falls through to terminal or default", func(t *testing.T) {
-		w := detectPreviewWidth()
+		w := detectPreviewWidth(io.Discard)
 		assert.Greater(t, w, 0)
 	})
 }
 
-func TestApplyColorModeNeverStripsANSI(t *testing.T) {
-	pinTestColorProfile(t)
+func TestResolvePreviewTheme(t *testing.T) {
+	t.Run("never disables colors", func(t *testing.T) {
+		theme, err := resolvePreviewTheme("never", strings.NewReader(""), io.Discard)
+		require.NoError(t, err)
+		assert.Equal(t, colorprofile.NoTTY, theme.profile)
+	})
 
-	err := applyColorMode("never")
-	require.NoError(t, err)
-	assert.Equal(t, colorprofile.NoTTY, lipgloss.Writer.Profile)
+	t.Run("always forces colors", func(t *testing.T) {
+		theme, err := resolvePreviewTheme("always", strings.NewReader(""), io.Discard)
+		require.NoError(t, err)
+		assert.Equal(t, colorprofile.ANSI256, theme.profile)
+	})
 
+	t.Run("auto with non-terminal streams disables colors and defaults to dark", func(t *testing.T) {
+		t.Setenv("CLICOLOR_FORCE", "")
+		t.Setenv("FORCE_COLOR", "")
+		t.Setenv("COLORFGBG", "")
+		var out bytes.Buffer
+		theme, err := resolvePreviewTheme("auto", strings.NewReader(""), &out)
+		require.NoError(t, err)
+		assert.True(t, theme.colorsDisabled())
+		assert.True(t, theme.hasDarkBackground)
+	})
+
+	t.Run("invalid mode errors", func(t *testing.T) {
+		_, err := resolvePreviewTheme("sometimes", strings.NewReader(""), io.Discard)
+		require.ErrorContains(t, err, "invalid color mode")
+	})
+}
+
+func TestWritePreviewLineWithoutColorsStripsANSI(t *testing.T) {
 	styled := lipgloss.NewStyle().Bold(true).Foreground(colorRed).Render("plain")
 	var buf bytes.Buffer
-	require.NoError(t, writePreviewLine(&buf, styled))
+	require.NoError(t, noTTYPreviewRenderer().writePreviewLine(&buf, styled))
 	assert.Equal(t, "plain\n", buf.String())
 	assert.NotContains(t, buf.String(), "\x1b")
 }
@@ -278,7 +298,6 @@ func TestLabelColor(t *testing.T) {
 }
 
 func TestRenderLabels(t *testing.T) {
-	pinTestColorProfile(t)
 	tests := []struct {
 		labels       []github.Label
 		name         string
@@ -394,7 +413,6 @@ func testTimelineEvents() []github.TimelineEvent {
 }
 
 func TestRenderPreview(t *testing.T) {
-	pinTestColorProfile(t)
 	pr := testPRWithExpanded()
 	pr.Files = testReviewFiles()
 	comments := testFileComments()
@@ -484,7 +502,7 @@ func TestRenderPreview(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
-			err := renderPreview(&buf, tt.pr, tt.comments, tt.timeline, 60, "auto")
+			err := noTTYPreviewRenderer().renderPreview(&buf, tt.pr, tt.comments, tt.timeline, 60)
 			require.NoError(t, err)
 
 			output := buf.String()
@@ -497,14 +515,13 @@ func TestRenderPreview(t *testing.T) {
 }
 
 func TestRenderPreviewColorNeverStripsMarkdownANSI(t *testing.T) {
-	pinTestColorProfile(t)
 	pr := testPRWithExpanded()
 	pr.Body = "## Heading\n\nSome **bold** text."
 	pr.Files = nil
 	pr.FilesChanged = 0
 
 	var buf bytes.Buffer
-	err := renderPreview(&buf, pr, nil, nil, 60, "never")
+	err := noTTYPreviewRenderer().renderPreview(&buf, pr, nil, nil, 60)
 	require.NoError(t, err)
 
 	output := buf.String()
@@ -513,12 +530,11 @@ func TestRenderPreviewColorNeverStripsMarkdownANSI(t *testing.T) {
 }
 
 func TestRenderHighActivity(t *testing.T) {
-	pinTestColorProfile(t)
 	files := testReviewFiles()
 	comments := testFileComments()
 
 	scored := scoreFiles(files, comments)
-	output, shown := renderHighActivity(scored, "", 56)
+	output, shown := noTTYPreviewRenderer().renderHighActivity(scored, "", 56)
 
 	assert.Contains(t, output, "High Activity Files")
 	assert.Contains(t, output, "server.go", "highest churn non-test file should appear")
@@ -530,13 +546,12 @@ func TestRenderHighActivity(t *testing.T) {
 	testOnlyFiles := []github.PullRequestFile{
 		{Path: "foo_test.go", Additions: 100, Deletions: 50},
 	}
-	output, shown = renderHighActivity(scoreFiles(testOnlyFiles, map[string]int{}), "", 56)
+	output, shown = noTTYPreviewRenderer().renderHighActivity(scoreFiles(testOnlyFiles, map[string]int{}), "", 56)
 	assert.Empty(t, output)
 	assert.Nil(t, shown)
 }
 
 func TestRenderFileComments(t *testing.T) {
-	pinTestColorProfile(t)
 	files := []github.PullRequestFile{
 		{Path: "with_comments.go", Additions: 10, Deletions: 5},
 		{Path: "no_comments.go", Additions: 3, Deletions: 1},
@@ -546,11 +561,11 @@ func TestRenderFileComments(t *testing.T) {
 	}
 	cw := computeFileColumnWidths(files, comments)
 
-	output := formatFileEntry(files[0], comments["with_comments.go"], "", 56, cw)
+	output := noTTYPreviewRenderer().formatFileEntry(files[0], comments["with_comments.go"], "", 56, cw)
 	assert.Contains(t, output, iconComment)
 	assert.Contains(t, output, "3")
 
-	output = formatFileEntry(files[1], comments["no_comments.go"], "", 56, cw)
+	output = noTTYPreviewRenderer().formatFileEntry(files[1], comments["no_comments.go"], "", 56, cw)
 	assert.NotContains(t, output, iconComment)
 }
 
@@ -561,8 +576,8 @@ func TestFormatFileEntryAlignment(t *testing.T) {
 	}
 	cw := computeFileColumnWidths(files, nil)
 
-	out1 := formatFileEntry(files[0], 0, "", 80, cw)
-	out2 := formatFileEntry(files[1], 0, "", 80, cw)
+	out1 := noTTYPreviewRenderer().formatFileEntry(files[0], 0, "", 80, cw)
+	out2 := noTTYPreviewRenderer().formatFileEntry(files[1], 0, "", 80, cw)
 
 	assert.Contains(t, out1, "  +3")
 	assert.Contains(t, out2, "+181")
@@ -570,34 +585,31 @@ func TestFormatFileEntryAlignment(t *testing.T) {
 	assert.Contains(t, out2, "-42")
 }
 
-func TestPreviewMarkdownStylePath(t *testing.T) {
-	pinTestColorProfile(t)
-
+func TestMarkdownStylePath(t *testing.T) {
 	tests := []struct {
-		colorMode string
 		dark      bool
 		name      string
 		profile   colorprofile.Profile
 		wantStyle string
 	}{
-		{colorMode: "auto", dark: true, name: "auto without colors uses notty", profile: colorprofile.NoTTY, wantStyle: styles.NoTTYStyle},
-		{colorMode: "always", dark: true, name: "always keeps dark style even when output profile is notty", profile: colorprofile.NoTTY, wantStyle: styles.DarkStyle},
-		{colorMode: "always", dark: false, name: "always honors light background", profile: colorprofile.ANSI256, wantStyle: styles.LightStyle},
-		{colorMode: "never", dark: false, name: "never uses notty", profile: colorprofile.ANSI256, wantStyle: styles.NoTTYStyle},
+		{dark: true, name: "no colors uses notty", profile: colorprofile.NoTTY, wantStyle: styles.NoTTYStyle},
+		{dark: true, name: "colors with dark background", profile: colorprofile.ANSI256, wantStyle: styles.DarkStyle},
+		{dark: false, name: "colors with light background", profile: colorprofile.ANSI256, wantStyle: styles.LightStyle},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			lipgloss.Writer.Profile = tt.profile
-			previewHasDarkBackground = tt.dark
+			r := &previewRenderer{
+				logger: testLogger(),
+				theme:  previewTheme{hasDarkBackground: tt.dark, profile: tt.profile},
+			}
 
-			assert.Equal(t, tt.wantStyle, previewMarkdownStylePath(tt.colorMode))
+			assert.Equal(t, tt.wantStyle, r.markdownStylePath())
 		})
 	}
 }
 
 func TestRenderBody(t *testing.T) {
-	pinTestColorProfile(t)
 	tests := []struct {
 		body         string
 		name         string
@@ -628,7 +640,7 @@ func TestRenderBody(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			output := renderBody(tt.body, 60, "auto")
+			output := noTTYPreviewRenderer().renderBody(tt.body, 60)
 			if tt.wantEmpty {
 				assert.Empty(t, output)
 			} else {
@@ -641,8 +653,6 @@ func TestRenderBody(t *testing.T) {
 }
 
 func TestRenderPreviewHandlesAdversarialMarkdown(t *testing.T) {
-	pinTestColorProfile(t)
-
 	body, err := os.ReadFile("testdata/adversarial-pr-markdown.md")
 	require.NoError(t, err)
 
@@ -659,7 +669,7 @@ func TestRenderPreviewHandlesAdversarialMarkdown(t *testing.T) {
 
 	var buf bytes.Buffer
 	require.NotPanics(t, func() {
-		err = renderPreview(&buf, pr, nil, nil, 80, "never")
+		err = noTTYPreviewRenderer().renderPreview(&buf, pr, nil, nil, 80)
 	})
 	require.NoError(t, err)
 
@@ -679,7 +689,6 @@ func TestRenderPreviewHandlesAdversarialMarkdown(t *testing.T) {
 }
 
 func TestRenderTimeline(t *testing.T) {
-	pinTestColorProfile(t)
 	pr := testPRWithExpanded()
 
 	t.Run("events are ordered chronologically", func(t *testing.T) {
@@ -689,7 +698,7 @@ func TestRenderTimeline(t *testing.T) {
 			{Actor: "merger", CreatedAt: time.Now().Add(-30 * time.Minute), Type: github.TimelineEventMerged},
 		}
 
-		output := renderTimeline(pr, timeline)
+		output := noTTYPreviewRenderer().renderTimeline(pr, timeline)
 
 		assert.Contains(t, output, "Activity")
 		assert.Contains(t, output, "opened this PR")
@@ -707,7 +716,7 @@ func TestRenderTimeline(t *testing.T) {
 	})
 
 	t.Run("empty PR and timeline returns empty", func(t *testing.T) {
-		output := renderTimeline(github.PullRequest{}, nil)
+		output := noTTYPreviewRenderer().renderTimeline(github.PullRequest{}, nil)
 		assert.Empty(t, output)
 	})
 
@@ -718,7 +727,7 @@ func TestRenderTimeline(t *testing.T) {
 			{Actor: "dev", CreatedAt: time.Now().Add(-80 * time.Minute), Details: "third", Type: github.TimelineEventCommitted},
 			{Actor: "reviewer1", CreatedAt: time.Now().Add(-1 * time.Hour), Details: "approved", Type: github.TimelineEventReviewed},
 		}
-		output := renderTimeline(pr, timeline)
+		output := noTTYPreviewRenderer().renderTimeline(pr, timeline)
 		assert.Contains(t, output, "pushed 3 commits")
 		assert.NotContains(t, output, "first")
 		assert.NotContains(t, output, "second")
@@ -737,7 +746,7 @@ func TestHighActivityIncludesCommentedFiles(t *testing.T) {
 	}
 
 	scored := scoreFiles(files, comments)
-	output, shown := renderHighActivity(scored, "", 80)
+	output, shown := noTTYPreviewRenderer().renderHighActivity(scored, "", 80)
 
 	assert.Contains(t, output, "low_churn_commented.go", "low-churn file with comments should appear")
 	assert.Contains(t, output, "High Activity Files")
@@ -750,10 +759,9 @@ func TestHighActivityIncludesCommentedFiles(t *testing.T) {
 }
 
 func TestRenderStateBadge(t *testing.T) {
-	pinTestColorProfile(t)
 	pr := testPRWithExpanded()
 
-	output := renderHeader(pr)
+	output := noTTYPreviewRenderer().renderHeader(pr)
 	assert.Contains(t, output, "OPEN")
 }
 
@@ -794,12 +802,11 @@ func TestFileDiffURL(t *testing.T) {
 }
 
 func TestHighActivityCountInHeader(t *testing.T) {
-	pinTestColorProfile(t)
 	files := testReviewFiles()
 	comments := testFileComments()
 
 	scored := scoreFiles(files, comments)
-	output, shown := renderHighActivity(scored, "", 56)
+	output, shown := noTTYPreviewRenderer().renderHighActivity(scored, "", 56)
 
 	assert.Contains(t, output, fmt.Sprintf("High Activity Files (%d)", len(shown)))
 }

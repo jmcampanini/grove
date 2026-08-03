@@ -26,14 +26,18 @@ type GitCli struct {
 var _ Git = &GitCli{}
 
 // New creates a new GitCli instance that executes git commands in the specified working directory.
-func New(ctx context.Context, dryRun bool, workingDir string, timeout time.Duration) Git {
+// A nil logger falls back to the default logger.
+func New(ctx context.Context, dryRun bool, workingDir string, timeout time.Duration, logger *clog.Logger) Git {
 	if ctx == nil {
 		ctx = context.Background()
+	}
+	if logger == nil {
+		logger = clog.Default()
 	}
 	return &GitCli{
 		ctx:        ctx,
 		dryRun:     dryRun,
-		log:        clog.Default().WithPrefix("git"),
+		log:        logger.WithPrefix("git"),
 		timeout:    timeout,
 		workingDir: workingDir,
 	}

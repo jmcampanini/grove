@@ -100,7 +100,7 @@ func TestRunGhProcessContract(t *testing.T) {
 			defer cancel()
 
 			var logs bytes.Buffer
-			client := New(ctx, dir, tt.timeout, nil).(*GitHubCli)
+			client := New(ctx, dir, tt.timeout, nil, nil).(*GitHubCli)
 			client.log = clog.New(&logs)
 			output, err := client.runGhProcess(tt.mode)
 			if tt.assertError != nil {
@@ -121,7 +121,7 @@ func TestRunGhProcessContract(t *testing.T) {
 func TestRunGhProcessExecutableNotFound(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("PATH", dir)
-	client := New(context.Background(), dir, time.Second, nil).(*GitHubCli)
+	client := New(context.Background(), dir, time.Second, nil, nil).(*GitHubCli)
 	client.log = clog.New(io.Discard)
 
 	_, err := client.runGhProcess("version")

@@ -52,7 +52,7 @@ func runRemove(cmd *cobra.Command, args []string, force, keepBranch bool) error 
 	// Root the git client at mainWorktreePath so that post-removal commands
 	// (DeleteBranch, PruneWorktrees) still work even when cwd is the removed worktree.
 	ctx := &removeContext{
-		gitClient:        git.New(cmd.Context(), false, rt.mainWorktreePath, rt.cfg.Git.Timeout),
+		gitClient:        git.New(cmd.Context(), false, rt.mainWorktreePath, rt.cfg.Git.Timeout, rt.logger),
 		mainWorktreePath: rt.mainWorktreePath,
 	}
 

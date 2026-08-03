@@ -37,6 +37,7 @@ type namerContext struct {
 
 func loadNamingConfig(cmd *cobra.Command) (config.Config, error) {
 	ctx := cmd.Context()
+	logger := commandLogger(cmd)
 	cwd, err := os.Getwd()
 	if err != nil {
 		return config.Config{}, fmt.Errorf("failed to get current directory: %w", err)
@@ -48,7 +49,7 @@ func loadNamingConfig(cmd *cobra.Command) (config.Config, error) {
 	}
 
 	defaultTimeout := config.DefaultConfig().Git.Timeout
-	g := git.New(ctx, false, cwd, defaultTimeout)
+	g := git.New(ctx, false, cwd, defaultTimeout, logger)
 
 	// Unlike loadCommandRuntime, git errors (timeout, corrupt index) are treated
 	// the same as "not in a repo" so the namer can degrade gracefully to defaults.
@@ -57,12 +58,12 @@ func loadNamingConfig(cmd *cobra.Command) (config.Config, error) {
 		if mainPath, gitErr := g.GetMainWorktreePath(); gitErr == nil {
 			paths = config.ConfigPaths(cwd, root, mainPath, homeDir)
 		} else {
-			log.Debug("namer: failed to get main worktree path, using worktree root only", "err", gitErr)
+			logger.Debug("namer: failed to get main worktree path, using worktree root only", "err", gitErr)
 			paths = config.ConfigPaths(cwd, root, root, homeDir)
 		}
 	} else {
-		log.Debug("namer: not in a git repository, attempting workspace root detection", "cwd", cwd)
-		paths = resolveNamerConfigPaths(ctx, cwd, homeDir, paths, defaultTimeout)
+		logger.Debug("namer: not in a git repository, attempting workspace root detection", "cwd", cwd)
+		paths = resolveNamerConfigPaths(ctx, logger, cwd, homeDir, paths, defaultTimeout)
 	}
 
 	cfg, _, err := config.LoadFilesWithFlags(paths, cmd.Root().PersistentFlags())
@@ -73,23 +74,23 @@ func loadNamingConfig(cmd *cobra.Command) (config.Config, error) {
 	return cfg, nil
 }
 
-func resolveNamerConfigPaths(ctx context.Context, cwd, homeDir string, fallback []string, timeout time.Duration) []string {
+func resolveNamerConfigPaths(ctx context.Context, logger *log.Logger, cwd, homeDir string, fallback []string, timeout time.Duration) []string {
 	bootstrapCfg, _, err := config.LoadFiles(fallback)
 	if err != nil {
-		log.Debug("namer: failed to load bootstrap config", "err", err)
+		logger.Debug("namer: failed to load bootstrap config", "err", err)
 		return fallback
 	}
 
-	wsRoot, err := resolveWorkspaceRoot(ctx, cwd, bootstrapCfg.Workspace.PrimaryBranches, timeout)
+	wsRoot, err := resolveWorkspaceRoot(ctx, logger, cwd, bootstrapCfg.Workspace.PrimaryBranches, timeout)
 	if err != nil {
-		log.Debug("namer: workspace root detection failed, using bootstrap config", "err", err)
+		logger.Debug("namer: workspace root detection failed, using bootstrap config", "err", err)
 		return fallback
 	}
 
-	wsGit := git.New(ctx, false, wsRoot, timeout)
+	wsGit := git.New(ctx, false, wsRoot, timeout, logger)
 	mainPath, err := wsGit.GetMainWorktreePath()
 	if err != nil {
-		log.Debug("namer: failed to get main worktree path from workspace root", "err", err)
+		logger.Debug("namer: failed to get main worktree path from workspace root", "err", err)
 		return fallback
 	}
 

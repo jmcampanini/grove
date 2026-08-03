@@ -519,6 +519,7 @@ func TestCheckoutPRWorktree(t *testing.T) {
 				cfg:       tt.cfg,
 				ghClient:  &mockGitHub{},
 				gitClient: tt.gitMock,
+				logger:    testLogger(),
 			}
 
 			err := checkoutPRWorktree(&stdout, ctx, tt.prInfo)
@@ -554,6 +555,7 @@ func TestCheckoutPRWorktreeDirectBranchMatch(t *testing.T) {
 		cfg:       defaultTestConfig(),
 		ghClient:  &mockGitHub{},
 		gitClient: gitMock,
+		logger:    testLogger(),
 	}
 
 	prInfo := github.PullRequest{

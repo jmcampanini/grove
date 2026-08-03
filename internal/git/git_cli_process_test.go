@@ -100,7 +100,7 @@ func TestExecuteGitCommandProcessContract(t *testing.T) {
 			defer cancel()
 
 			var logs bytes.Buffer
-			client := New(ctx, false, dir, tt.timeout).(*GitCli)
+			client := New(ctx, false, dir, tt.timeout, nil).(*GitCli)
 			client.log = clog.New(&logs)
 			output, err := client.executeGitCommand(tt.mode)
 			if tt.assertError != nil {
@@ -121,7 +121,7 @@ func TestExecuteGitCommandProcessContract(t *testing.T) {
 func TestExecuteGitCommandExecutableNotFound(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("PATH", dir)
-	client := New(context.Background(), false, dir, time.Second).(*GitCli)
+	client := New(context.Background(), false, dir, time.Second, nil).(*GitCli)
 	client.log = clog.New(io.Discard)
 
 	_, err := client.executeGitCommand("status")
