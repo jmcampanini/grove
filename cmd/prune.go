@@ -140,18 +140,9 @@ func executePrune(w io.Writer, ctx *statusContext) error {
 }
 
 func gatherPruneStatuses(ctx *statusContext) ([]worktreeStatus, error) {
-	worktrees, err := ctx.gitClient.ListWorktrees()
+	worktrees, branchMap, err := loadWorktreesAndBranches(ctx.gitClient)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list worktrees: %w", err)
-	}
-	branches, err := ctx.gitClient.ListLocalBranches()
-	if err != nil {
-		return nil, fmt.Errorf("failed to list branches: %w", err)
-	}
-
-	branchMap := make(map[string]git.LocalBranch, len(branches))
-	for _, branch := range branches {
-		branchMap[branch.Name] = branch
+		return nil, err
 	}
 
 	statuses := make([]worktreeStatus, 0, len(worktrees))
@@ -295,7 +286,6 @@ func classifyPrunable(ws worktreeStatus, remoteBranches map[string]bool) (pruneE
 type pruneState struct {
 	description string
 	evidence    pruneEvidence
-	prunable    bool
 }
 
 func revalidatePrunable(ctx *statusContext, candidate prunable) (string, bool, error) {
@@ -311,7 +301,7 @@ func revalidatePrunable(ctx *statusContext, candidate prunable) (string, bool, e
 	if err != nil {
 		return "", false, err
 	}
-	if !state.prunable || state.evidence != candidate.evidence {
+	if state.evidence != candidate.evidence {
 		return state.description, false, nil
 	}
 
@@ -426,7 +416,7 @@ func currentPruneState(ctx *statusContext, candidate prunable) (pruneState, erro
 	if _, err := os.Stat(candidate.path); err != nil {
 		if os.IsNotExist(err) {
 			evidence := pruneEvidence{kind: pruneEvidenceOrphaned}
-			return pruneState{description: evidence.String(), evidence: evidence, prunable: true}, nil
+			return pruneState{description: evidence.String(), evidence: evidence}, nil
 		}
 		return pruneState{}, fmt.Errorf("failed to inspect worktree %q: %w", candidate.name, err)
 	}
@@ -455,7 +445,7 @@ func currentPruneState(ctx *statusContext, candidate prunable) (pruneState, erro
 	ws.pr = pr
 
 	if evidence, ok := classifyPrunable(ws, nil); ok && evidence.kind == pruneEvidencePR {
-		return pruneState{description: evidence.String(), evidence: evidence, prunable: true}, nil
+		return pruneState{description: evidence.String(), evidence: evidence}, nil
 	}
 
 	remoteBranches, err := buildRemoteBranchSet(ctx.gitClient)
@@ -464,7 +454,7 @@ func currentPruneState(ctx *statusContext, candidate prunable) (pruneState, erro
 	}
 	evidence, ok := classifyPrunable(ws, remoteBranches)
 	if ok {
-		return pruneState{description: evidence.String(), evidence: evidence, prunable: true}, nil
+		return pruneState{description: evidence.String(), evidence: evidence}, nil
 	}
 	return pruneState{description: describeCurrentPruneState(ws, remoteBranches)}, nil
 }
@@ -657,12 +647,5 @@ func removeOrphanedWorktree(gitClient git.Git, path, branchName string) error {
 	if err := gitClient.RemoveWorktree(path, true); err != nil {
 		return fmt.Errorf("failed to remove orphaned worktree %q: %w", filepath.Base(path), err)
 	}
-	if branchName != "" {
-		if err := gitClient.DeleteBranch(branchName, true); err != nil {
-			if !strings.Contains(err.Error(), "not found") {
-				return fmt.Errorf("failed to delete branch %q: %w", branchName, err)
-			}
-		}
-	}
-	return nil
+	return deleteBranchIfExists(gitClient, branchName)
 }

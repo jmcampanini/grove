@@ -75,19 +75,9 @@ func runStatus(cmd *cobra.Command, _ []string) error {
 }
 
 func gatherStatuses(ctx *statusContext) ([]worktreeStatus, error) {
-	worktrees, err := ctx.gitClient.ListWorktrees()
+	worktrees, branchMap, err := loadWorktreesAndBranches(ctx.gitClient)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list worktrees: %w", err)
-	}
-
-	branches, err := ctx.gitClient.ListLocalBranches()
-	if err != nil {
-		return nil, fmt.Errorf("failed to list branches: %w", err)
-	}
-
-	branchMap := make(map[string]git.LocalBranch, len(branches))
-	for _, b := range branches {
-		branchMap[b.Name] = b
+		return nil, err
 	}
 
 	var statuses []worktreeStatus
@@ -97,6 +87,23 @@ func gatherStatuses(ctx *statusContext) ([]worktreeStatus, error) {
 	}
 
 	return statuses, nil
+}
+
+func loadWorktreesAndBranches(gitClient git.Git) ([]git.Worktree, map[string]git.LocalBranch, error) {
+	worktrees, err := gitClient.ListWorktrees()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to list worktrees: %w", err)
+	}
+	branches, err := gitClient.ListLocalBranches()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to list branches: %w", err)
+	}
+
+	branchMap := make(map[string]git.LocalBranch, len(branches))
+	for _, branch := range branches {
+		branchMap[branch.Name] = branch
+	}
+	return worktrees, branchMap, nil
 }
 
 func buildWorktreeStatus(ctx *statusContext, wt git.Worktree, branchMap map[string]git.LocalBranch) worktreeStatus {
