@@ -157,8 +157,5 @@ func removeWorktreeAndBranch(gitClient git.Git, absPath, branchName string) erro
 			}
 		}
 	}
-	if err := gitClient.PruneWorktrees(); err != nil {
-		return fmt.Errorf("failed to prune worktrees: %w", err)
-	}
 	return nil
 }
