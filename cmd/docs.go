@@ -31,7 +31,7 @@ Common commands:
 - grove pr checkout NUMBER: check out a pull request as a worktree.
 - grove issue start NUMBER: create a branch and worktree to work on an issue.
 - grove status: list workspace worktrees and branch state.
-- grove sync: update local branch metadata and prune stale refs.
+- grove sync: fetch and hard-reset the current branch to its upstream, discarding local changes after confirmation.
 - grove config: print the effective TOML configuration.
 - grove config --provenance: print field-level configuration sources.
 
