@@ -6,7 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/jmcampanini/grove-cli/internal/git"
 	"github.com/jmcampanini/grove-cli/internal/github"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -99,6 +101,18 @@ func TestFindPrunable(t *testing.T) {
 			wantCount: 0,
 		},
 		{
+			name: "locked worktree is never prunable",
+			statuses: []worktreeStatus{
+				{
+					absPath:    filepath.Join(workspace, "wt-merged"),
+					branchName: "feature/merged",
+					locked:     true,
+					pr:         &github.PullRequest{Number: 10, State: github.PRStateMerged},
+				},
+			},
+			wantCount: 0,
+		},
+		{
 			name: "main worktree is never prunable",
 			statuses: []worktreeStatus{
 				{
@@ -164,154 +178,474 @@ func TestFindPrunable(t *testing.T) {
 
 			if tt.wantReasons != nil {
 				for i, reason := range tt.wantReasons {
-					assert.Equal(t, reason, result[i].reason, "reason[%d]", i)
+					assert.Equal(t, reason, result[i].evidence.String(), "reason[%d]", i)
 				}
 			}
 		})
 	}
 }
 
-func TestPruneReason(t *testing.T) {
-	wtDir := t.TempDir()
+func TestFindPrunableCapturesLocalState(t *testing.T) {
+	path := t.TempDir()
+	prunables := findPrunable([]worktreeStatus{
+		{
+			absPath:    path,
+			branchName: "feature/test",
+			dirty:      true,
+			headSHA:    "abc123",
+			pr:         &github.PullRequest{Number: 10, State: github.PRStateMerged},
+		},
+	}, nil)
 
-	remoteBranches := map[string]bool{
-		"origin/main": true,
+	require.Len(t, prunables, 1)
+	assert.True(t, prunables[0].dirty)
+	assert.Equal(t, "abc123", prunables[0].headSHA)
+}
+
+func TestExecutePruneFailsBeforePromptWhenGitHubUnavailable(t *testing.T) {
+	path := t.TempDir()
+	commit := git.NewCommit("abc123", "test", time.Unix(0, 0), "tester")
+	branch := git.NewLocalBranch("feature/test", "origin/feature/test", path, true, 0, 0, commit)
+	gitMock := &mockGit{
+		isWorktreeDirtyFn: func(string) (bool, error) { return false, nil },
+		listLocalBranchesFn: func() ([]git.LocalBranch, error) {
+			return []git.LocalBranch{branch}, nil
+		},
+		listWorktreesFn: func() ([]git.Worktree, error) {
+			return []git.Worktree{{AbsolutePath: path, Ref: &branch}}, nil
+		},
+	}
+	ghMock := &mockGitHub{
+		getPullRequestByBranchFn: func(string) (*github.PullRequest, error) {
+			return nil, errors.New("gh unavailable")
+		},
+	}
+	ctx := &statusContext{
+		ghClient:         ghMock,
+		gitClient:        gitMock,
+		mainWorktreePath: filepath.Join(filepath.Dir(path), "main"),
 	}
 
+	err := executePrune(&bytes.Buffer{}, ctx)
+	require.ErrorContains(t, err, `failed to get PR state for branch "feature/test": gh unavailable`)
+}
+
+func TestExecutePruneReportsLockedWorktree(t *testing.T) {
+	path := t.TempDir()
+	commit := git.NewCommit("abc123", "test", time.Unix(0, 0), "tester")
+	branch := git.NewLocalBranch("feature/test", "", path, true, 0, 0, commit)
+	gitMock := &mockGit{
+		listLocalBranchesFn: func() ([]git.LocalBranch, error) {
+			return []git.LocalBranch{branch}, nil
+		},
+		listWorktreesFn: func() ([]git.Worktree, error) {
+			return []git.Worktree{{AbsolutePath: path, Locked: true, Ref: &branch}}, nil
+		},
+	}
+	ghCalls := 0
+	ghMock := &mockGitHub{
+		getPullRequestByBranchFn: func(string) (*github.PullRequest, error) {
+			ghCalls++
+			return nil, nil
+		},
+	}
+	ctx := &statusContext{
+		ghClient:         ghMock,
+		gitClient:        gitMock,
+		mainWorktreePath: filepath.Join(filepath.Dir(path), "main"),
+	}
+
+	var output bytes.Buffer
+	require.NoError(t, executePrune(&output, ctx))
+	assert.Zero(t, ghCalls)
+	assert.Contains(t, output.String(), "Locked worktrees excluded from prune:")
+	assert.Contains(t, output.String(), filepath.Base(path)+"  feature/test  (locked)")
+	assert.Contains(t, output.String(), "Nothing to prune.")
+}
+
+func TestRevalidatePrunable(t *testing.T) {
 	tests := []struct {
-		name   string
-		status worktreeStatus
-		want   string
+		branchAfterGitHub   string
+		candidateEvidence   pruneEvidence
+		currentBranch       string
+		currentDirty        bool
+		currentHead         string
+		currentPR           *github.PullRequest
+		currentUpstream     string
+		dirtyAfterGitHub    bool
+		ghErr               error
+		headAfterGitHub     string
+		lockedAfterGitHub   bool
+		name                string
+		pathMissing         bool
+		registered          bool
+		remoteExists        bool
+		upstreamAfterGitHub string
+		wantCurrent         string
+		wantErr             string
+		wantUnchanged       bool
 	}{
 		{
-			name: "merged PR",
-			status: worktreeStatus{
-				absPath: wtDir,
-				pr:      &github.PullRequest{Number: 5, State: github.PRStateMerged},
-			},
-			want: "PR #5 merged",
+			candidateEvidence: pruneEvidence{kind: pruneEvidencePR, prNumber: 10, prState: github.PRStateMerged},
+			currentBranch:     "feature/test",
+			currentPR:         &github.PullRequest{Number: 10, State: github.PRStateMerged},
+			name:              "unchanged merged PR",
+			registered:        true,
+			wantCurrent:       "PR #10 merged",
+			wantUnchanged:     true,
 		},
 		{
-			name: "closed PR",
-			status: worktreeStatus{
-				absPath: wtDir,
-				pr:      &github.PullRequest{Number: 7, State: github.PRStateClosed},
-			},
-			want: "PR #7 closed",
+			candidateEvidence: pruneEvidence{kind: pruneEvidencePR, prNumber: 10, prState: github.PRStateClosed},
+			currentBranch:     "feature/test",
+			currentPR:         &github.PullRequest{Number: 10, State: github.PRStateOpen},
+			name:              "reopened PR",
+			registered:        true,
+			wantCurrent:       "PR #10 open",
 		},
 		{
-			name: "open PR not prunable",
-			status: worktreeStatus{
-				absPath: wtDir,
-				pr:      &github.PullRequest{Number: 8, State: github.PRStateOpen},
-			},
-			want: "",
+			candidateEvidence: pruneEvidence{kind: pruneEvidencePR, prNumber: 10, prState: github.PRStateMerged},
+			currentBranch:     "feature/test",
+			currentPR:         &github.PullRequest{Number: 15, State: github.PRStateMerged},
+			name:              "branch reused by different merged PR",
+			registered:        true,
+			wantCurrent:       "PR #15 merged",
 		},
 		{
-			name: "upstream gone",
-			status: worktreeStatus{
-				absPath:  wtDir,
-				tracking: trackingInfo{upstream: "origin/feature/gone"},
-			},
-			want: "upstream gone",
+			candidateEvidence: pruneEvidence{kind: pruneEvidencePR, prNumber: 10, prState: github.PRStateClosed},
+			currentBranch:     "feature/test",
+			currentPR:         &github.PullRequest{Number: 10, State: github.PRStateOpen},
+			currentUpstream:   "origin/feature/test",
+			name:              "reason changes from closed PR to upstream gone",
+			registered:        true,
+			wantCurrent:       "upstream gone",
 		},
 		{
-			name: "upstream exists",
-			status: worktreeStatus{
-				absPath:  wtDir,
-				tracking: trackingInfo{upstream: "origin/main"},
-			},
-			want: "",
+			candidateEvidence: pruneEvidence{kind: pruneEvidenceUpstreamGone, upstream: "origin/feature/test"},
+			currentBranch:     "feature/test",
+			currentUpstream:   "origin/feature/test",
+			name:              "unchanged missing upstream",
+			registered:        true,
+			wantCurrent:       "upstream gone",
+			wantUnchanged:     true,
 		},
 		{
-			name: "no tracking no PR",
-			status: worktreeStatus{
-				absPath: wtDir,
-			},
-			want: "",
+			candidateEvidence: pruneEvidence{kind: pruneEvidenceUpstreamGone, upstream: "origin/feature/test"},
+			currentBranch:     "feature/test",
+			currentUpstream:   "origin/feature/test",
+			name:              "upstream reappears",
+			registered:        true,
+			remoteExists:      true,
+			wantCurrent:       `upstream "origin/feature/test" exists`,
 		},
 		{
-			name: "orphaned directory",
-			status: worktreeStatus{
-				absPath: "/nonexistent/wt-orphaned",
-			},
-			want: "orphaned",
+			candidateEvidence: pruneEvidence{kind: pruneEvidencePR, prNumber: 10, prState: github.PRStateMerged},
+			currentBranch:     "feature/reused",
+			name:              "path maps to another branch",
+			registered:        true,
+			wantCurrent:       `path now maps to branch "feature/reused"`,
+		},
+		{
+			candidateEvidence: pruneEvidence{kind: pruneEvidenceOrphaned},
+			currentBranch:     "feature/test",
+			name:              "unchanged orphan",
+			pathMissing:       true,
+			registered:        true,
+			wantCurrent:       "orphaned",
+			wantUnchanged:     true,
+		},
+		{
+			candidateEvidence: pruneEvidence{kind: pruneEvidencePR, prNumber: 10, prState: github.PRStateMerged},
+			currentBranch:     "feature/test",
+			name:              "worktree no longer registered",
+			wantCurrent:       "worktree is no longer registered",
+		},
+		{
+			candidateEvidence: pruneEvidence{kind: pruneEvidencePR, prNumber: 10, prState: github.PRStateMerged},
+			currentBranch:     "feature/test",
+			ghErr:             errors.New("gh timed out"),
+			name:              "GitHub lookup error",
+			registered:        true,
+			wantErr:           "failed to refresh PR state",
+		},
+		{
+			branchAfterGitHub: "feature/reused",
+			candidateEvidence: pruneEvidence{kind: pruneEvidencePR, prNumber: 10, prState: github.PRStateMerged},
+			currentBranch:     "feature/test",
+			currentPR:         &github.PullRequest{Number: 10, State: github.PRStateMerged},
+			name:              "path changes branch during GitHub lookup",
+			registered:        true,
+			wantCurrent:       `path now maps to branch "feature/reused"`,
+		},
+		{
+			candidateEvidence:   pruneEvidence{kind: pruneEvidenceUpstreamGone, upstream: "origin/feature/test"},
+			currentBranch:       "feature/test",
+			currentUpstream:     "origin/feature/test",
+			name:                "upstream changes during GitHub lookup",
+			registered:          true,
+			upstreamAfterGitHub: "origin/replacement",
+			wantCurrent:         `upstream is now "origin/replacement"`,
+		},
+		{
+			candidateEvidence: pruneEvidence{kind: pruneEvidencePR, prNumber: 10, prState: github.PRStateMerged},
+			currentBranch:     "feature/test",
+			currentDirty:      true,
+			name:              "worktree becomes dirty before revalidation",
+			registered:        true,
+			wantCurrent:       "worktree has uncommitted changes",
+		},
+		{
+			candidateEvidence: pruneEvidence{kind: pruneEvidencePR, prNumber: 10, prState: github.PRStateMerged},
+			currentBranch:     "feature/test",
+			currentPR:         &github.PullRequest{Number: 10, State: github.PRStateMerged},
+			dirtyAfterGitHub:  true,
+			name:              "worktree becomes dirty during GitHub lookup",
+			registered:        true,
+			wantCurrent:       "worktree has uncommitted changes",
+		},
+		{
+			candidateEvidence: pruneEvidence{kind: pruneEvidencePR, prNumber: 10, prState: github.PRStateMerged},
+			currentBranch:     "feature/test",
+			currentHead:       "def456",
+			name:              "HEAD changes before revalidation",
+			registered:        true,
+			wantCurrent:       "HEAD changed from abc123 to def456",
+		},
+		{
+			candidateEvidence: pruneEvidence{kind: pruneEvidencePR, prNumber: 10, prState: github.PRStateMerged},
+			currentBranch:     "feature/test",
+			currentPR:         &github.PullRequest{Number: 10, State: github.PRStateMerged},
+			headAfterGitHub:   "def456",
+			name:              "HEAD changes during GitHub lookup",
+			registered:        true,
+			wantCurrent:       "HEAD changed from abc123 to def456",
+		},
+		{
+			candidateEvidence: pruneEvidence{kind: pruneEvidencePR, prNumber: 10, prState: github.PRStateMerged},
+			currentBranch:     "feature/test",
+			currentPR:         &github.PullRequest{Number: 10, State: github.PRStateMerged},
+			lockedAfterGitHub: true,
+			name:              "worktree is locked during GitHub lookup",
+			registered:        true,
+			wantCurrent:       "worktree is locked",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := pruneReason(tt.status, remoteBranches)
-			assert.Equal(t, tt.want, got)
+			workspace := t.TempDir()
+			path := filepath.Join(workspace, "wt-test")
+			require.NoError(t, os.Mkdir(path, 0o755))
+			if tt.pathMissing {
+				require.NoError(t, os.Remove(path))
+			}
+
+			currentBranch := tt.currentBranch
+			currentDirty := tt.currentDirty
+			currentHead := tt.currentHead
+			if currentHead == "" {
+				currentHead = "abc123"
+			}
+			currentLocked := false
+			currentUpstream := tt.currentUpstream
+			makeCommit := func() git.Commit {
+				return git.NewCommit(currentHead, "test", time.Unix(0, 0), "tester")
+			}
+			makeBranch := func() git.LocalBranch {
+				return git.NewLocalBranch(currentBranch, currentUpstream, path, true, 0, 0, makeCommit())
+			}
+
+			gitMock := &mockGit{
+				isWorktreeDirtyFn: func(string) (bool, error) {
+					return currentDirty, nil
+				},
+				listLocalBranchesFn: func() ([]git.LocalBranch, error) {
+					return []git.LocalBranch{makeBranch()}, nil
+				},
+				listRemoteBranchesFn: func(remote string) ([]git.RemoteBranch, error) {
+					if tt.remoteExists && remote == "origin" {
+						return []git.RemoteBranch{git.NewRemoteBranch("feature/test", "origin", makeCommit())}, nil
+					}
+					return nil, nil
+				},
+				listWorktreesFn: func() ([]git.Worktree, error) {
+					if !tt.registered {
+						return nil, nil
+					}
+					branch := makeBranch()
+					return []git.Worktree{{AbsolutePath: path, Locked: currentLocked, Ref: &branch}}, nil
+				},
+			}
+			ghMock := &mockGitHub{
+				getPullRequestByBranchFn: func(string) (*github.PullRequest, error) {
+					if tt.branchAfterGitHub != "" {
+						currentBranch = tt.branchAfterGitHub
+					}
+					if tt.dirtyAfterGitHub {
+						currentDirty = true
+					}
+					if tt.headAfterGitHub != "" {
+						currentHead = tt.headAfterGitHub
+					}
+					if tt.lockedAfterGitHub {
+						currentLocked = true
+					}
+					if tt.upstreamAfterGitHub != "" {
+						currentUpstream = tt.upstreamAfterGitHub
+					}
+					return tt.currentPR, tt.ghErr
+				},
+			}
+			ctx := &statusContext{
+				ghClient:         ghMock,
+				gitClient:        gitMock,
+				mainWorktreePath: filepath.Join(workspace, "main"),
+			}
+			candidate := prunable{
+				branchName: "feature/test",
+				evidence:   tt.candidateEvidence,
+				headSHA:    "abc123",
+				name:       "wt-test",
+				path:       path,
+			}
+
+			current, unchanged, err := revalidatePrunable(ctx, candidate)
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				assert.False(t, unchanged)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantCurrent, current)
+			assert.Equal(t, tt.wantUnchanged, unchanged)
 		})
 	}
 }
 
 func TestExecuteRemovals(t *testing.T) {
+	upstreamEvidence := func(branch string) pruneEvidence {
+		return pruneEvidence{kind: pruneEvidenceUpstreamGone, upstream: "origin/" + branch}
+	}
+
 	tests := []struct {
-		deleteBranchErr  error
+		changed          map[string]string
 		name             string
 		prunables        []prunable
-		pruneWorktreeErr error
-		removeErr        error
+		removeErr        map[string]error
+		revalidationErr  map[string]error
 		wantContains     []string
 		wantErr          bool
 		wantErrContain   string
+		wantRemovedPaths []string
 	}{
 		{
 			name: "successful removal",
 			prunables: []prunable{
-				{branchName: "feature/test", name: "wt-test", path: "/workspace/wt-test", reason: "upstream gone"},
+				{branchName: "feature/test", evidence: upstreamEvidence("feature/test"), name: "wt-test", path: "/workspace/wt-test"},
 			},
-			wantContains: []string{"wt-test", "feature/test", "upstream gone", "1 removed"},
+			wantContains:     []string{"wt-test", "feature/test", "upstream gone", "1 removed"},
+			wantRemovedPaths: []string{"/workspace/wt-test"},
 		},
 		{
 			name: "multiple removals",
 			prunables: []prunable{
-				{branchName: "feature/a", name: "wt-a", path: "/workspace/wt-a", reason: "upstream gone"},
-				{branchName: "feature/b", name: "wt-b", path: "/workspace/wt-b", reason: "PR #5 merged"},
+				{branchName: "feature/a", evidence: upstreamEvidence("feature/a"), name: "wt-a", path: "/workspace/wt-a"},
+				{
+					branchName: "feature/b",
+					evidence:   pruneEvidence{kind: pruneEvidencePR, prNumber: 5, prState: github.PRStateMerged},
+					name:       "wt-b",
+					path:       "/workspace/wt-b",
+				},
 			},
-			wantContains: []string{"wt-a", "wt-b", "2 removed"},
+			wantContains:     []string{"wt-a", "wt-b", "2 removed"},
+			wantRemovedPaths: []string{"/workspace/wt-a", "/workspace/wt-b"},
+		},
+		{
+			changed: map[string]string{
+				"/workspace/wt-changed": "PR #10 open",
+			},
+			name: "changed candidate is skipped while another is removed",
+			prunables: []prunable{
+				{
+					branchName: "feature/changed",
+					evidence:   pruneEvidence{kind: pruneEvidencePR, prNumber: 10, prState: github.PRStateMerged},
+					name:       "wt-changed",
+					path:       "/workspace/wt-changed",
+				},
+				{branchName: "feature/keep", evidence: upstreamEvidence("feature/keep"), name: "wt-keep", path: "/workspace/wt-keep"},
+			},
+			wantContains: []string{
+				"skipped: was PR #10 merged; current: PR #10 open; rerun grove prune",
+				"1 removed",
+				"1 skipped",
+			},
+			wantRemovedPaths: []string{"/workspace/wt-keep"},
+		},
+		{
+			name: "revalidation error fails while another is removed",
+			prunables: []prunable{
+				{branchName: "feature/fail", evidence: upstreamEvidence("feature/fail"), name: "wt-fail", path: "/workspace/wt-fail"},
+				{branchName: "feature/keep", evidence: upstreamEvidence("feature/keep"), name: "wt-keep", path: "/workspace/wt-keep"},
+			},
+			revalidationErr: map[string]error{
+				"/workspace/wt-fail": errors.New("gh timed out"),
+			},
+			wantContains:     []string{"wt-fail", "revalidation failed: gh timed out", "1 removed", "1 failed"},
+			wantErr:          true,
+			wantErrContain:   "prune failed for 1 selected worktree",
+			wantRemovedPaths: []string{"/workspace/wt-keep"},
 		},
 		{
 			name: "removal error is reported",
 			prunables: []prunable{
-				{branchName: "feature/fail", name: "wt-fail", path: "/workspace/wt-fail", reason: "upstream gone"},
+				{branchName: "feature/fail", evidence: upstreamEvidence("feature/fail"), name: "wt-fail", path: "/workspace/wt-fail"},
 			},
-			removeErr:      errors.New("permission denied"),
-			wantErr:        true,
-			wantErrContain: "1 removal(s) failed",
+			removeErr: map[string]error{
+				"/workspace/wt-fail": errors.New("permission denied"),
+			},
 			wantContains:   []string{"wt-fail", "permission denied", "1 failed"},
+			wantErr:        true,
+			wantErrContain: "prune failed for 1 selected worktree",
 		},
 		{
-			name: "orphaned worktree uses prune path",
+			name: "orphaned worktree uses targeted removal",
 			prunables: []prunable{
-				{branchName: "feature/orphan", name: "wt-orphan", path: "/workspace/wt-orphan", reason: "orphaned"},
+				{
+					branchName: "feature/orphan",
+					evidence:   pruneEvidence{kind: pruneEvidenceOrphaned},
+					name:       "wt-orphan",
+					path:       "/workspace/wt-orphan",
+				},
 			},
-			wantContains: []string{"wt-orphan", "orphaned", "1 removed"},
-		},
-		{
-			name: "orphaned prune error is reported",
-			prunables: []prunable{
-				{branchName: "feature/orphan", name: "wt-orphan", path: "/workspace/wt-orphan", reason: "orphaned"},
-			},
-			pruneWorktreeErr: errors.New("prune failed"),
-			wantErr:          true,
-			wantErrContain:   "1 removal(s) failed",
-			wantContains:     []string{"wt-orphan", "1 failed"},
+			wantContains:     []string{"wt-orphan", "orphaned", "1 removed"},
+			wantRemovedPaths: []string{"/workspace/wt-orphan"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			var removedPaths []string
 			mock := &mockGit{
-				deleteBranchFn:   func(_ string, _ bool) error { return tt.deleteBranchErr },
-				pruneWorktreesFn: func() error { return tt.pruneWorktreeErr },
-				removeWorktreeFn: func(_ string, _ bool) error { return tt.removeErr },
+				removeWorktreeFn: func(path string, _ bool) error {
+					if err := tt.removeErr[path]; err != nil {
+						return err
+					}
+					removedPaths = append(removedPaths, path)
+					return nil
+				},
+			}
+			revalidate := func(p prunable) (string, bool, error) {
+				if err := tt.revalidationErr[p.path]; err != nil {
+					return "", false, err
+				}
+				if current, ok := tt.changed[p.path]; ok {
+					return current, false, nil
+				}
+				return p.evidence.String(), true, nil
 			}
 
 			var buf bytes.Buffer
-			err := executeRemovals(&buf, mock, tt.prunables)
+			err := executeRemovals(&buf, mock, tt.prunables, revalidate)
 
 			if tt.wantErr {
 				require.Error(t, err)
@@ -322,6 +656,7 @@ func TestExecuteRemovals(t *testing.T) {
 				require.NoError(t, err)
 			}
 
+			assert.Equal(t, tt.wantRemovedPaths, removedPaths)
 			output := buf.String()
 			for _, s := range tt.wantContains {
 				assert.Contains(t, output, s, "output should contain %q", s)
