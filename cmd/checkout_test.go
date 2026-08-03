@@ -344,6 +344,7 @@ func TestExecuteCheckout(t *testing.T) {
 			ctx := &checkoutContext{
 				cfg:       defaultTestConfig(),
 				gitClient: tt.gitMock(workspaceDir),
+				logger:    testLogger(),
 			}
 
 			err := executeCheckout(&stdout, ctx, tt.ref)
@@ -386,6 +387,7 @@ func TestExecuteCheckout_VerifiesGitArgs(t *testing.T) {
 	ctx := &checkoutContext{
 		cfg:       defaultTestConfig(),
 		gitClient: gitMock,
+		logger:    testLogger(),
 	}
 
 	err := executeCheckout(&stdout, ctx, "feature/fix-login")

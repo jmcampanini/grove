@@ -58,6 +58,7 @@ To check out an existing pull request, use 'grove pr checkout' instead.`,
 	cmd.Flags().String("from", "", "git ref (branch, tag, or commit) to create the new branch from (default: HEAD)")
 	cmd.Flags().Bool("from-remote-primary", false, "fetch the default remote's primary branch and create the new branch from it")
 	cmd.Flags().Bool("reuse", false, "reuse existing worktree if one already exists for this phrase")
+	cmd.MarkFlagsMutuallyExclusive("from", "from-remote-primary", "reuse")
 	return cmd
 }
 
@@ -66,6 +67,7 @@ type createContext struct {
 	cfg               config.Config
 	fromRemotePrimary bool
 	gitClient         git.Git
+	logger            *log.Logger
 	reuse             bool
 }
 
@@ -97,6 +99,7 @@ func runCreate(cmd *cobra.Command, args []string) error {
 		cfg:               rt.cfg,
 		fromRemotePrimary: fromRemotePrimary,
 		gitClient:         rt.gitClient,
+		logger:            rt.logger,
 		reuse:             reuse,
 	}
 
@@ -104,7 +107,7 @@ func runCreate(cmd *cobra.Command, args []string) error {
 }
 
 func executeCreate(stdout io.Writer, ctx *createContext, phrase string) error {
-	if err := validateCreateRequest(ctx, phrase); err != nil {
+	if err := validateCreatePhrase(phrase); err != nil {
 		return err
 	}
 
@@ -156,19 +159,11 @@ Examples:
 	return err
 }
 
-func validateCreateRequest(ctx *createContext, phrase string) error {
-	switch {
-	case ctx.fromRemotePrimary && ctx.baseRef != "":
-		return errors.New("--from and --from-remote-primary cannot be used together")
-	case ctx.fromRemotePrimary && ctx.reuse:
-		return errors.New("--reuse and --from-remote-primary cannot be used together")
-	case ctx.reuse && ctx.baseRef != "":
-		return errors.New("--reuse and --from cannot be used together: --reuse attaches to an existing branch and ignores --from")
-	case strings.TrimSpace(phrase) == "":
+func validateCreatePhrase(phrase string) error {
+	if strings.TrimSpace(phrase) == "" {
 		return errors.New("phrase cannot be empty")
-	default:
-		return nil
 	}
+	return nil
 }
 
 func resolveCreateBaseRef(ctx *createContext) (string, error) {
@@ -212,11 +207,11 @@ func reuseExistingBranch(stdout io.Writer, ctx *createContext, namer *naming.Loc
 		}
 		if branch, ok := wt.Ref.FullBranch(); ok && branch.Name == branchName {
 			if _, statErr := os.Stat(wt.AbsolutePath); statErr != nil {
-				log.WithPrefix("create").Warn("stale worktree entry found", "branch", branchName, "path", wt.AbsolutePath)
+				ctx.logger.WithPrefix("create").Warn("stale worktree entry found", "branch", branchName, "path", wt.AbsolutePath)
 				foundStale = true
 				continue
 			}
-			log.WithPrefix("create").Warn("reusing existing worktree", "branch", branchName, "path", wt.AbsolutePath)
+			ctx.logger.WithPrefix("create").Warn("reusing existing worktree", "branch", branchName, "path", wt.AbsolutePath)
 			_, err = fmt.Fprintln(stdout, wt.AbsolutePath)
 			return err
 		}
@@ -235,7 +230,7 @@ func reuseExistingBranch(stdout io.Writer, ctx *createContext, namer *naming.Loc
 		return fmt.Errorf("worktree path %q already exists; to remove it: git worktree remove %s", worktreePath, worktreeName)
 	}
 
-	log.WithPrefix("create").Warn("creating worktree for existing branch", "branch", branchName, "path", worktreePath)
+	ctx.logger.WithPrefix("create").Warn("creating worktree for existing branch", "branch", branchName, "path", worktreePath)
 	if err := ctx.gitClient.CreateWorktreeForExistingBranch(branchName, worktreePath); err != nil {
 		return fmt.Errorf("failed to create worktree for existing branch: %w", err)
 	}

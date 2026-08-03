@@ -172,7 +172,7 @@ func TestMatcher_FindWorktreeForIssue(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			namer := createNamer(t, tt.issueCfg)
-			matcher := NewMatcher(namer)
+			matcher := NewMatcher(namer, nil)
 
 			got := matcher.FindWorktreeForIssue(tt.issue, tt.worktrees)
 
@@ -230,7 +230,7 @@ func TestMatcher_MatchAll(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			namer := createNamer(t, defaultIssueConfig())
-			matcher := NewMatcher(namer)
+			matcher := NewMatcher(namer, nil)
 
 			got := matcher.MatchAll(tt.issues, tt.worktrees)
 
@@ -246,7 +246,7 @@ func TestMatcher_MatchAll(t *testing.T) {
 
 func TestNewMatcher(t *testing.T) {
 	namer := createNamer(t, defaultIssueConfig())
-	matcher := NewMatcher(namer)
+	matcher := NewMatcher(namer, nil)
 	assert.NotNil(t, matcher)
 	assert.Equal(t, namer, matcher.namer)
 	assert.NotNil(t, matcher.log)

@@ -65,7 +65,7 @@ func runPRList(cmd *cobra.Command, fzf bool) error {
 		return fmt.Errorf("failed to list worktrees: %w", err)
 	}
 
-	matcher := pr.NewMatcher(namer)
+	matcher := pr.NewMatcher(namer, rt.logger)
 	matches := matcher.MatchAll(prs, worktrees)
 
 	if fzf {

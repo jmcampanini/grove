@@ -32,14 +32,19 @@ type GitHubCli struct {
 
 var _ GitHub = &GitHubCli{}
 
-func New(ctx context.Context, workingDir string, timeout time.Duration, c *cache.Cache) GitHub {
+// New creates a GitHubCli that executes gh commands in the specified working
+// directory. A nil logger falls back to the default logger.
+func New(ctx context.Context, workingDir string, timeout time.Duration, c *cache.Cache, logger *clog.Logger) GitHub {
 	if ctx == nil {
 		ctx = context.Background()
+	}
+	if logger == nil {
+		logger = clog.Default()
 	}
 	return &GitHubCli{
 		cache:      c,
 		ctx:        ctx,
-		log:        clog.Default().WithPrefix("github"),
+		log:        logger.WithPrefix("github"),
 		timeout:    timeout,
 		workingDir: workingDir,
 	}

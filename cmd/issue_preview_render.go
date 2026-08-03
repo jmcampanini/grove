@@ -34,7 +34,7 @@ func issueStateText(iss github.Issue) string {
 	return strings.ToUpper(string(iss.State))
 }
 
-func renderIssueHeader(iss github.Issue) string {
+func (r *previewRenderer) renderIssueHeader(iss github.Issue) string {
 	labelStyle := lipgloss.NewStyle().Foreground(colorPurple).Bold(true).Width(10)
 	valueStyle := lipgloss.NewStyle().Foreground(colorGray)
 
@@ -64,13 +64,13 @@ func renderIssueHeader(iss github.Issue) string {
 		fmt.Fprintln(&sb, row("Milestone", iss.Milestone))
 	}
 	if iss.URL != "" {
-		fmt.Fprintln(&sb, row("URL", hyperlink(iss.URL, iss.URL)))
+		fmt.Fprintln(&sb, row("URL", r.hyperlink(iss.URL, iss.URL)))
 	}
 
 	return strings.TrimRight(sb.String(), "\n")
 }
 
-func renderIssueComments(comments []github.IssueComment, width int, colorMode string) string {
+func (r *previewRenderer) renderIssueComments(comments []github.IssueComment, width int) string {
 	if len(comments) == 0 {
 		return ""
 	}
@@ -90,18 +90,18 @@ func renderIssueComments(comments []github.IssueComment, width int, colorMode st
 	}
 	for _, c := range shown {
 		meta := lipgloss.NewStyle().Bold(true).Render("@"+c.AuthorLogin) + metaStyle.Render(" · "+relativeTime(c.CreatedAt))
-		if body := renderBody(c.Body, width, colorMode); body != "" {
+		if body := r.renderBody(c.Body, width); body != "" {
 			parts = append(parts, meta+"\n"+body)
 		} else {
 			parts = append(parts, meta)
 		}
 	}
 
-	header := sectionHeader(fmt.Sprintf("Comments (%d)", len(comments)))
+	header := r.sectionHeader(fmt.Sprintf("Comments (%d)", len(comments)))
 	return header + "\n" + strings.Join(parts, "\n\n")
 }
 
-func renderIssuePreview(w io.Writer, iss github.Issue, width int, colorMode string) error {
+func (r *previewRenderer) renderIssuePreview(w io.Writer, iss github.Issue, width int) error {
 	border := lipgloss.RoundedBorder()
 	boxStyle := lipgloss.NewStyle().
 		Border(border).
@@ -111,15 +111,15 @@ func renderIssuePreview(w io.Writer, iss github.Issue, width int, colorMode stri
 
 	var sections []string
 
-	sections = append(sections, boxStyle.Render(renderIssueHeader(iss)))
+	sections = append(sections, boxStyle.Render(r.renderIssueHeader(iss)))
 
-	if body := renderBody(iss.Body, width, colorMode); body != "" {
+	if body := r.renderBody(iss.Body, width); body != "" {
 		sections = append(sections, boxStyle.Render(body))
 	}
 
-	if comments := renderIssueComments(iss.Comments, width, colorMode); comments != "" {
+	if comments := r.renderIssueComments(iss.Comments, width); comments != "" {
 		sections = append(sections, boxStyle.Render(comments))
 	}
 
-	return writePreviewLine(w, lipgloss.JoinVertical(lipgloss.Left, sections...))
+	return r.writePreviewLine(w, lipgloss.JoinVertical(lipgloss.Left, sections...))
 }

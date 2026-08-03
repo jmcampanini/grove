@@ -65,7 +65,7 @@ func runIssueList(cmd *cobra.Command, fzf bool) error {
 		return fmt.Errorf("failed to list worktrees: %w", err)
 	}
 
-	matcher := issue.NewMatcher(namer)
+	matcher := issue.NewMatcher(namer, rt.logger)
 	matches := matcher.MatchAll(issues, worktrees)
 
 	if fzf {

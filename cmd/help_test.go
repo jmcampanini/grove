@@ -7,7 +7,7 @@ import (
 )
 
 func TestRootHelpDocumentsLogging(t *testing.T) {
-	root := newRootCmd()
+	root := newTestRootCommand()
 	for _, want := range []string{
 		"$XDG_STATE_HOME/grove/grove.log",
 		"~/.local/state/grove/grove.log",

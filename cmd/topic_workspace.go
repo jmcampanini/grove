@@ -6,6 +6,8 @@ func newWorkspaceTopicCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "workspace",
 		Short: "Workspace layout and requirements",
+		Args:  cobra.NoArgs,
+		RunE:  runHelpTopic,
 		Long: `A workspace is a directory whose subdirectories are git repository roots
 (the main repo and its worktrees). Grove operates on this layout.
 

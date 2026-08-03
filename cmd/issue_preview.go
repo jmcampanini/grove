@@ -39,7 +39,8 @@ func runIssuePreview(cmd *cobra.Command, args []string, colorMode string, fzf bo
 		return handlePreviewError(cmd, err, fzf)
 	}
 
-	if err := applyColorMode(colorMode); err != nil {
+	theme, err := resolvePreviewTheme(colorMode, cmd.InOrStdin(), cmd.OutOrStdout())
+	if err != nil {
 		return handleError(err)
 	}
 
@@ -64,7 +65,8 @@ func runIssuePreview(cmd *cobra.Command, args []string, colorMode string, fzf bo
 	}
 
 	w := cmd.OutOrStdout()
-	width := detectPreviewWidth()
+	width := detectPreviewWidth(w)
 
-	return renderIssuePreview(w, issueInfo, width, colorMode)
+	renderer := &previewRenderer{logger: rt.logger, theme: theme}
+	return renderer.renderIssuePreview(w, issueInfo, width)
 }

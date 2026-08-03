@@ -44,6 +44,7 @@ func runPRCheckout(cmd *cobra.Command, args []string) error {
 		cfg:       rt.cfg,
 		ghClient:  rt.newUncachedGitHubClient(),
 		gitClient: rt.gitClient,
+		logger:    rt.logger,
 	}
 
 	prInfo, err := ctx.ghClient.GetPullRequest(prNum)
@@ -52,7 +53,7 @@ func runPRCheckout(cmd *cobra.Command, args []string) error {
 	}
 
 	if prInfo.State == github.PRStateMerged || prInfo.State == github.PRStateClosed {
-		log.WithPrefix("pr").Warn("checking out non-open pull request", "number", prInfo.Number, "state", strings.ToLower(string(prInfo.State)))
+		ctx.logger.WithPrefix("pr").Warn("checking out non-open pull request", "number", prInfo.Number, "state", strings.ToLower(string(prInfo.State)))
 	}
 
 	return checkoutPRWorktree(cmd.OutOrStdout(), ctx, prInfo)
@@ -62,6 +63,7 @@ type prCheckoutContext struct {
 	cfg       config.Config
 	ghClient  github.GitHub
 	gitClient git.Git
+	logger    *log.Logger
 }
 
 func checkoutPRWorktree(stdout io.Writer, ctx *prCheckoutContext, prInfo github.PullRequest) error {
@@ -89,11 +91,11 @@ func checkoutPRWorktree(stdout io.Writer, ctx *prCheckoutContext, prInfo github.
 		return fmt.Errorf("failed to list worktrees: %w", err)
 	}
 
-	matcher := pr.NewMatcher(namer)
+	matcher := pr.NewMatcher(namer, ctx.logger)
 	existingWorktree := matcher.FindWorktreeForPR(prInfo, worktrees)
 
 	if existingWorktree != nil {
-		log.WithPrefix("pr").Warn("worktree already exists for pull request", "number", prInfo.Number, "path", existingWorktree.AbsolutePath)
+		ctx.logger.WithPrefix("pr").Warn("worktree already exists for pull request", "number", prInfo.Number, "path", existingWorktree.AbsolutePath)
 		_, err := fmt.Fprintln(stdout, existingWorktree.AbsolutePath)
 		return err
 	}

@@ -13,7 +13,7 @@ import (
 const testTimeout = 30 * time.Second
 
 func TestNew(t *testing.T) {
-	gh := New(context.Background(), "/some/path", 60*time.Second, nil)
+	gh := New(context.Background(), "/some/path", 60*time.Second, nil, nil)
 
 	require.NotNil(t, gh)
 
@@ -77,7 +77,7 @@ func TestGitHubCli_GetPullRequestByBranch_Integration(t *testing.T) {
 	skipIfGhNotAvailable(t)
 	skipIfNotInGitRepo(t)
 
-	gh := New(context.Background(), ".", testTimeout, nil)
+	gh := New(context.Background(), ".", testTimeout, nil, nil)
 
 	// Test with a branch that likely doesn't have a PR
 	pr, err := gh.GetPullRequestByBranch("nonexistent-branch-12345")
@@ -104,7 +104,7 @@ func TestGitHubCli_ListIssues_Integration(t *testing.T) {
 	skipIfGhNotAvailable(t)
 	skipIfNotInGitRepo(t)
 
-	gh := New(context.Background(), ".", testTimeout, nil)
+	gh := New(context.Background(), ".", testTimeout, nil, nil)
 
 	// List open issues (may return empty list, which is fine)
 	issues, err := gh.ListIssues(IssueQuery{State: IssueStateOpen}, DefaultIssueLimit)
@@ -121,7 +121,7 @@ func TestGitHubCli_ListPullRequests_Integration(t *testing.T) {
 	skipIfGhNotAvailable(t)
 	skipIfNotInGitRepo(t)
 
-	gh := New(context.Background(), ".", testTimeout, nil)
+	gh := New(context.Background(), ".", testTimeout, nil, nil)
 
 	// List open PRs (may return empty list, which is fine)
 	prs, err := gh.ListPullRequests(PRQuery{State: PRStateOpen}, DefaultPRLimit)

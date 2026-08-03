@@ -241,6 +241,7 @@ func TestStartIssueWorktree(t *testing.T) {
 				cfg:       tt.cfg,
 				ghClient:  &mockGitHub{},
 				gitClient: tt.gitMock,
+				logger:    testLogger(),
 			}
 
 			err := startIssueWorktree(&stdout, ctx, tt.issueInfo)
@@ -290,7 +291,7 @@ func TestStartIssueWorktree_ExistingWorktree(t *testing.T) {
 			}
 
 			var stdout bytes.Buffer
-			ctx := &issueStartContext{cfg: defaultTestConfig(), ghClient: &mockGitHub{}, gitClient: gitMock}
+			ctx := &issueStartContext{cfg: defaultTestConfig(), ghClient: &mockGitHub{}, gitClient: gitMock, logger: testLogger()}
 
 			err := startIssueWorktree(&stdout, ctx, github.Issue{Number: 123, State: github.IssueStateOpen, Title: tt.title})
 
@@ -320,7 +321,7 @@ func TestStartIssueWorktree_StaleWorktreeEntry(t *testing.T) {
 	}
 
 	var stdout bytes.Buffer
-	ctx := &issueStartContext{cfg: defaultTestConfig(), ghClient: &mockGitHub{}, gitClient: gitMock}
+	ctx := &issueStartContext{cfg: defaultTestConfig(), ghClient: &mockGitHub{}, gitClient: gitMock, logger: testLogger()}
 
 	err := startIssueWorktree(&stdout, ctx, github.Issue{Number: 123, State: github.IssueStateOpen, Title: "Add auth"})
 
@@ -347,7 +348,7 @@ func TestStartIssueWorktree_WorktreePathCollision(t *testing.T) {
 	}
 
 	var stdout bytes.Buffer
-	ctx := &issueStartContext{cfg: defaultTestConfig(), ghClient: &mockGitHub{}, gitClient: gitMock}
+	ctx := &issueStartContext{cfg: defaultTestConfig(), ghClient: &mockGitHub{}, gitClient: gitMock, logger: testLogger()}
 
 	err := startIssueWorktree(&stdout, ctx, github.Issue{Number: 123, State: github.IssueStateOpen, Title: "Add auth"})
 

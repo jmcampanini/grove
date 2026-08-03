@@ -353,6 +353,7 @@ func TestExecuteCreate(t *testing.T) {
 			ctx := &createContext{
 				cfg:       defaultTestConfig(),
 				gitClient: tt.gitMock(workspaceDir),
+				logger:    testLogger(),
 				reuse:     tt.reuse,
 			}
 
@@ -376,49 +377,24 @@ func TestExecuteCreate(t *testing.T) {
 	}
 }
 
-func TestExecuteCreate_ValidatesIncompatibleOptions(t *testing.T) {
+func TestCreateModeFlagsAreMutuallyExclusive(t *testing.T) {
 	tests := []struct {
-		name           string
-		ctx            createContext
-		wantErrContain string
+		args []string
+		name string
 	}{
-		{
-			name: "--reuse and --from cannot be used together",
-			ctx: createContext{
-				baseRef: "main",
-				reuse:   true,
-			},
-			wantErrContain: "--reuse and --from cannot be used together",
-		},
-		{
-			name: "--from and --from-remote-primary cannot be used together",
-			ctx: createContext{
-				baseRef:           "main",
-				fromRemotePrimary: true,
-			},
-			wantErrContain: "--from and --from-remote-primary cannot be used together",
-		},
-		{
-			name: "--reuse and --from-remote-primary cannot be used together",
-			ctx: createContext{
-				fromRemotePrimary: true,
-				reuse:             true,
-			},
-			wantErrContain: "--reuse and --from-remote-primary cannot be used together",
-		},
+		{name: "--from and --reuse", args: []string{"create", "x", "--from", "main", "--reuse"}},
+		{name: "--from and --from-remote-primary", args: []string{"create", "x", "--from", "main", "--from-remote-primary"}},
+		{name: "--reuse and --from-remote-primary", args: []string{"create", "x", "--reuse", "--from-remote-primary"}},
+		{name: "all three", args: []string{"create", "x", "--from", "main", "--reuse", "--from-remote-primary"}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := tt.ctx
-			ctx.cfg = defaultTestConfig()
-			ctx.gitClient = &mockGit{}
-
-			var stdout bytes.Buffer
-			err := executeCreate(&stdout, &ctx, "add logging support")
+			stdout, _, err := executeForTest(tt.args...)
 
 			require.Error(t, err)
-			assert.Contains(t, err.Error(), tt.wantErrContain)
+			assert.Contains(t, err.Error(), "none of the others can be")
+			assert.Empty(t, stdout)
 		})
 	}
 }
@@ -545,6 +521,7 @@ func TestExecuteCreate_FromRemotePrimary(t *testing.T) {
 				cfg:               defaultTestConfig(),
 				fromRemotePrimary: true,
 				gitClient:         gitMock,
+				logger:            testLogger(),
 			}
 
 			err := executeCreate(&stdout, ctx, "add logging support")
@@ -596,6 +573,7 @@ func TestExecuteCreate_ReuseVerifiesGitArgs(t *testing.T) {
 	ctx := &createContext{
 		cfg:       defaultTestConfig(),
 		gitClient: gitMock,
+		logger:    testLogger(),
 		reuse:     true,
 	}
 
@@ -659,6 +637,7 @@ func TestExecuteCreate_VerifiesGitArgs(t *testing.T) {
 				baseRef:   tt.baseRef,
 				cfg:       defaultTestConfig(),
 				gitClient: gitMock,
+				logger:    testLogger(),
 			}
 
 			err := executeCreate(&stdout, ctx, "add logging support")

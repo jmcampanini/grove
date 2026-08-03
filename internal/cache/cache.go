@@ -29,10 +29,14 @@ type Cache struct {
 
 // New creates a cache that stores entries in dir with the given TTL.
 // A zero TTL disables caching (Get always misses, Set is a no-op).
-func New(dir string, ttl time.Duration) *Cache {
+// A nil logger falls back to the default logger.
+func New(dir string, ttl time.Duration, logger *clog.Logger) *Cache {
+	if logger == nil {
+		logger = clog.Default()
+	}
 	return &Cache{
 		dir: dir,
-		log: clog.Default().WithPrefix("cache"),
+		log: logger.WithPrefix("cache"),
 		ttl: ttl,
 	}
 }

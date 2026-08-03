@@ -13,14 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func saveAndRestoreLogger(t *testing.T) {
-	t.Helper()
-	t.Cleanup(func() {
-		Close()
-		log.SetOutput(os.Stderr)
-	})
-}
-
 func TestTeeWriter_Write(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -105,15 +97,15 @@ func TestDefaultLogFilePath(t *testing.T) {
 	}
 }
 
-func TestSetup_CreatesPrivateFileAndDirectory(t *testing.T) {
-	saveAndRestoreLogger(t)
-
+func TestNewTee_CreatesPrivateFileAndDirectory(t *testing.T) {
 	stateDir := filepath.Join(t.TempDir(), "state")
 	t.Setenv("XDG_STATE_HOME", stateDir)
 	t.Setenv("HOME", t.TempDir())
 
-	require.NoError(t, Setup())
-	log.Info("create log file")
+	var terminal bytes.Buffer
+	tee, err := NewTee(&terminal)
+	require.NoError(t, err)
+	defer func() { _ = tee.Close() }()
 
 	logDir := filepath.Join(stateDir, "grove")
 	logPath := filepath.Join(logDir, "grove.log")
@@ -126,51 +118,41 @@ func TestSetup_CreatesPrivateFileAndDirectory(t *testing.T) {
 	assert.Equal(t, os.FileMode(0o600), fileInfo.Mode().Perm())
 }
 
-func TestSetup_AppendsAcrossCycles(t *testing.T) {
-	saveAndRestoreLogger(t)
-
+func TestNewTee_AppendsAcrossCycles(t *testing.T) {
 	stateDir := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", stateDir)
 	t.Setenv("HOME", t.TempDir())
 	path := filepath.Join(stateDir, "grove", "grove.log")
 
-	require.NoError(t, Setup())
-	_, err := logFile.WriteString("first\n")
-	require.NoError(t, err)
-	Close()
+	var terminal bytes.Buffer
 
-	require.NoError(t, Setup())
-	_, err = logFile.WriteString("second\n")
+	first, err := NewTee(&terminal)
 	require.NoError(t, err)
-	Close()
+	_, err = first.Write([]byte("first\n"))
+	require.NoError(t, err)
+	require.NoError(t, first.Close())
+
+	second, err := NewTee(&terminal)
+	require.NoError(t, err)
+	_, err = second.Write([]byte("second\n"))
+	require.NoError(t, err)
+	require.NoError(t, second.Close())
 
 	content, err := os.ReadFile(path)
 	require.NoError(t, err)
 	assert.Equal(t, "first\nsecond\n", string(content))
 }
 
-func TestSetup_FailureLeavesTerminalLogger(t *testing.T) {
-	saveAndRestoreLogger(t)
-
+func TestNewTee_FailureReturnsError(t *testing.T) {
 	stateDir := filepath.Join(t.TempDir(), "state")
 	require.NoError(t, os.WriteFile(stateDir, nil, 0o600))
 	t.Setenv("XDG_STATE_HOME", stateDir)
 	t.Setenv("HOME", t.TempDir())
 
 	var terminal bytes.Buffer
-	log.SetOutput(&terminal)
-
-	err := Setup()
+	_, err := NewTee(&terminal)
 	require.Error(t, err)
-	assert.Nil(t, logFile)
-
-	log.Info("terminal still works")
-	assert.Contains(t, terminal.String(), "terminal still works")
-}
-
-func TestClose_NilSafe(t *testing.T) {
-	logFile = nil
-	Close()
+	assert.Empty(t, terminal.String())
 }
 
 type errWriter struct{ err error }
@@ -210,31 +192,19 @@ func TestTeeWriter_FileError_LogsWarningOnce(t *testing.T) {
 		"warning should be logged only once")
 }
 
-func TestSetup_DoubleCall_ClosesPreviousFile(t *testing.T) {
-	saveAndRestoreLogger(t)
-
-	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	t.Setenv("HOME", t.TempDir())
-
-	require.NoError(t, Setup())
-	firstFile := logFile
-
-	require.NoError(t, Setup())
-
-	_, writeErr := firstFile.WriteString("should fail")
-	assert.Error(t, writeErr, "first file should be closed after second Setup call")
-}
-
-func TestSetup_Integration_LogReachesFile(t *testing.T) {
-	saveAndRestoreLogger(t)
-
+func TestNewTee_Integration_LogReachesFile(t *testing.T) {
 	stateDir := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", stateDir)
 	t.Setenv("HOME", t.TempDir())
 	path := filepath.Join(stateDir, "grove", "grove.log")
 
-	require.NoError(t, Setup())
-	log.Info("integration test message", "key", "value")
+	var terminal bytes.Buffer
+	tee, err := NewTee(&terminal)
+	require.NoError(t, err)
+	defer func() { _ = tee.Close() }()
+
+	logger := log.New(tee)
+	logger.Info("integration test message", "key", "value")
 
 	content, err := os.ReadFile(path)
 	require.NoError(t, err)

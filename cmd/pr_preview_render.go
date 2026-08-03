@@ -16,7 +16,6 @@ import (
 	"charm.land/glamour/v2"
 	"charm.land/glamour/v2/styles"
 	"charm.land/lipgloss/v2"
-	"charm.land/log/v2"
 	"github.com/jmcampanini/grove-cli/internal/github"
 	"github.com/muesli/termenv"
 )
@@ -29,8 +28,8 @@ var (
 	colorYellow = lipgloss.Color("214")
 )
 
-func colorCyan() color.Color {
-	return lightDarkColor(previewHasDarkBackground, "30", "44")
+func (r *previewRenderer) colorCyan() color.Color {
+	return lightDarkColor(r.theme.hasDarkBackground, "30", "44")
 }
 
 const (
@@ -53,8 +52,8 @@ const (
 	iconZap      = "\uea86" // nf-cod-zap
 )
 
-func hyperlink(url, text string) string {
-	if previewColorsDisabled() {
+func (r *previewRenderer) hyperlink(url, text string) string {
+	if r.theme.colorsDisabled() {
 		return text
 	}
 	return termenv.Hyperlink(url, text)
@@ -203,11 +202,11 @@ func wrapBody(body string, width int) string {
 	return strings.Join(lines, "\n")
 }
 
-func sectionHeader(text string) string {
-	return lipgloss.NewStyle().Foreground(colorCyan()).Bold(true).Render(text)
+func (r *previewRenderer) sectionHeader(text string) string {
+	return lipgloss.NewStyle().Foreground(r.colorCyan()).Bold(true).Render(text)
 }
 
-func renderChecksLines(checks []github.StatusCheck) string {
+func (r *previewRenderer) renderChecksLines(checks []github.StatusCheck) string {
 	if len(checks) == 0 {
 		return ""
 	}
@@ -219,8 +218,8 @@ func renderChecksLines(checks []github.StatusCheck) string {
 			lipgloss.NewStyle().Foreground(colorGray).Render(checkStatusText(sc)),
 		)
 		if sc.DetailURL != "" {
-			link := hyperlink(sc.DetailURL, "[↗ details]")
-			line += "  " + lipgloss.NewStyle().Foreground(colorCyan()).Render(link)
+			link := r.hyperlink(sc.DetailURL, "[↗ details]")
+			line += "  " + lipgloss.NewStyle().Foreground(r.colorCyan()).Render(link)
 		}
 		lines = append(lines, line)
 	}
@@ -286,7 +285,7 @@ func isTestFile(path string) bool {
 	return slices.ContainsFunc(testDirSegments, func(s string) bool { return strings.Contains(prefixed, s) })
 }
 
-func timelineEventIcon(eventType github.TimelineEventType, details string) string {
+func (r *previewRenderer) timelineEventIcon(eventType github.TimelineEventType, details string) string {
 	switch eventType {
 	case github.TimelineEventReviewed:
 		switch details {
@@ -298,13 +297,13 @@ func timelineEventIcon(eventType github.TimelineEventType, details string) strin
 			return colorIcon(iconComment, colorGray)
 		}
 	case github.TimelineEventCommented:
-		return colorIcon(iconComment, colorCyan())
+		return colorIcon(iconComment, r.colorCyan())
 	case github.TimelineEventCommitted:
 		return colorIcon(iconGitRef, colorPurple)
 	case github.TimelineEventForcePushed:
 		return colorIcon(iconZap, colorYellow)
 	case github.TimelineEventLabeled:
-		return colorIcon(iconTag, colorCyan())
+		return colorIcon(iconTag, r.colorCyan())
 	case github.TimelineEventMerged:
 		return colorIcon(iconMerge, colorPurple)
 	case github.TimelineEventClosed:
@@ -316,7 +315,7 @@ func timelineEventIcon(eventType github.TimelineEventType, details string) strin
 	case github.TimelineEventConvertToDraft:
 		return colorIcon(iconDraft, colorYellow)
 	case github.TimelineEventReviewRequested:
-		return colorIcon(iconBell, colorCyan())
+		return colorIcon(iconBell, r.colorCyan())
 	default:
 		return colorIcon(iconCircle, colorGray)
 	}
@@ -383,15 +382,15 @@ func fileDiffURL(prURL, path string) string {
 	return fmt.Sprintf("%s/files#diff-%s", prURL, hex.EncodeToString(h[:]))
 }
 
-func formatFileEntry(f github.PullRequestFile, comments int, prURL string, contentWidth int, cw fileColumnWidths) string {
+func (r *previewRenderer) formatFileEntry(f github.PullRequestFile, comments int, prURL string, contentWidth int, cw fileColumnWidths) string {
 	added := lipgloss.NewStyle().Foreground(colorGreen).Render(fmt.Sprintf("%+*d", cw.addWidth, f.Additions))
 	delStr := fmt.Sprintf("-%d", f.Deletions)
 	deleted := lipgloss.NewStyle().Foreground(colorRed).Render(fmt.Sprintf("%*s", cw.delWidth, delStr))
 
 	var linkCol string
 	if prURL != "" {
-		link := hyperlink(fileDiffURL(prURL, f.Path), "[↗]")
-		linkCol = "  " + lipgloss.NewStyle().Foreground(colorCyan()).Render(link)
+		link := r.hyperlink(fileDiffURL(prURL, f.Path), "[↗]")
+		linkCol = "  " + lipgloss.NewStyle().Foreground(r.colorCyan()).Render(link)
 	}
 
 	var right string
@@ -426,7 +425,7 @@ func formatFileEntry(f github.PullRequestFile, comments int, prURL string, conte
 	return fmt.Sprintf("  %s%s%s", left, strings.Repeat(" ", gap), right)
 }
 
-func renderHeader(pr github.PullRequest) string {
+func (r *previewRenderer) renderHeader(pr github.PullRequest) string {
 	labelStyle := lipgloss.NewStyle().Foreground(colorPurple).Bold(true).Width(10)
 	valueStyle := lipgloss.NewStyle().Foreground(colorGray)
 
@@ -453,19 +452,19 @@ func renderHeader(pr github.PullRequest) string {
 	}
 
 	if pr.URL != "" {
-		fmt.Fprintln(&sb, row("URL", hyperlink(pr.URL, pr.URL)))
+		fmt.Fprintln(&sb, row("URL", r.hyperlink(pr.URL, pr.URL)))
 	}
 
 	return strings.TrimRight(sb.String(), "\n")
 }
 
-func renderChecks(pr github.PullRequest) string {
+func (r *previewRenderer) renderChecks(pr github.PullRequest) string {
 	var parts []string
-	if ciLines := renderChecksLines(pr.StatusChecks); ciLines != "" {
-		parts = append(parts, sectionHeader("Checks")+"\n"+ciLines)
+	if ciLines := r.renderChecksLines(pr.StatusChecks); ciLines != "" {
+		parts = append(parts, r.sectionHeader("Checks")+"\n"+ciLines)
 	}
 	if reviewLines := renderReviewLines(pr.Reviews); reviewLines != "" {
-		parts = append(parts, sectionHeader("Reviews")+"\n"+reviewLines)
+		parts = append(parts, r.sectionHeader("Reviews")+"\n"+reviewLines)
 	}
 	if len(parts) == 0 {
 		return ""
@@ -515,7 +514,7 @@ func selectHighActivityFiles(scored []scoredFile) []scoredFile {
 	return result
 }
 
-func renderHighActivity(scored []scoredFile, prURL string, contentWidth int) (string, []scoredFile) {
+func (r *previewRenderer) renderHighActivity(scored []scoredFile, prURL string, contentWidth int) (string, []scoredFile) {
 	shown := selectHighActivityFiles(scored)
 	if len(shown) == 0 {
 		return "", nil
@@ -531,18 +530,18 @@ func renderHighActivity(scored []scoredFile, prURL string, contentWidth int) (st
 	}
 	cw := computeFileColumnWidths(shownFiles, shownComments)
 
-	header := sectionHeader(fmt.Sprintf("High Activity Files (%d)", len(shown)))
+	header := r.sectionHeader(fmt.Sprintf("High Activity Files (%d)", len(shown)))
 	var sb strings.Builder
 	sb.WriteString(header)
 	sb.WriteString("\n")
 	for _, sf := range shown {
-		sb.WriteString(formatFileEntry(sf.file, sf.comments, prURL, contentWidth, cw))
+		sb.WriteString(r.formatFileEntry(sf.file, sf.comments, prURL, contentWidth, cw))
 		sb.WriteString("\n")
 	}
 	return strings.TrimRight(sb.String(), "\n"), shown
 }
 
-func renderFileList(files []github.PullRequestFile, fileComments map[string]int, totalChanged int, haPaths map[string]bool, prURL string, contentWidth int) string {
+func (r *previewRenderer) renderFileList(files []github.PullRequestFile, fileComments map[string]int, totalChanged int, haPaths map[string]bool, prURL string, contentWidth int) string {
 	var displayFiles []github.PullRequestFile
 	for _, f := range files {
 		if haPaths[f.Path] {
@@ -555,13 +554,13 @@ func renderFileList(files []github.PullRequestFile, fileComments map[string]int,
 	}
 	cw := computeFileColumnWidths(displayFiles, fileComments)
 
-	header := sectionHeader(fmt.Sprintf("Files (%d)", totalChanged))
+	header := r.sectionHeader(fmt.Sprintf("Files (%d)", totalChanged))
 	var sb strings.Builder
 	sb.WriteString(header)
 	sb.WriteString("\n")
 
 	for _, f := range displayFiles {
-		sb.WriteString(formatFileEntry(f, fileComments[f.Path], prURL, contentWidth, cw))
+		sb.WriteString(r.formatFileEntry(f, fileComments[f.Path], prURL, contentWidth, cw))
 		sb.WriteString("\n")
 	}
 
@@ -573,40 +572,33 @@ func renderFileList(files []github.PullRequestFile, fileComments map[string]int,
 	return strings.TrimRight(sb.String(), "\n")
 }
 
-func previewMarkdownStylePath(colorMode string) string {
-	switch colorMode {
-	case "never":
+func (r *previewRenderer) markdownStylePath() string {
+	if r.theme.colorsDisabled() {
 		return styles.NoTTYStyle
-	case "auto":
-		if previewColorsDisabled() {
-			return styles.NoTTYStyle
-		}
 	}
-
-	if previewHasDarkBackground {
+	if r.theme.hasDarkBackground {
 		return styles.DarkStyle
 	}
 	return styles.LightStyle
 }
 
-func renderBody(body string, width int, colorMode string) string {
+func (r *previewRenderer) renderBody(body string, width int) string {
 	if body == "" {
 		return ""
 	}
 
-	stylePath := previewMarkdownStylePath(colorMode)
 	wrapWidth := max(width-4, 20)
 	renderer, err := glamour.NewTermRenderer(
-		glamour.WithStylePath(stylePath),
+		glamour.WithStylePath(r.markdownStylePath()),
 		glamour.WithWordWrap(wrapWidth),
 	)
 	if err != nil {
-		log.WithPrefix("pr").Debug("markdown renderer init failed, using plain text fallback", "error", err)
+		r.logger.WithPrefix("pr").Debug("markdown renderer init failed, using plain text fallback", "error", err)
 		return wrapBody(body, width)
 	}
 	rendered, err := renderer.Render(body)
 	if err != nil {
-		log.WithPrefix("pr").Debug("markdown rendering failed, using plain text fallback", "error", err)
+		r.logger.WithPrefix("pr").Debug("markdown rendering failed, using plain text fallback", "error", err)
 		return wrapBody(body, width)
 	}
 	return strings.TrimSpace(rendered)
@@ -638,7 +630,7 @@ func collapseTimeline(events []github.TimelineEvent) []collapsedEvent {
 	return collapsed
 }
 
-func renderTimeline(pr github.PullRequest, timeline []github.TimelineEvent) string {
+func (r *previewRenderer) renderTimeline(pr github.PullRequest, timeline []github.TimelineEvent) string {
 	var events []github.TimelineEvent
 
 	if !pr.CreatedAt.IsZero() {
@@ -659,7 +651,7 @@ func renderTimeline(pr github.PullRequest, timeline []github.TimelineEvent) stri
 		return ""
 	}
 
-	header := sectionHeader("Activity")
+	header := r.sectionHeader("Activity")
 	timeStyle := lipgloss.NewStyle().Foreground(colorGray).Width(16).Align(lipgloss.Right)
 	lineStyle := lipgloss.NewStyle().Foreground(colorPurple)
 
@@ -677,7 +669,7 @@ func renderTimeline(pr github.PullRequest, timeline []github.TimelineEvent) stri
 			icon = colorIcon(iconGitRef, colorPurple)
 			msg = fmt.Sprintf("@%s pushed %d commits", e.Actor, ce.count)
 		default:
-			icon = timelineEventIcon(e.Type, e.Details)
+			icon = r.timelineEventIcon(e.Type, e.Details)
 			msg = timelineEventMessage(e)
 		}
 		fmt.Fprintf(&sb, "  %s  %s %s\n", timeStyle.Render(relativeTime(e.CreatedAt)), icon, msg)
@@ -688,7 +680,7 @@ func renderTimeline(pr github.PullRequest, timeline []github.TimelineEvent) stri
 	return strings.TrimRight(sb.String(), "\n")
 }
 
-func renderPreview(w io.Writer, pr github.PullRequest, fileComments map[string]int, timeline []github.TimelineEvent, width int, colorMode string) error {
+func (r *previewRenderer) renderPreview(w io.Writer, pr github.PullRequest, fileComments map[string]int, timeline []github.TimelineEvent, width int) error {
 	border := lipgloss.RoundedBorder()
 	boxStyle := lipgloss.NewStyle().
 		Border(border).
@@ -698,16 +690,16 @@ func renderPreview(w io.Writer, pr github.PullRequest, fileComments map[string]i
 
 	var sections []string
 
-	sections = append(sections, boxStyle.Render(renderHeader(pr)))
+	sections = append(sections, boxStyle.Render(r.renderHeader(pr)))
 
-	if checksContent := renderChecks(pr); checksContent != "" {
+	if checksContent := r.renderChecks(pr); checksContent != "" {
 		sections = append(sections, boxStyle.Render(checksContent))
 	}
 
 	scored := scoreFiles(pr.Files, fileComments)
 	contentWidth := width - 4
 
-	highActivity, shownFiles := renderHighActivity(scored, pr.URL, contentWidth)
+	highActivity, shownFiles := r.renderHighActivity(scored, pr.URL, contentWidth)
 	if highActivity != "" {
 		sections = append(sections, boxStyle.Render(highActivity))
 	}
@@ -717,15 +709,15 @@ func renderPreview(w io.Writer, pr github.PullRequest, fileComments map[string]i
 		haPaths[sf.file.Path] = true
 	}
 
-	sections = append(sections, boxStyle.Render(renderFileList(pr.Files, fileComments, pr.FilesChanged, haPaths, pr.URL, contentWidth)))
+	sections = append(sections, boxStyle.Render(r.renderFileList(pr.Files, fileComments, pr.FilesChanged, haPaths, pr.URL, contentWidth)))
 
-	if body := renderBody(pr.Body, width, colorMode); body != "" {
+	if body := r.renderBody(pr.Body, width); body != "" {
 		sections = append(sections, boxStyle.Render(body))
 	}
 
-	if timelineContent := renderTimeline(pr, timeline); timelineContent != "" {
+	if timelineContent := r.renderTimeline(pr, timeline); timelineContent != "" {
 		sections = append(sections, boxStyle.Render(timelineContent))
 	}
 
-	return writePreviewLine(w, lipgloss.JoinVertical(lipgloss.Left, sections...))
+	return r.writePreviewLine(w, lipgloss.JoinVertical(lipgloss.Left, sections...))
 }

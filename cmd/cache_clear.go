@@ -11,6 +11,7 @@ func newCacheClearCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "clear",
 		Short: "Remove all cached data",
+		Args:  cobra.NoArgs,
 		RunE:  runCacheClear,
 	}
 }
@@ -21,7 +22,7 @@ func runCacheClear(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	c := cache.New(dir, 0)
+	c := cache.New(dir, 0, commandLogger(cmd))
 	if err := c.Clear(); err != nil {
 		return err
 	}

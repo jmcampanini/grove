@@ -7,12 +7,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"charm.land/log/v2"
 	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
 )
-
-var logFile *os.File
 
 type teeWriter struct {
 	file          io.Writer
@@ -32,6 +29,27 @@ func (t *teeWriter) Write(p []byte) (n int, err error) {
 	return n, err
 }
 
+// Tee forwards diagnostic writes to a terminal writer while appending an
+// ANSI-stripped copy to the grove log file.
+type Tee struct {
+	// Profile is the color profile of the terminal writer, captured at
+	// construction so loggers writing through the tee can keep the
+	// terminal's native color support.
+	Profile colorprofile.Profile
+
+	file *os.File
+	tee  *teeWriter
+}
+
+func (t *Tee) Write(p []byte) (int, error) {
+	return t.tee.Write(p)
+}
+
+// Close releases the log file.
+func (t *Tee) Close() error {
+	return t.file.Close()
+}
+
 // DefaultLogFilePath returns the log file path following the XDG Base
 // Directory Specification. It uses $XDG_STATE_HOME/grove/grove.log, falling
 // back to ~/.local/state/grove/grove.log. It returns an empty string if the
@@ -48,44 +66,26 @@ func DefaultLogFilePath() string {
 	return filepath.Join(stateDir, "grove", "grove.log")
 }
 
-// Setup tees the default logger's output to stderr and the fixed log file. If
-// a previous log file is open, it is closed before the new one is opened. The
-// color profile is captured before swapping the output so that stderr retains
-// its native color support after the tee is installed.
-func Setup() error {
+// NewTee opens the default log file for appending and returns a Tee that
+// forwards writes to terminal while copying them, ANSI-stripped, to the file.
+func NewTee(terminal io.Writer) (*Tee, error) {
 	filePath := DefaultLogFilePath()
 	if filePath == "" {
-		return errors.New("could not determine log file path: user home directory is unavailable")
+		return nil, errors.New("could not determine log file path: user home directory is unavailable")
 	}
 
-	Close()
-
 	if err := os.MkdirAll(filepath.Dir(filePath), 0o700); err != nil {
-		return err
+		return nil, err
 	}
 
 	f, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	logFile = f
 
-	profile := colorprofile.Detect(os.Stderr, os.Environ())
-	log.SetOutput(&teeWriter{
-		terminal: os.Stderr,
-		file:     f,
-	})
-	log.SetColorProfile(profile)
-
-	return nil
-}
-
-// Close releases the log file opened by Setup, if any, and restores the
-// default logger's output to stderr.
-func Close() {
-	if logFile != nil {
-		_ = logFile.Close()
-		logFile = nil
-		log.SetOutput(os.Stderr)
-	}
+	return &Tee{
+		Profile: colorprofile.Detect(terminal, os.Environ()),
+		file:    f,
+		tee:     &teeWriter{file: f, terminal: terminal},
+	}, nil
 }

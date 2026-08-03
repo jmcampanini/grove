@@ -50,6 +50,7 @@ func runIssueStart(cmd *cobra.Command, args []string) error {
 		cfg:       rt.cfg,
 		ghClient:  rt.newUncachedGitHubClient(),
 		gitClient: rt.gitClient,
+		logger:    rt.logger,
 	}
 
 	issueInfo, err := ctx.ghClient.GetIssue(issueNum)
@@ -58,7 +59,7 @@ func runIssueStart(cmd *cobra.Command, args []string) error {
 	}
 
 	if issueInfo.State == github.IssueStateClosed {
-		log.WithPrefix("issue").Warn("starting work on a closed issue", "number", issueInfo.Number, "reason", strings.ToLower(string(issueInfo.StateReason)))
+		ctx.logger.WithPrefix("issue").Warn("starting work on a closed issue", "number", issueInfo.Number, "reason", strings.ToLower(string(issueInfo.StateReason)))
 	}
 
 	return startIssueWorktree(cmd.OutOrStdout(), ctx, issueInfo)
@@ -68,6 +69,7 @@ type issueStartContext struct {
 	cfg       config.Config
 	ghClient  github.GitHub
 	gitClient git.Git
+	logger    *log.Logger
 }
 
 func startIssueWorktree(stdout io.Writer, ctx *issueStartContext, issueInfo github.Issue) error {
@@ -122,7 +124,7 @@ func startIssueWorktree(stdout io.Writer, ctx *issueStartContext, issueInfo gith
 			return fmt.Errorf("failed to create branch and worktree: %w", err)
 		}
 	} else {
-		log.WithPrefix("issue").Warn("reusing existing branch for issue", "number", issueInfo.Number, "branch", branchToUse)
+		ctx.logger.WithPrefix("issue").Warn("reusing existing branch for issue", "number", issueInfo.Number, "branch", branchToUse)
 		if err := ctx.gitClient.CreateWorktreeForExistingBranch(branchToUse, wtPath); err != nil {
 			return fmt.Errorf("failed to create worktree: %w", err)
 		}
@@ -141,18 +143,18 @@ func reuseExistingIssueWorktree(stdout io.Writer, ctx *issueStartContext, namer 
 		return true, fmt.Errorf("failed to list worktrees: %w", err)
 	}
 
-	existingWorktree := issue.NewMatcher(namer).FindWorktreeForIssue(issueInfo, worktrees)
+	existingWorktree := issue.NewMatcher(namer, ctx.logger).FindWorktreeForIssue(issueInfo, worktrees)
 	if existingWorktree == nil {
 		return false, nil
 	}
 
 	if _, statErr := os.Stat(existingWorktree.AbsolutePath); statErr == nil {
-		log.WithPrefix("issue").Warn("worktree already exists for issue", "number", issueInfo.Number, "path", existingWorktree.AbsolutePath)
+		ctx.logger.WithPrefix("issue").Warn("worktree already exists for issue", "number", issueInfo.Number, "path", existingWorktree.AbsolutePath)
 		_, err := fmt.Fprintln(stdout, existingWorktree.AbsolutePath)
 		return true, err
 	}
 
-	log.WithPrefix("issue").Warn("stale worktree entry found for issue", "number", issueInfo.Number, "path", existingWorktree.AbsolutePath)
+	ctx.logger.WithPrefix("issue").Warn("stale worktree entry found for issue", "number", issueInfo.Number, "path", existingWorktree.AbsolutePath)
 	if err := ctx.gitClient.PruneWorktrees(); err != nil {
 		return true, fmt.Errorf("failed to prune stale worktrees: %w", err)
 	}
