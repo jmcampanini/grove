@@ -660,16 +660,17 @@ func (g *GitCli) parseWorktreeBlock(lines []string, branchMap map[string]LocalBr
 
 	absolutePath := fields["worktree"]
 	sha := fields["HEAD"]
+	_, locked := fields["locked"]
 
 	// Bare worktrees don't have a ref, skip
 	if _, isBare := fields["bare"]; isBare {
-		return Worktree{AbsolutePath: absolutePath}, nil
+		return Worktree{AbsolutePath: absolutePath, HeadSHA: sha, Locked: locked}, nil
 	}
 
 	branchName := strings.TrimPrefix(fields["branch"], "refs/heads/")
 	_, detached := fields["detached"]
 
-	worktree := Worktree{AbsolutePath: absolutePath}
+	worktree := Worktree{AbsolutePath: absolutePath, HeadSHA: sha, Locked: locked}
 
 	if branchName != "" {
 		branch, ok := branchMap[branchName]

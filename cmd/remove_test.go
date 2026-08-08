@@ -297,78 +297,59 @@ func TestRemoveWorktreeAndBranch(t *testing.T) {
 		deleteBranchErr error
 		deleteCalled    bool
 		name            string
-		pruneCalled     bool
-		pruneErr        error
 		removeCalled    bool
 		removeErr       error
 		wantErr         bool
 		wantErrContain  string
 	}{
 		{
-			name:         "removes worktree and branch",
 			branchName:   "feature/test",
-			removeCalled: true,
 			deleteCalled: true,
-			pruneCalled:  true,
+			name:         "removes worktree and branch",
+			removeCalled: true,
 		},
 		{
 			name:         "no branch name skips branch deletion",
-			branchName:   "",
 			removeCalled: true,
-			pruneCalled:  true,
 		},
 		{
-			name:           "remove worktree error",
 			branchName:     "feature/test",
+			name:           "remove worktree error",
+			removeCalled:   true,
 			removeErr:      errors.New("remove failed"),
 			wantErr:        true,
 			wantErrContain: "failed to remove worktree",
-			removeCalled:   true,
 		},
 		{
-			name:            "branch not found error is ignored",
 			branchName:      "feature/test",
 			deleteBranchErr: errors.New("error: branch 'feature/test' not found"),
 			deleteCalled:    true,
-			pruneCalled:     true,
+			name:            "branch not found error is ignored",
 			removeCalled:    true,
 		},
 		{
-			name:            "branch delete error propagates",
 			branchName:      "feature/test",
 			deleteBranchErr: errors.New("permission denied"),
 			deleteCalled:    true,
+			name:            "branch delete error propagates",
 			removeCalled:    true,
 			wantErr:         true,
 			wantErrContain:  "failed to delete branch",
-		},
-		{
-			name:           "prune error",
-			branchName:     "",
-			pruneErr:       errors.New("prune failed"),
-			wantErr:        true,
-			wantErrContain: "failed to prune",
-			removeCalled:   true,
-			pruneCalled:    true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var removeCalled, deleteCalled, pruneCalled bool
+			var deleteCalled, removeCalled bool
 
 			mock := &mockGit{
-				removeWorktreeFn: func(_ string, _ bool) error {
-					removeCalled = true
-					return tt.removeErr
-				},
 				deleteBranchFn: func(_ string, _ bool) error {
 					deleteCalled = true
 					return tt.deleteBranchErr
 				},
-				pruneWorktreesFn: func() error {
-					pruneCalled = true
-					return tt.pruneErr
+				removeWorktreeFn: func(_ string, _ bool) error {
+					removeCalled = true
+					return tt.removeErr
 				},
 			}
 
@@ -385,7 +366,6 @@ func TestRemoveWorktreeAndBranch(t *testing.T) {
 
 			assert.Equal(t, tt.removeCalled, removeCalled, "removeCalled")
 			assert.Equal(t, tt.deleteCalled, deleteCalled, "deleteCalled")
-			assert.Equal(t, tt.pruneCalled, pruneCalled, "pruneCalled")
 		})
 	}
 }

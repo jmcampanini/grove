@@ -41,8 +41,10 @@ type worktreeStatus struct {
 	absPath    string
 	branchName string
 	dirty      bool
+	headSHA    string
 	isMain     bool
 	kind       string
+	locked     bool
 	pr         *github.PullRequest
 	tracking   trackingInfo
 }
@@ -73,19 +75,9 @@ func runStatus(cmd *cobra.Command, _ []string) error {
 }
 
 func gatherStatuses(ctx *statusContext) ([]worktreeStatus, error) {
-	worktrees, err := ctx.gitClient.ListWorktrees()
+	worktrees, branchMap, err := loadWorktreesAndBranches(ctx.gitClient)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list worktrees: %w", err)
-	}
-
-	branches, err := ctx.gitClient.ListLocalBranches()
-	if err != nil {
-		return nil, fmt.Errorf("failed to list branches: %w", err)
-	}
-
-	branchMap := make(map[string]git.LocalBranch, len(branches))
-	for _, b := range branches {
-		branchMap[b.Name] = b
+		return nil, err
 	}
 
 	var statuses []worktreeStatus
@@ -97,24 +89,27 @@ func gatherStatuses(ctx *statusContext) ([]worktreeStatus, error) {
 	return statuses, nil
 }
 
-func buildWorktreeStatus(ctx *statusContext, wt git.Worktree, branchMap map[string]git.LocalBranch) worktreeStatus {
-	ws := worktreeStatus{
-		absPath: wt.AbsolutePath,
-		isMain:  wt.AbsolutePath == ctx.mainWorktreePath,
+func loadWorktreesAndBranches(gitClient git.Git) ([]git.Worktree, map[string]git.LocalBranch, error) {
+	worktrees, err := gitClient.ListWorktrees()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to list worktrees: %w", err)
+	}
+	branches, err := gitClient.ListLocalBranches()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to list branches: %w", err)
 	}
 
-	ws.branchName = extractBranchName(&wt)
+	branchMap := make(map[string]git.LocalBranch, len(branches))
+	for _, branch := range branches {
+		branchMap[branch.Name] = branch
+	}
+	return worktrees, branchMap, nil
+}
 
+func buildWorktreeStatus(ctx *statusContext, wt git.Worktree, branchMap map[string]git.LocalBranch) worktreeStatus {
+	ws := newWorktreeStatus(ctx, wt, branchMap)
 	if ws.branchName == "" {
 		return ws
-	}
-
-	if b, ok := branchMap[ws.branchName]; ok {
-		ws.tracking = trackingInfo{
-			ahead:    b.Ahead,
-			behind:   b.Behind,
-			upstream: b.UpstreamName,
-		}
 	}
 
 	dirty, err := ctx.gitClient.IsWorktreeDirty(wt.AbsolutePath)
@@ -130,6 +125,24 @@ func buildWorktreeStatus(ctx *statusContext, wt git.Worktree, branchMap map[stri
 		ws.kind = "local"
 	}
 
+	return ws
+}
+
+func newWorktreeStatus(ctx *statusContext, wt git.Worktree, branchMap map[string]git.LocalBranch) worktreeStatus {
+	ws := worktreeStatus{
+		absPath: wt.AbsolutePath,
+		isMain:  wt.AbsolutePath == ctx.mainWorktreePath,
+		locked:  wt.Locked,
+	}
+	ws.branchName = extractBranchName(&wt)
+	ws.headSHA = wt.CommitSHA()
+	if b, ok := branchMap[ws.branchName]; ok {
+		ws.tracking = trackingInfo{
+			ahead:    b.Ahead,
+			behind:   b.Behind,
+			upstream: b.UpstreamName,
+		}
+	}
 	return ws
 }
 

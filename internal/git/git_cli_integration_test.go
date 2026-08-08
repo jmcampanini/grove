@@ -1214,6 +1214,47 @@ func TestRemoveWorktree_Integration(t *testing.T) {
 	}
 }
 
+func TestRemoveWorktree_Integration_MissingDirectory(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	repo := newTestRepo(t)
+	repo.commit("initial commit")
+	repo.createBranch("feature-orphaned")
+	repo.createBranch("feature-other-orphan")
+
+	worktreePath := filepath.Join(t.TempDir(), "wt-orphaned")
+	otherWorktreePath := filepath.Join(t.TempDir(), "wt-other-orphan")
+	repo.createWorktree(worktreePath, "feature-orphaned")
+	repo.createWorktree(otherWorktreePath, "feature-other-orphan")
+	resolvedPath := resolvePath(t, worktreePath)
+	resolvedOtherPath := resolvePath(t, otherWorktreePath)
+	require.NoError(t, os.RemoveAll(worktreePath))
+	require.NoError(t, os.RemoveAll(otherWorktreePath))
+
+	require.NoError(t, repo.Git.RemoveWorktree(resolvedPath, true))
+
+	worktrees, err := repo.Git.ListWorktrees()
+	require.NoError(t, err)
+	var foundOther bool
+	for _, wt := range worktrees {
+		assert.NotEqual(t, resolvedPath, wt.AbsolutePath)
+		foundOther = foundOther || wt.AbsolutePath == resolvedOtherPath
+	}
+	assert.True(t, foundOther)
+
+	require.NoError(t, repo.Git.DeleteBranch("feature-orphaned", true))
+	require.NoError(t, repo.Git.RemoveWorktree(resolvedOtherPath, true))
+	require.NoError(t, repo.Git.DeleteBranch("feature-other-orphan", true))
+
+	for _, branch := range []string{"feature-orphaned", "feature-other-orphan"} {
+		exists, err := repo.Git.BranchExists(branch, false)
+		require.NoError(t, err)
+		assert.False(t, exists)
+	}
+}
+
 func TestRemoveWorktree_Integration_Force(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")

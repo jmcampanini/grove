@@ -19,7 +19,19 @@ type WorktreeRef interface {
 
 type Worktree struct {
 	AbsolutePath string
+	HeadSHA      string
+	Locked       bool
 	Ref          WorktreeRef
+}
+
+func (w Worktree) CommitSHA() string {
+	if w.HeadSHA != "" {
+		return w.HeadSHA
+	}
+	if w.Ref == nil {
+		return ""
+	}
+	return w.Ref.Commit().SHA
 }
 
 type Commit struct {

@@ -150,15 +150,15 @@ func removeWorktreeAndBranch(gitClient git.Git, absPath, branchName string) erro
 	if err := gitClient.RemoveWorktree(absPath, true); err != nil {
 		return fmt.Errorf("failed to remove worktree %q: %w", filepath.Base(absPath), err)
 	}
-	if branchName != "" {
-		if err := gitClient.DeleteBranch(branchName, true); err != nil {
-			if !strings.Contains(err.Error(), "not found") {
-				return fmt.Errorf("failed to delete branch %q: %w", branchName, err)
-			}
-		}
+	return deleteBranchIfExists(gitClient, branchName)
+}
+
+func deleteBranchIfExists(gitClient git.Git, branchName string) error {
+	if branchName == "" {
+		return nil
 	}
-	if err := gitClient.PruneWorktrees(); err != nil {
-		return fmt.Errorf("failed to prune worktrees: %w", err)
+	if err := gitClient.DeleteBranch(branchName, true); err != nil && !strings.Contains(err.Error(), "not found") {
+		return fmt.Errorf("failed to delete branch %q: %w", branchName, err)
 	}
 	return nil
 }
