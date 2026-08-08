@@ -1,10 +1,10 @@
 # Untrusted pull request
 
-Named entity: [click](<javascript:alert(1)>)
+Named entity: [click](javascript&colon;alert(1))
 
-Numeric entity: [click](<javascript:alert(1)>)
+Numeric entity: [click](&#106;avascript:alert(1))
 
-Image destination: ![pixel](<javascript:alert(1)>)
+Image destination: ![pixel](javascript&colon;alert(1))
 
 Ordinary link: [example](https://example.com/docs?q=1&safe=true)
 
