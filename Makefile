@@ -42,7 +42,7 @@ tidy: ## Apply go mod tidy.
 tidy-check: ## Check go.mod/go.sum without modifying files.
 	go mod tidy -diff
 
-vuln: ## Check for reachable known vulnerabilities.
+vuln: ## Check dependencies and reachable code for known vulnerabilities.
 	go tool govulncheck ./...
 
 check: fmt-check tidy-check vuln lint test ## Run all non-mutating checks.
