@@ -17,5 +17,3 @@ When possible, include in the private report:
 - the affected revision: the output of `grove --version`, or the commit you installed from.
 
 Reports are handled on a best-effort basis. There is no guaranteed response, remediation, or disclosure timeline.
-
-Policy standards: CLI-SEC-003, CLI-SEC-006.
