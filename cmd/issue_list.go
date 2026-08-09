@@ -49,7 +49,7 @@ func runIssueList(cmd *cobra.Command, fzf bool) error {
 		return err
 	}
 
-	namer, err := naming.NewIssueNamer(cfg.Issue, cfg.Slugify)
+	namer, err := naming.NewIssueNamer(cfg.Issue, cfg.Naming)
 	if err != nil {
 		return fmt.Errorf("failed to create issue namer: %w", err)
 	}

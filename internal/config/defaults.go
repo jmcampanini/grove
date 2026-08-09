@@ -12,27 +12,21 @@ func DefaultConfig() Config {
 			PreviewCacheTTL: 5 * time.Minute,
 		},
 		Issue: IssueConfig{
-			BranchTemplate:     "issue/{{.Number}}-{{.TitleSlug}}",
-			StripBranchPrefix:  []string{"issue/"},
-			TitleSlugMaxLength: 40,
-			WorktreePrefix:     "is-",
+			BranchTemplate:   "issue/{{.Number}}-{{.TitleSlug}}",
+			WorktreeTemplate: "is-{{.Number}}-{{.TitleSlug}}",
 		},
 		LocalBranch: LocalBranchConfig{
-			BranchPrefix:      "feature/",
-			StripBranchPrefix: []string{"feature/"},
-			WorktreePrefix:    "wt-",
+			BranchTemplate:   "feature/{{.PhraseSlug}}",
+			WorktreeTemplate: "wt-{{.BranchSlug}}",
+		},
+		Naming: NamingConfig{
+			Lowercase:     true,
+			MaxLength:     30,
+			StripPrefixes: []string{"feature/", "fix/", "issue/"},
 		},
 		PullRequest: PullRequestConfig{
-			BranchTemplate: "{{.BranchName}}",
-			WorktreePrefix: "pr-",
-		},
-		Slugify: SlugifyConfig{
-			CollapseDashes:     true,
-			HashLength:         4,
-			Lowercase:          true,
-			MaxLength:          50,
-			ReplaceNonAlphanum: true,
-			TrimDashes:         true,
+			BranchTemplate:   "{{.Branch}}",
+			WorktreeTemplate: "pr-{{.Number}}-{{.TitleSlug}}",
 		},
 		Workspace: WorkspaceConfig{
 			PrimaryBranches: []string{"main", "develop", "master"},

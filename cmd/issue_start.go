@@ -73,7 +73,7 @@ type issueStartContext struct {
 }
 
 func startIssueWorktree(stdout io.Writer, ctx *issueStartContext, issueInfo github.Issue) error {
-	namer, err := naming.NewIssueNamer(ctx.cfg.Issue, ctx.cfg.Slugify)
+	namer, err := naming.NewIssueNamer(ctx.cfg.Issue, ctx.cfg.Naming)
 	if err != nil {
 		return fmt.Errorf("failed to create issue namer: %w", err)
 	}
@@ -83,8 +83,11 @@ func startIssueWorktree(stdout io.Writer, ctx *issueStartContext, issueInfo gith
 		return fmt.Errorf("failed to generate branch name: %w", err)
 	}
 
-	handled, err := reuseExistingIssueWorktree(stdout, ctx, namer, issueInfo)
-	if handled || err != nil {
+	existingWorktree, err := findExistingIssueWorktree(ctx, namer, issueInfo)
+	if err != nil {
+		return err
+	}
+	if reused, err := reuseLiveIssueWorktree(stdout, ctx, issueInfo, existingWorktree); reused || err != nil {
 		return err
 	}
 
@@ -93,72 +96,86 @@ func startIssueWorktree(stdout io.Writer, ctx *issueStartContext, issueInfo gith
 		return err
 	}
 	branchToUse := localBranch
-	branchIsNew := true
-	if reusableBranch != "" {
+	branchIsNew := reusableBranch == ""
+	if !branchIsNew {
 		branchToUse = reusableBranch
-		branchIsNew = false
 	}
 
-	worktreeName := namer.GenerateWorktreeName(branchToUse)
-	if worktreeName == "" {
-		return fmt.Errorf("failed to generate worktree name: empty result")
+	worktreeName, err := namer.GenerateWorktreeName(issueInfo.Number, issueInfo.Title, branchToUse)
+	if err != nil {
+		return fmt.Errorf("failed to generate worktree name: %w", err)
+	}
+	if err := pruneStaleIssueWorktree(ctx, issueInfo, existingWorktree); err != nil {
+		return err
 	}
 
 	workspacePath, err := ctx.gitClient.GetWorkspacePath()
 	if err != nil {
 		return fmt.Errorf("failed to get workspace path: %w", err)
 	}
-
 	wtPath := filepath.Join(workspacePath, worktreeName)
-
 	if _, err := os.Stat(wtPath); err == nil {
 		return fmt.Errorf("worktree path %s already exists (not an issue worktree or different branch)", wtPath)
 	}
 
-	if branchIsNew {
-		baseRef, err := resolveRemotePrimaryBaseRef(ctx.gitClient)
-		if err != nil {
-			return err
-		}
-		if err := ctx.gitClient.CreateWorktreeForNewBranchFromRef(branchToUse, wtPath, baseRef); err != nil {
-			return fmt.Errorf("failed to create branch and worktree: %w", err)
-		}
-	} else {
-		ctx.logger.WithPrefix("issue").Warn("reusing existing branch for issue", "number", issueInfo.Number, "branch", branchToUse)
-		if err := ctx.gitClient.CreateWorktreeForExistingBranch(branchToUse, wtPath); err != nil {
-			return fmt.Errorf("failed to create worktree: %w", err)
-		}
+	if err := createIssueWorktree(ctx, issueInfo, branchToUse, wtPath, branchIsNew); err != nil {
+		return err
 	}
-
 	_, err = fmt.Fprintln(stdout, wtPath)
 	return err
 }
 
-// reuseExistingIssueWorktree prints the path of a live worktree already matched
-// to the issue and reports handled=true so the caller stops. Stale entries
-// (still registered but gone from disk) are pruned so creation can proceed.
-func reuseExistingIssueWorktree(stdout io.Writer, ctx *issueStartContext, namer *naming.IssueNamer, issueInfo github.Issue) (bool, error) {
+func findExistingIssueWorktree(ctx *issueStartContext, namer *naming.IssueNamer, issueInfo github.Issue) (*git.Worktree, error) {
 	worktrees, err := ctx.gitClient.ListWorktrees()
 	if err != nil {
-		return true, fmt.Errorf("failed to list worktrees: %w", err)
+		return nil, fmt.Errorf("failed to list worktrees: %w", err)
 	}
+	return issue.NewMatcher(namer, ctx.logger).FindWorktreeForIssue(issueInfo, worktrees), nil
+}
 
-	existingWorktree := issue.NewMatcher(namer, ctx.logger).FindWorktreeForIssue(issueInfo, worktrees)
-	if existingWorktree == nil {
+func reuseLiveIssueWorktree(stdout io.Writer, ctx *issueStartContext, issueInfo github.Issue, worktree *git.Worktree) (bool, error) {
+	if worktree == nil {
 		return false, nil
 	}
-
-	if _, statErr := os.Stat(existingWorktree.AbsolutePath); statErr == nil {
-		ctx.logger.WithPrefix("issue").Warn("worktree already exists for issue", "number", issueInfo.Number, "path", existingWorktree.AbsolutePath)
-		_, err := fmt.Fprintln(stdout, existingWorktree.AbsolutePath)
-		return true, err
+	if _, err := os.Stat(worktree.AbsolutePath); err != nil {
+		if !os.IsNotExist(err) {
+			return false, fmt.Errorf("failed to inspect existing worktree %s: %w", worktree.AbsolutePath, err)
+		}
+		return false, nil
 	}
+	ctx.logger.WithPrefix("issue").Warn("worktree already exists for issue", "number", issueInfo.Number, "path", worktree.AbsolutePath)
+	_, err := fmt.Fprintln(stdout, worktree.AbsolutePath)
+	return true, err
+}
 
-	ctx.logger.WithPrefix("issue").Warn("stale worktree entry found for issue", "number", issueInfo.Number, "path", existingWorktree.AbsolutePath)
+func pruneStaleIssueWorktree(ctx *issueStartContext, issueInfo github.Issue, worktree *git.Worktree) error {
+	if worktree == nil {
+		return nil
+	}
+	ctx.logger.WithPrefix("issue").Warn("stale worktree entry found for issue", "number", issueInfo.Number, "path", worktree.AbsolutePath)
 	if err := ctx.gitClient.PruneWorktrees(); err != nil {
-		return true, fmt.Errorf("failed to prune stale worktrees: %w", err)
+		return fmt.Errorf("failed to prune stale worktrees: %w", err)
 	}
-	return false, nil
+	return nil
+}
+
+func createIssueWorktree(ctx *issueStartContext, issueInfo github.Issue, branch, worktreePath string, branchIsNew bool) error {
+	if !branchIsNew {
+		ctx.logger.WithPrefix("issue").Warn("reusing existing branch for issue", "number", issueInfo.Number, "branch", branch)
+		if err := ctx.gitClient.CreateWorktreeForExistingBranch(branch, worktreePath); err != nil {
+			return fmt.Errorf("failed to create worktree: %w", err)
+		}
+		return nil
+	}
+
+	baseRef, err := resolveRemotePrimaryBaseRef(ctx.gitClient)
+	if err != nil {
+		return err
+	}
+	if err := ctx.gitClient.CreateWorktreeForNewBranchFromRef(branch, worktreePath, baseRef); err != nil {
+		return fmt.Errorf("failed to create branch and worktree: %w", err)
+	}
+	return nil
 }
 
 // findReusableIssueBranch returns the first local branch matched to the issue

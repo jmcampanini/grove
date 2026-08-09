@@ -67,23 +67,23 @@ type prCheckoutContext struct {
 }
 
 func checkoutPRWorktree(stdout io.Writer, ctx *prCheckoutContext, prInfo github.PullRequest) error {
-	namer, err := naming.NewPullRequestNamer(ctx.cfg.PullRequest, ctx.cfg.Slugify)
+	namer, err := naming.NewPullRequestNamer(ctx.cfg.PullRequest, ctx.cfg.Naming)
 	if err != nil {
 		return fmt.Errorf("failed to create PR namer: %w", err)
 	}
 
 	prData := naming.PullRequestTemplateData{
-		BranchName: prInfo.BranchName,
-		Number:     prInfo.Number,
+		Branch: prInfo.BranchName,
+		Number: prInfo.Number,
 	}
 	localBranch, err := namer.GenerateBranchName(prData)
 	if err != nil {
 		return fmt.Errorf("failed to generate branch name: %w", err)
 	}
 
-	worktreeName := namer.GenerateWorktreeName(localBranch)
-	if worktreeName == "" {
-		return fmt.Errorf("failed to generate worktree name: empty result")
+	worktreeName, err := namer.GenerateWorktreeName(prInfo.Number, prInfo.Title, localBranch)
+	if err != nil {
+		return fmt.Errorf("failed to generate worktree name: %w", err)
 	}
 
 	worktrees, err := ctx.gitClient.ListWorktrees()

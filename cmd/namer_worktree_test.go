@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"errors"
 	"strings"
 	"testing"
 
@@ -16,6 +17,7 @@ func TestExecuteNamerWorktree(t *testing.T) {
 		phrase         string
 		wantErr        bool
 		wantErrContain string
+		wantErrIs      error
 		wantOutput     string
 	}{
 		{
@@ -34,9 +36,9 @@ func TestExecuteNamerWorktree(t *testing.T) {
 			wantOutput: "wt-add-oauth2-google",
 		},
 		{
-			name:       "long phrase triggers hash truncation",
+			name:       "generated branch cap is preserved",
 			phrase:     "implement comprehensive user authentication and authorization system with role based access",
-			wantOutput: "wt-implement-comprehensive-user-authentication-a-nquu",
+			wantOutput: "wt-implement-comprehensiv",
 		},
 		{
 			name:           "empty phrase",
@@ -48,24 +50,28 @@ func TestExecuteNamerWorktree(t *testing.T) {
 			name:           "all special chars slugifies to empty",
 			phrase:         "@#$%^&*",
 			wantErr:        true,
-			wantErrContain: "empty name after slugification",
+			wantErrContain: "failed to generate branch name",
+			wantErrIs:      naming.ErrEmptySlug,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := defaultTestConfig()
-			ctx := &namerContext{
-				namer: naming.NewLocalBranchNamer(cfg.LocalBranch, cfg.Slugify),
-			}
+			namer, err := naming.NewLocalBranchNamer(cfg.LocalBranch, cfg.Naming)
+			require.NoError(t, err)
+			ctx := &namerContext{namer: namer}
 
 			var buf bytes.Buffer
-			err := executeNamerWorktree(&buf, ctx, tt.phrase)
+			err = executeNamerWorktree(&buf, ctx, tt.phrase)
 
 			if tt.wantErr {
 				require.Error(t, err)
 				if tt.wantErrContain != "" {
 					assert.Contains(t, err.Error(), tt.wantErrContain)
+				}
+				if tt.wantErrIs != nil {
+					assert.True(t, errors.Is(err, tt.wantErrIs))
 				}
 				return
 			}

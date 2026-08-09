@@ -49,7 +49,7 @@ func runPRList(cmd *cobra.Command, fzf bool) error {
 		return err
 	}
 
-	namer, err := naming.NewPullRequestNamer(cfg.PullRequest, cfg.Slugify)
+	namer, err := naming.NewPullRequestNamer(cfg.PullRequest, cfg.Naming)
 	if err != nil {
 		return fmt.Errorf("failed to create PR namer: %w", err)
 	}

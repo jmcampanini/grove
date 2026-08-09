@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"errors"
 	"strings"
 	"testing"
 
@@ -16,6 +17,7 @@ func TestExecuteNamerSlug(t *testing.T) {
 		phrase         string
 		wantErr        bool
 		wantErrContain string
+		wantErrIs      error
 		wantOutput     string
 	}{
 		{
@@ -34,9 +36,9 @@ func TestExecuteNamerSlug(t *testing.T) {
 			wantOutput: "add-oauth2-google",
 		},
 		{
-			name:       "long phrase triggers hash truncation",
+			name:       "raw slug is not capped",
 			phrase:     "implement comprehensive user authentication and authorization system with role based access",
-			wantOutput: "implement-comprehensive-user-authentication-a-nquu",
+			wantOutput: "implement-comprehensive-user-authentication-and-authorization-system-with-role-based-access",
 		},
 		{
 			name:           "empty phrase",
@@ -49,12 +51,13 @@ func TestExecuteNamerSlug(t *testing.T) {
 			phrase:         "@#$%^&*",
 			wantErr:        true,
 			wantErrContain: "empty result after slugification",
+			wantErrIs:      naming.ErrEmptySlug,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			opts := naming.SlugifyOptionsFromConfig(defaultTestConfig().Slugify)
+			opts := naming.SlugifyOptionsFromConfig(defaultTestConfig().Naming)
 
 			var buf bytes.Buffer
 			err := executeNamerSlug(&buf, opts, tt.phrase)
@@ -64,6 +67,9 @@ func TestExecuteNamerSlug(t *testing.T) {
 				if tt.wantErrContain != "" {
 					assert.Contains(t, err.Error(), tt.wantErrContain)
 				}
+				if tt.wantErrIs != nil {
+					assert.True(t, errors.Is(err, tt.wantErrIs))
+				}
 				return
 			}
 
@@ -71,4 +77,8 @@ func TestExecuteNamerSlug(t *testing.T) {
 			assert.Equal(t, tt.wantOutput, strings.TrimSpace(buf.String()))
 		})
 	}
+}
+
+func TestNamerSlugHelpDocumentsNoNameCap(t *testing.T) {
+	assert.Contains(t, newNamerSlugCmd().Long, "not capped by naming.max_length")
 }

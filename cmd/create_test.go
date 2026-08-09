@@ -15,10 +15,11 @@ import (
 
 func TestExecuteCreate(t *testing.T) {
 	tests := []struct {
+		branchTemplate string
+		gitMock        func(workspaceDir string) *mockGit
 		name           string
 		phrase         string
 		reuse          bool
-		gitMock        func(workspaceDir string) *mockGit
 		setupFS        func(t *testing.T, workspaceDir string)
 		wantErr        bool
 		wantErrContain string
@@ -42,7 +43,7 @@ func TestExecuteCreate(t *testing.T) {
 					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
 				}
 			},
-			wantOutput: "wt-fix-handle-404-500-errors",
+			wantOutput: "wt-fix-handle-404-500-err",
 		},
 		{
 			name:   "mixed casing",
@@ -52,17 +53,25 @@ func TestExecuteCreate(t *testing.T) {
 					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
 				}
 			},
-			wantOutput: "wt-add-oauth2-google-integration",
+			wantOutput: "wt-add-oauth2-google-inte",
 		},
 		{
-			name:   "long phrase triggers hash truncation",
+			name:   "long generated branch is capped before worktree naming",
 			phrase: "implement comprehensive user authentication and authorization system with role based access",
 			gitMock: func(workspaceDir string) *mockGit {
 				return &mockGit{
 					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
 				}
 			},
-			wantOutput: "wt-implement-comprehensive-user-authentication-a-nquu",
+			wantOutput: "wt-implement-comprehensiv",
+		},
+		{
+			branchTemplate: "{{.Unknown}}",
+			name:           "invalid naming template",
+			phrase:         "add logging support",
+			gitMock:        func(string) *mockGit { return &mockGit{} },
+			wantErr:        true,
+			wantErrContain: "failed to initialize local branch namer",
 		},
 		{
 			name:   "duplicate branch",
@@ -350,8 +359,12 @@ func TestExecuteCreate(t *testing.T) {
 			}
 
 			var stdout bytes.Buffer
+			cfg := defaultTestConfig()
+			if tt.branchTemplate != "" {
+				cfg.LocalBranch.BranchTemplate = tt.branchTemplate
+			}
 			ctx := &createContext{
-				cfg:       defaultTestConfig(),
+				cfg:       cfg,
 				gitClient: tt.gitMock(workspaceDir),
 				logger:    testLogger(),
 				reuse:     tt.reuse,
@@ -548,6 +561,12 @@ func TestExecuteCreate_FromRemotePrimary(t *testing.T) {
 
 func TestCreateCommandHasFromRemotePrimaryFlag(t *testing.T) {
 	assert.NotNil(t, newCreateCmd().Flags().Lookup("from-remote-primary"))
+}
+
+func TestCreateHelpDocumentsNamingTemplates(t *testing.T) {
+	help := newCreateCmd().Long
+	assert.Contains(t, help, `--worktree-template "subagent-{{.BranchSlug}}"`)
+	assert.NotContains(t, help, "worktree-prefix")
 }
 
 func TestExecuteCreate_ReuseVerifiesGitArgs(t *testing.T) {

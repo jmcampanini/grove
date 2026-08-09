@@ -11,8 +11,8 @@ type Config struct {
 	GitHub      GitHubConfig      `toml:"github"`
 	Issue       IssueConfig       `toml:"issue"`
 	LocalBranch LocalBranchConfig `toml:"local_branch"`
+	Naming      NamingConfig      `toml:"naming"`
 	PullRequest PullRequestConfig `toml:"pull_request"`
-	Slugify     SlugifyConfig     `toml:"slugify"`
 	Workspace   WorkspaceConfig   `toml:"workspace"`
 }
 
@@ -25,23 +25,26 @@ func (c Config) Validate() error {
 	if c.GitHub.PreviewCacheTTL < 0 {
 		return errors.New("github.preview_cache_ttl cannot be negative")
 	}
-	if c.Issue.TitleSlugMaxLength < 0 {
-		return errors.New("issue.title_slug_max_length cannot be negative")
+	if c.Issue.BranchTemplate == "" {
+		return errors.New("issue.branch_template cannot be empty")
 	}
-	if c.Issue.WorktreePrefix == "" {
-		return errors.New("issue.worktree_prefix cannot be empty")
+	if c.Issue.WorktreeTemplate == "" {
+		return errors.New("issue.worktree_template cannot be empty")
 	}
-	if c.PullRequest.WorktreePrefix == "" {
-		return errors.New("pull_request.worktree_prefix cannot be empty")
+	if c.LocalBranch.BranchTemplate == "" {
+		return errors.New("local_branch.branch_template cannot be empty")
 	}
-	if c.Slugify.HashLength < 0 {
-		return errors.New("slugify.hash_length cannot be negative")
+	if c.LocalBranch.WorktreeTemplate == "" {
+		return errors.New("local_branch.worktree_template cannot be empty")
 	}
-	if c.Slugify.MaxLength < 0 {
-		return errors.New("slugify.max_length cannot be negative")
+	if c.Naming.MaxLength < 0 {
+		return errors.New("naming.max_length cannot be negative")
 	}
-	if c.Slugify.MaxLength > 0 && c.Slugify.HashLength > c.Slugify.MaxLength-2 {
-		return errors.New("slugify.hash_length must be at least 2 less than slugify.max_length")
+	if c.PullRequest.BranchTemplate == "" {
+		return errors.New("pull_request.branch_template cannot be empty")
+	}
+	if c.PullRequest.WorktreeTemplate == "" {
+		return errors.New("pull_request.worktree_template cannot be empty")
 	}
 	if len(c.Workspace.PrimaryBranches) == 0 {
 		return errors.New("workspace.primary_branches cannot be empty")
@@ -59,48 +62,29 @@ type GitHubConfig struct {
 	PreviewCacheTTL time.Duration `toml:"preview_cache_ttl"` // TTL for FZF preview cache (e.g., "5m"); 0 disables
 }
 
-// IssueConfig configures issue worktree naming.
+// IssueConfig configures issue naming.
 type IssueConfig struct {
-	BranchTemplate string `toml:"branch_template"` // Template for local branch name (e.g., "issue/{{.Number}}-{{.TitleSlug}}")
-
-	// StripBranchPrefix is a list of prefixes to strip from branch names.
-	// Only the first matching prefix is stripped (checked in list order).
-	StripBranchPrefix []string `toml:"strip_branch_prefix"`
-
-	// TitleSlugMaxLength caps the length of {{.TitleSlug}}. Truncation is clean
-	// (no hash suffix) because the issue number already guarantees uniqueness.
-	// 0 disables the cap.
-	TitleSlugMaxLength int `toml:"title_slug_max_length"`
-
-	WorktreePrefix string `toml:"worktree_prefix"` // Prefix for issue worktree directories (e.g., "is-")
+	BranchTemplate   string `toml:"branch_template"`
+	WorktreeTemplate string `toml:"worktree_template"`
 }
 
-// LocalBranchConfig configures local branch worktree naming.
+// LocalBranchConfig configures local branch naming.
 type LocalBranchConfig struct {
-	BranchPrefix string `toml:"branch_prefix"` // e.g., "feature/"
-
-	// StripBranchPrefix is a list of prefixes to strip from branch names.
-	// Only the first matching prefix is stripped (checked in list order).
-	// e.g., branch "feature/add-auth" with ["fix/", "feature/"] -> "add-auth"
-	StripBranchPrefix []string `toml:"strip_branch_prefix"`
-
-	WorktreePrefix string `toml:"worktree_prefix" config:"worktree-prefix" help:"Override the local branch worktree directory prefix (local_branch.worktree_prefix)"` // e.g., "wt-"
+	BranchTemplate   string `toml:"branch_template"`
+	WorktreeTemplate string `toml:"worktree_template" config:"worktree-template" help:"Override the local branch worktree directory template (local_branch.worktree_template)"`
 }
 
-// PullRequestConfig configures pull request worktree naming.
+// NamingConfig configures generated names.
+type NamingConfig struct {
+	Lowercase     bool     `toml:"lowercase"`
+	MaxLength     int      `toml:"max_length"`
+	StripPrefixes []string `toml:"strip_prefixes"`
+}
+
+// PullRequestConfig configures pull request naming.
 type PullRequestConfig struct {
-	BranchTemplate string `toml:"branch_template"` // Template for local branch name (e.g., "{{.BranchName}}")
-	WorktreePrefix string `toml:"worktree_prefix"` // Prefix for PR worktree directories (e.g., "pr-")
-}
-
-// SlugifyConfig configures slug generation.
-type SlugifyConfig struct {
-	CollapseDashes     bool `toml:"collapse_dashes"`
-	HashLength         int  `toml:"hash_length"`
-	Lowercase          bool `toml:"lowercase"`
-	MaxLength          int  `toml:"max_length"`
-	ReplaceNonAlphanum bool `toml:"replace_non_alphanum"`
-	TrimDashes         bool `toml:"trim_dashes"`
+	BranchTemplate   string `toml:"branch_template"`
+	WorktreeTemplate string `toml:"worktree_template"`
 }
 
 // WorkspaceConfig configures workspace root detection.

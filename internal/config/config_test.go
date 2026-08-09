@@ -16,39 +16,26 @@ import (
 func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
 
-	// Git defaults
 	assert.Equal(t, 5*time.Second, cfg.Git.Timeout)
-
-	// GitHub defaults
 	assert.Equal(t, 5*time.Minute, cfg.GitHub.PreviewCacheTTL)
-
-	// Issue defaults
-	assert.Equal(t, "issue/{{.Number}}-{{.TitleSlug}}", cfg.Issue.BranchTemplate)
-	assert.Equal(t, []string{"issue/"}, cfg.Issue.StripBranchPrefix)
-	assert.Equal(t, 40, cfg.Issue.TitleSlugMaxLength)
-	assert.Equal(t, "is-", cfg.Issue.WorktreePrefix)
-
-	// Slugify defaults
-	assert.True(t, cfg.Slugify.CollapseDashes)
-	assert.Equal(t, 4, cfg.Slugify.HashLength)
-	assert.True(t, cfg.Slugify.Lowercase)
-	assert.Equal(t, 50, cfg.Slugify.MaxLength)
-	assert.True(t, cfg.Slugify.ReplaceNonAlphanum)
-	assert.True(t, cfg.Slugify.TrimDashes)
-
-	// LocalBranch defaults
-	assert.Equal(t, "feature/", cfg.LocalBranch.BranchPrefix)
-	assert.Equal(t, []string{"feature/"}, cfg.LocalBranch.StripBranchPrefix)
-	assert.Equal(t, "wt-", cfg.LocalBranch.WorktreePrefix)
-
-	// PullRequest defaults
-	assert.Equal(t, "{{.BranchName}}", cfg.PullRequest.BranchTemplate)
-	assert.Equal(t, "pr-", cfg.PullRequest.WorktreePrefix)
-
-	// Workspace defaults
+	assert.Equal(t, IssueConfig{
+		BranchTemplate:   "issue/{{.Number}}-{{.TitleSlug}}",
+		WorktreeTemplate: "is-{{.Number}}-{{.TitleSlug}}",
+	}, cfg.Issue)
+	assert.Equal(t, LocalBranchConfig{
+		BranchTemplate:   "feature/{{.PhraseSlug}}",
+		WorktreeTemplate: "wt-{{.BranchSlug}}",
+	}, cfg.LocalBranch)
+	assert.Equal(t, NamingConfig{
+		Lowercase:     true,
+		MaxLength:     30,
+		StripPrefixes: []string{"feature/", "fix/", "issue/"},
+	}, cfg.Naming)
+	assert.Equal(t, PullRequestConfig{
+		BranchTemplate:   "{{.Branch}}",
+		WorktreeTemplate: "pr-{{.Number}}-{{.TitleSlug}}",
+	}, cfg.PullRequest)
 	assert.Equal(t, []string{"main", "develop", "master"}, cfg.Workspace.PrimaryBranches)
-
-	// Default config should be valid
 	assert.NoError(t, cfg.Validate())
 }
 
@@ -58,144 +45,86 @@ func TestConfig_Validate(t *testing.T) {
 		modify  func(*Config)
 		wantErr string
 	}{
+		{name: "valid defaults", modify: func(*Config) {}},
 		{
-			name:    "valid default config",
-			modify:  func(c *Config) {},
-			wantErr: "",
+			name: "zero git timeout",
+			modify: func(cfg *Config) {
+				cfg.Git.Timeout = 0
+			},
 		},
-		// Git
 		{
 			name: "negative git timeout",
-			modify: func(c *Config) {
-				c.Git.Timeout = -1 * time.Second
+			modify: func(cfg *Config) {
+				cfg.Git.Timeout = -time.Second
 			},
 			wantErr: "git.timeout cannot be negative",
 		},
 		{
-			name: "zero timeout is valid",
-			modify: func(c *Config) {
-				c.Git.Timeout = 0
-			},
-			wantErr: "",
-		},
-		// GitHub
-		{
-			name: "negative preview cache TTL",
-			modify: func(c *Config) {
-				c.GitHub.PreviewCacheTTL = -1 * time.Second
+			name: "negative GitHub preview cache TTL",
+			modify: func(cfg *Config) {
+				cfg.GitHub.PreviewCacheTTL = -time.Second
 			},
 			wantErr: "github.preview_cache_ttl cannot be negative",
 		},
 		{
-			name: "zero preview cache TTL is valid",
-			modify: func(c *Config) {
-				c.GitHub.PreviewCacheTTL = 0
+			name: "empty issue branch template",
+			modify: func(cfg *Config) {
+				cfg.Issue.BranchTemplate = ""
 			},
-			wantErr: "",
-		},
-		// Issue
-		{
-			name: "negative issue title slug max length",
-			modify: func(c *Config) {
-				c.Issue.TitleSlugMaxLength = -1
-			},
-			wantErr: "issue.title_slug_max_length cannot be negative",
+			wantErr: "issue.branch_template cannot be empty",
 		},
 		{
-			name: "zero issue title slug max length is valid",
-			modify: func(c *Config) {
-				c.Issue.TitleSlugMaxLength = 0
+			name: "empty issue worktree template",
+			modify: func(cfg *Config) {
+				cfg.Issue.WorktreeTemplate = ""
 			},
-			wantErr: "",
+			wantErr: "issue.worktree_template cannot be empty",
 		},
 		{
-			name: "empty issue worktree prefix",
-			modify: func(c *Config) {
-				c.Issue.WorktreePrefix = ""
+			name: "empty local branch template",
+			modify: func(cfg *Config) {
+				cfg.LocalBranch.BranchTemplate = ""
 			},
-			wantErr: "issue.worktree_prefix cannot be empty",
-		},
-		// PullRequest
-		{
-			name: "empty pull request worktree prefix",
-			modify: func(c *Config) {
-				c.PullRequest.WorktreePrefix = ""
-			},
-			wantErr: "pull_request.worktree_prefix cannot be empty",
-		},
-		// Slugify
-		{
-			name: "negative hash length",
-			modify: func(c *Config) {
-				c.Slugify.HashLength = -1
-			},
-			wantErr: "slugify.hash_length cannot be negative",
+			wantErr: "local_branch.branch_template cannot be empty",
 		},
 		{
-			name: "zero hash length is valid",
-			modify: func(c *Config) {
-				c.Slugify.HashLength = 0
+			name: "empty local worktree template",
+			modify: func(cfg *Config) {
+				cfg.LocalBranch.WorktreeTemplate = ""
 			},
-			wantErr: "",
+			wantErr: "local_branch.worktree_template cannot be empty",
 		},
 		{
-			name: "negative max length",
-			modify: func(c *Config) {
-				c.Slugify.MaxLength = -1
+			name: "negative naming max length",
+			modify: func(cfg *Config) {
+				cfg.Naming.MaxLength = -1
 			},
-			wantErr: "slugify.max_length cannot be negative",
+			wantErr: "naming.max_length cannot be negative",
 		},
 		{
-			name: "zero max length is valid",
-			modify: func(c *Config) {
-				c.Slugify.MaxLength = 0
+			name: "zero naming max length",
+			modify: func(cfg *Config) {
+				cfg.Naming.MaxLength = 0
 			},
-			wantErr: "",
 		},
 		{
-			name: "hash length equals max length minus 2 is valid",
-			modify: func(c *Config) {
-				c.Slugify.MaxLength = 10
-				c.Slugify.HashLength = 8
+			name: "empty pull request branch template",
+			modify: func(cfg *Config) {
+				cfg.PullRequest.BranchTemplate = ""
 			},
-			wantErr: "",
+			wantErr: "pull_request.branch_template cannot be empty",
 		},
 		{
-			name: "hash length greater than max length minus 2 is invalid",
-			modify: func(c *Config) {
-				c.Slugify.MaxLength = 10
-				c.Slugify.HashLength = 9
+			name: "empty pull request worktree template",
+			modify: func(cfg *Config) {
+				cfg.PullRequest.WorktreeTemplate = ""
 			},
-			wantErr: "slugify.hash_length must be at least 2 less than slugify.max_length",
+			wantErr: "pull_request.worktree_template cannot be empty",
 		},
 		{
-			name: "hash length equals max length is invalid",
-			modify: func(c *Config) {
-				c.Slugify.MaxLength = 10
-				c.Slugify.HashLength = 10
-			},
-			wantErr: "slugify.hash_length must be at least 2 less than slugify.max_length",
-		},
-		{
-			name: "hash length greater than max length is invalid",
-			modify: func(c *Config) {
-				c.Slugify.MaxLength = 5
-				c.Slugify.HashLength = 10
-			},
-			wantErr: "slugify.hash_length must be at least 2 less than slugify.max_length",
-		},
-		// Workspace
-		{
-			name: "empty primary branches",
-			modify: func(c *Config) {
-				c.Workspace.PrimaryBranches = []string{}
-			},
-			wantErr: "workspace.primary_branches cannot be empty",
-		},
-		{
-			name: "nil primary branches",
-			modify: func(c *Config) {
-				c.Workspace.PrimaryBranches = nil
+			name: "empty workspace primary branches",
+			modify: func(cfg *Config) {
+				cfg.Workspace.PrimaryBranches = nil
 			},
 			wantErr: "workspace.primary_branches cannot be empty",
 		},
@@ -208,9 +137,9 @@ func TestConfig_Validate(t *testing.T) {
 			err := cfg.Validate()
 			if tt.wantErr == "" {
 				assert.NoError(t, err)
-			} else {
-				assert.EqualError(t, err, tt.wantErr)
+				return
 			}
+			assert.EqualError(t, err, tt.wantErr)
 		})
 	}
 }
@@ -440,9 +369,6 @@ func TestLoad_MissingFile(t *testing.T) {
 }
 
 func TestLoad_SingleFile(t *testing.T) {
-	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "grove.toml")
-
 	tests := []struct {
 		name    string
 		content string
@@ -458,78 +384,42 @@ timeout = "10s"
 			},
 		},
 		{
-			name: "github preview cache TTL",
+			name: "GitHub preview cache TTL",
 			content: `[github]
 preview_cache_ttl = "10m"
 `,
 			check: func(t *testing.T, cfg Config) {
 				assert.Equal(t, 10*time.Minute, cfg.GitHub.PreviewCacheTTL)
-				assert.Equal(t, 5*time.Second, cfg.Git.Timeout)
 			},
 		},
 		{
-			name: "github preview cache TTL disabled",
+			name: "zero GitHub preview cache TTL",
 			content: `[github]
 preview_cache_ttl = "0s"
 `,
 			check: func(t *testing.T, cfg Config) {
-				assert.Equal(t, time.Duration(0), cfg.GitHub.PreviewCacheTTL)
+				assert.Zero(t, cfg.GitHub.PreviewCacheTTL)
 			},
 		},
 		{
-			name: "issue config",
+			name: "issue and pull request templates",
 			content: `[issue]
 branch_template = "ticket/{{.Number}}-{{.TitleSlug}}"
-strip_branch_prefix = ["ticket/", "issue/"]
-title_slug_max_length = 30
-worktree_prefix = "task-"
+worktree_template = "task-{{.Number}}-{{.BranchSlug}}"
+
+[pull_request]
+branch_template = "review/{{.Number}}/{{.Branch}}"
+worktree_template = "review-{{.Number}}-{{.TitleSlug}}"
 `,
 			check: func(t *testing.T, cfg Config) {
 				assert.Equal(t, "ticket/{{.Number}}-{{.TitleSlug}}", cfg.Issue.BranchTemplate)
-				assert.Equal(t, []string{"ticket/", "issue/"}, cfg.Issue.StripBranchPrefix)
-				assert.Equal(t, 30, cfg.Issue.TitleSlugMaxLength)
-				assert.Equal(t, "task-", cfg.Issue.WorktreePrefix)
+				assert.Equal(t, "task-{{.Number}}-{{.BranchSlug}}", cfg.Issue.WorktreeTemplate)
+				assert.Equal(t, "review/{{.Number}}/{{.Branch}}", cfg.PullRequest.BranchTemplate)
+				assert.Equal(t, "review-{{.Number}}-{{.TitleSlug}}", cfg.PullRequest.WorktreeTemplate)
 			},
 		},
 		{
-			name: "empty issue strip prefix list clears default",
-			content: `[issue]
-strip_branch_prefix = []
-`,
-			check: func(t *testing.T, cfg Config) {
-				assert.Empty(t, cfg.Issue.StripBranchPrefix)
-				assert.Equal(t, "is-", cfg.Issue.WorktreePrefix)
-			},
-		},
-		{
-			name: "local branch config",
-			content: `[local_branch]
-branch_prefix = "fix/"
-worktree_prefix = "work-"
-strip_branch_prefix = ["fix/", "feature/", "chore/"]
-`,
-			check: func(t *testing.T, cfg Config) {
-				assert.Equal(t, "fix/", cfg.LocalBranch.BranchPrefix)
-				assert.Equal(t, "work-", cfg.LocalBranch.WorktreePrefix)
-				assert.Equal(t, []string{"fix/", "feature/", "chore/"}, cfg.LocalBranch.StripBranchPrefix)
-			},
-		},
-		{
-			name: "slugify options",
-			content: `[slugify]
-max_length = 30
-hash_length = 6
-lowercase = false
-`,
-			check: func(t *testing.T, cfg Config) {
-				assert.Equal(t, 30, cfg.Slugify.MaxLength)
-				assert.Equal(t, 6, cfg.Slugify.HashLength)
-				assert.False(t, cfg.Slugify.Lowercase)
-				assert.True(t, cfg.Slugify.CollapseDashes)
-			},
-		},
-		{
-			name: "workspace config",
+			name: "workspace primary branches",
 			content: `[workspace]
 primary_branches = ["trunk", "main"]
 `,
@@ -548,87 +438,91 @@ primary_branches = ["trunk", "main"]
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := os.WriteFile(configPath, []byte(tt.content), 0644)
-			require.NoError(t, err)
+			configPath := filepath.Join(t.TempDir(), "grove.toml")
+			require.NoError(t, os.WriteFile(configPath, []byte(tt.content), 0644))
 
 			cfg, report, err := LoadFiles([]string{configPath})
 			require.NoError(t, err)
-
 			tt.check(t, cfg)
 			assert.Equal(t, []string{configPath}, report.LoadedFiles)
 		})
 	}
 }
 
-func TestLoad_SequentialOverlay(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	// Create two config files
-	lowPriorityPath := filepath.Join(tmpDir, "low.toml")
-	highPriorityPath := filepath.Join(tmpDir, "high.toml")
-
-	lowPriorityContent := `[local_branch]
-branch_prefix = "low/"
-
-[slugify]
-max_length = 100
+func TestLoad_NamingTOML(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "grove.toml")
+	content := `[naming]
+lowercase = false
+max_length = 42
+strip_prefixes = ["topic/", "bug/"]
 `
+	require.NoError(t, os.WriteFile(configPath, []byte(content), 0644))
 
-	highPriorityContent := `[local_branch]
-branch_prefix = "high/"
-`
-
-	require.NoError(t, os.WriteFile(lowPriorityPath, []byte(lowPriorityContent), 0644))
-	require.NoError(t, os.WriteFile(highPriorityPath, []byte(highPriorityContent), 0644))
-
-	cfg, report, err := LoadFiles([]string{lowPriorityPath, highPriorityPath})
+	cfg, report, err := LoadFiles([]string{configPath})
 	require.NoError(t, err)
+	assert.Equal(t, NamingConfig{
+		Lowercase:     false,
+		MaxLength:     42,
+		StripPrefixes: []string{"topic/", "bug/"},
+	}, cfg.Naming)
+	assert.Equal(t, []string{configPath}, report.LoadedFiles)
+}
 
-	// High priority should override local_branch.branch_prefix
-	assert.Equal(t, "high/", cfg.LocalBranch.BranchPrefix)
-	// Low priority should still apply for non-overridden fields
-	assert.Equal(t, 100, cfg.Slugify.MaxLength)
-	// Both paths should be in source paths
-	assert.Equal(t, []string{lowPriorityPath, highPriorityPath}, report.LoadedFiles)
+func TestLoad_SequentialOverlayAndProvenance(t *testing.T) {
+	tmpDir := t.TempDir()
+	lowPath := filepath.Join(tmpDir, "low.toml")
+	highPath := filepath.Join(tmpDir, "high.toml")
+	require.NoError(t, os.WriteFile(lowPath, []byte(`[naming]
+max_length = 80
+strip_prefixes = ["low/"]
+
+[local_branch]
+branch_template = "low/{{.PhraseSlug}}"
+`), 0644))
+	require.NoError(t, os.WriteFile(highPath, []byte(`[naming]
+strip_prefixes = ["high/"]
+
+[local_branch]
+branch_template = "high/{{.PhraseSlug}}"
+`), 0644))
+
+	cfg, report, err := LoadFiles([]string{lowPath, highPath})
+	require.NoError(t, err)
+	assert.Equal(t, 80, cfg.Naming.MaxLength)
+	assert.Equal(t, []string{"high/"}, cfg.Naming.StripPrefixes)
+	assert.Equal(t, "high/{{.PhraseSlug}}", cfg.LocalBranch.BranchTemplate)
+	assert.Equal(t, []string{lowPath, highPath}, report.LoadedFiles)
+	assert.Equal(t, lowPath, report.Updates["naming.maxlength"])
+	assert.Equal(t, highPath, report.Updates["naming.stripprefixes"])
+	assert.Equal(t, highPath, report.Updates["localbranch.branchtemplate"])
+	assert.Equal(t, configloader.SourceDefault, report.Updates["naming.lowercase"])
 }
 
 func TestLoad_ZeroValueOverwrite(t *testing.T) {
 	tmpDir := t.TempDir()
-
-	// First file sets values.
 	firstPath := filepath.Join(tmpDir, "first.toml")
-	firstContent := `[issue]
-strip_branch_prefix = ["ticket/"]
-
-[slugify]
-max_length = 100
-`
-	require.NoError(t, os.WriteFile(firstPath, []byte(firstContent), 0644))
-
-	// Second file explicitly clears them.
 	secondPath := filepath.Join(tmpDir, "second.toml")
-	secondContent := `[issue]
-strip_branch_prefix = []
-
-[slugify]
+	require.NoError(t, os.WriteFile(firstPath, []byte(`[naming]
+lowercase = true
+max_length = 100
+strip_prefixes = ["topic/"]
+`), 0644))
+	require.NoError(t, os.WriteFile(secondPath, []byte(`[naming]
+lowercase = false
 max_length = 0
-`
-	require.NoError(t, os.WriteFile(secondPath, []byte(secondContent), 0644))
+strip_prefixes = []
+`), 0644))
 
 	cfg, _, err := LoadFiles([]string{firstPath, secondPath})
 	require.NoError(t, err)
-
-	assert.Empty(t, cfg.Issue.StripBranchPrefix)
-	assert.Equal(t, 0, cfg.Slugify.MaxLength)
+	assert.False(t, cfg.Naming.Lowercase)
+	assert.Zero(t, cfg.Naming.MaxLength)
+	assert.Empty(t, cfg.Naming.StripPrefixes)
 }
 
 func TestLoad_InvalidTOML(t *testing.T) {
-	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "grove.toml")
-
-	invalidContent := `[local_branch
-branch_prefix = "broken`
-	require.NoError(t, os.WriteFile(configPath, []byte(invalidContent), 0644))
+	configPath := filepath.Join(t.TempDir(), "grove.toml")
+	require.NoError(t, os.WriteFile(configPath, []byte("[naming\nmax_length = 10"), 0644))
 
 	_, _, err := LoadFiles([]string{configPath})
 	require.Error(t, err)
@@ -636,14 +530,8 @@ branch_prefix = "broken`
 }
 
 func TestLoad_UnknownKeys(t *testing.T) {
-	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "grove.toml")
-
-	content := `[git]
-timeout = "10s"
-unknown = true
-`
-	require.NoError(t, os.WriteFile(configPath, []byte(content), 0644))
+	configPath := filepath.Join(t.TempDir(), "grove.toml")
+	require.NoError(t, os.WriteFile(configPath, []byte("[git]\nunknown = true\n"), 0644))
 
 	_, _, err := LoadFiles([]string{configPath})
 	require.Error(t, err)
@@ -651,49 +539,46 @@ unknown = true
 	assert.Contains(t, err.Error(), "git.unknown")
 }
 
-func TestLoad_InvalidConfigValues(t *testing.T) {
-	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "grove.toml")
-
+func TestLoad_InvalidConfig(t *testing.T) {
 	tests := []struct {
 		name    string
 		content string
 		wantErr string
 	}{
 		{
-			name: "negative timeout",
+			name: "negative git timeout",
 			content: `[git]
 timeout = "-5s"
 `,
 			wantErr: "git.timeout cannot be negative",
 		},
 		{
-			name: "negative preview cache TTL",
+			name: "negative GitHub preview cache TTL",
 			content: `[github]
 preview_cache_ttl = "-1s"
 `,
 			wantErr: "github.preview_cache_ttl cannot be negative",
 		},
 		{
-			name: "negative hash_length",
-			content: `[slugify]
-hash_length = -5
-`,
-			wantErr: "slugify.hash_length cannot be negative",
-		},
-		{
-			name: "negative max_length",
-			content: `[slugify]
+			name: "negative naming max length",
+			content: `[naming]
 max_length = -1
 `,
-			wantErr: "slugify.max_length cannot be negative",
+			wantErr: "naming.max_length cannot be negative",
+		},
+		{
+			name: "explicit empty file template",
+			content: `[issue]
+branch_template = ""
+`,
+			wantErr: "issue.branch_template cannot be empty",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			configPath := filepath.Join(t.TempDir(), "grove.toml")
 			require.NoError(t, os.WriteFile(configPath, []byte(tt.content), 0644))
-
 			_, _, err := LoadFiles([]string{configPath})
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantErr)
@@ -703,129 +588,110 @@ max_length = -1
 
 func TestLoad_ReturnsLoadedFiles(t *testing.T) {
 	tmpDir := t.TempDir()
-
-	// Create three config files, but only two exist
 	path1 := filepath.Join(tmpDir, "one.toml")
 	path2 := filepath.Join(tmpDir, "two.toml")
-	path3 := filepath.Join(tmpDir, "nonexistent.toml")
+	missingPath := filepath.Join(tmpDir, "missing.toml")
+	require.NoError(t, os.WriteFile(path1, []byte("[naming]\nmax_length = 40\n"), 0644))
+	require.NoError(t, os.WriteFile(path2, []byte("[naming]\nmax_length = 50\n"), 0644))
 
-	require.NoError(t, os.WriteFile(path1, []byte("[local_branch]\nbranch_prefix = \"one/\""), 0644))
-	require.NoError(t, os.WriteFile(path2, []byte("[local_branch]\nbranch_prefix = \"two/\""), 0644))
-
-	_, report, err := LoadFiles([]string{path1, path3, path2})
+	_, report, err := LoadFiles([]string{path1, missingPath, path2})
 	require.NoError(t, err)
-
-	// Only existing files should be in loaded files
 	assert.Equal(t, []string{path1, path2}, report.LoadedFiles)
 }
 
 func TestLoad_PathIsDirectory(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	// Create a directory where a config file might be expected
-	dirPath := filepath.Join(tmpDir, "grove.toml")
+	dirPath := filepath.Join(t.TempDir(), "grove.toml")
 	require.NoError(t, os.Mkdir(dirPath, 0755))
 
 	cfg, report, err := LoadFiles([]string{dirPath})
 	require.NoError(t, err)
-
-	// Directory should be skipped
-	assert.Empty(t, report.LoadedFiles)
 	assert.Equal(t, DefaultConfig(), cfg)
+	assert.Empty(t, report.LoadedFiles)
 }
 
-func TestLoad_Provenance(t *testing.T) {
-	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "grove.toml")
-
-	content := `[git]
-timeout = "10s"
-
-[local_branch]
-branch_prefix = "fix/"
-`
-	require.NoError(t, os.WriteFile(configPath, []byte(content), 0644))
-
-	_, report, err := LoadFiles([]string{configPath})
-	require.NoError(t, err)
-
-	assert.Equal(t, configPath, report.Updates["git.timeout"])
-	assert.Equal(t, configPath, report.Updates["localbranch.branchprefix"])
-	assert.Equal(t, configloader.SourceDefault, report.Updates["slugify.maxlength"])
-}
-
-func TestLoadFilesWithFlags(t *testing.T) {
-	fileTOML := "[local_branch]\nworktree_prefix = \"tree-\"\n"
-
+func TestLoadFilesWithFlags_Precedence(t *testing.T) {
 	tests := []struct {
 		name       string
-		fileTOML   string
+		fileValue  *string
 		args       []string
-		wantPrefix string
-		wantSource bool
+		want       string
+		wantSource any
 	}{
 		{
-			name:       "flag overrides file value",
-			fileTOML:   fileTOML,
-			args:       []string{"--worktree-prefix", "subagent-"},
-			wantPrefix: "subagent-",
-			wantSource: true,
+			name:       "default used without file or flag",
+			want:       "wt-{{.BranchSlug}}",
+			wantSource: configloader.SourceDefault,
 		},
 		{
-			name:       "unset flag keeps file value",
-			fileTOML:   fileTOML,
-			args:       []string{},
-			wantPrefix: "tree-",
+			name:      "file overrides default",
+			fileValue: stringPtr("tree-{{.BranchSlug}}"),
+			want:      "tree-{{.BranchSlug}}",
 		},
 		{
-			name:       "flag overrides default when no file sets it",
-			fileTOML:   "",
-			args:       []string{"--worktree-prefix", "subagent-"},
-			wantPrefix: "subagent-",
-			wantSource: true,
+			name:      "unset flag keeps file value",
+			fileValue: stringPtr("tree-{{.BranchSlug}}"),
+			args:      []string{},
+			want:      "tree-{{.BranchSlug}}",
 		},
 		{
-			name:       "explicit empty flag value wins",
-			fileTOML:   fileTOML,
-			args:       []string{"--worktree-prefix", ""},
-			wantPrefix: "",
-			wantSource: true,
+			name:       "flag overrides file",
+			fileValue:  stringPtr("tree-{{.BranchSlug}}"),
+			args:       []string{"--worktree-template", "flag-{{.BranchSlug}}"},
+			want:       "flag-{{.BranchSlug}}",
+			wantSource: pflagloader.SourcePFlag,
+		},
+		{
+			name:       "flag overrides default",
+			args:       []string{"--worktree-template", "flag-{{.BranchSlug}}"},
+			want:       "flag-{{.BranchSlug}}",
+			wantSource: pflagloader.SourcePFlag,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var paths []string
-			if tt.fileTOML != "" {
+			if tt.fileValue != nil {
 				configPath := filepath.Join(t.TempDir(), "grove.toml")
-				require.NoError(t, os.WriteFile(configPath, []byte(tt.fileTOML), 0644))
+				content := "[local_branch]\nworktree_template = \"" + *tt.fileValue + "\"\n"
+				require.NoError(t, os.WriteFile(configPath, []byte(content), 0644))
 				paths = []string{configPath}
 			}
 
 			flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
 			require.NoError(t, RegisterFlags(flags))
 			require.NoError(t, flags.Parse(tt.args))
-
 			cfg, report, err := LoadFilesWithFlags(paths, flags)
 			require.NoError(t, err)
-			assert.Equal(t, tt.wantPrefix, cfg.LocalBranch.WorktreePrefix)
-
-			if tt.wantSource {
-				assert.Equal(t, pflagloader.SourcePFlag, report.Updates["localbranch.worktreeprefix"])
+			assert.Equal(t, tt.want, cfg.LocalBranch.WorktreeTemplate)
+			if tt.wantSource != nil {
+				assert.Equal(t, tt.wantSource, report.Updates["localbranch.worktreetemplate"])
 			}
 		})
 	}
 }
 
+func TestLoadFilesWithFlags_ExplicitEmptyIsInvalid(t *testing.T) {
+	flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	require.NoError(t, RegisterFlags(flags))
+	require.NoError(t, flags.Parse([]string{"--worktree-template", ""}))
+
+	_, _, err := LoadFilesWithFlags(nil, flags)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "local_branch.worktree_template cannot be empty")
+}
+
 func TestLoadFilesWithFlags_NilFlagSetMatchesLoadFiles(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "grove.toml")
-	require.NoError(t, os.WriteFile(configPath, []byte("[local_branch]\nworktree_prefix = \"tree-\"\n"), 0644))
+	require.NoError(t, os.WriteFile(configPath, []byte("[local_branch]\nworktree_template = \"tree-{{.BranchSlug}}\"\n"), 0644))
 
 	fromFiles, _, err := LoadFiles([]string{configPath})
 	require.NoError(t, err)
-
 	fromNilFlags, _, err := LoadFilesWithFlags([]string{configPath}, nil)
 	require.NoError(t, err)
-
 	assert.Equal(t, fromFiles, fromNilFlags)
+}
+
+func stringPtr(value string) *string {
+	return &value
 }

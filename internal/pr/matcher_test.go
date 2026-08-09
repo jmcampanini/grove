@@ -12,26 +12,23 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func defaultSlugifyConfig() config.SlugifyConfig {
-	return config.SlugifyConfig{
-		CollapseDashes:     true,
-		HashLength:         0,
-		Lowercase:          true,
-		MaxLength:          0,
-		ReplaceNonAlphanum: true,
-		TrimDashes:         true,
+func defaultNamingConfig() config.NamingConfig {
+	return config.NamingConfig{
+		Lowercase:     true,
+		MaxLength:     30,
+		StripPrefixes: []string{"feature/", "fix/", "issue/"},
 	}
 }
 
 func defaultPRConfig() config.PullRequestConfig {
 	return config.PullRequestConfig{
-		BranchTemplate: "{{.BranchName}}",
-		WorktreePrefix: "pr-",
+		BranchTemplate:   "{{.Branch}}",
+		WorktreeTemplate: "pr-{{.Number}}-{{.TitleSlug}}",
 	}
 }
 
 func createNamer(t *testing.T, prCfg config.PullRequestConfig) *naming.PullRequestNamer {
-	namer, err := naming.NewPullRequestNamer(prCfg, defaultSlugifyConfig())
+	namer, err := naming.NewPullRequestNamer(prCfg, defaultNamingConfig())
 	require.NoError(t, err)
 	return namer
 }
@@ -85,8 +82,8 @@ func TestMatcher_FindWorktreeForPR(t *testing.T) {
 		{
 			name: "template with PR number match",
 			prCfg: config.PullRequestConfig{
-				BranchTemplate: "pr/{{.Number}}",
-				WorktreePrefix: "pr-",
+				BranchTemplate:   "pr/{{.Number}}",
+				WorktreeTemplate: "pr-{{.Number}}-{{.TitleSlug}}",
 			},
 			pr: createPR(456, "feature/test"),
 			worktrees: []git.Worktree{

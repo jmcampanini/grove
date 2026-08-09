@@ -3,505 +3,382 @@ package naming
 import (
 	"strings"
 	"testing"
-	"unicode/utf8"
 
 	"github.com/jmcampanini/grove-cli/internal/config"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
-func defaultIssueConfig() config.IssueConfig {
+func testIssueConfig() config.IssueConfig {
 	return config.IssueConfig{
-		BranchTemplate:     "issue/{{.Number}}-{{.TitleSlug}}",
-		StripBranchPrefix:  []string{"issue/"},
-		TitleSlugMaxLength: 40,
-		WorktreePrefix:     "is-",
+		BranchTemplate:   "issue/{{.Number}}-{{.TitleSlug}}",
+		WorktreeTemplate: "is-{{.Number}}-{{.TitleSlug}}",
 	}
 }
 
-func newIssueNamer(t *testing.T, cfg config.IssueConfig) *IssueNamer {
+func requireIssueNamer(t *testing.T, issueCfg config.IssueConfig, namingCfg config.NamingConfig) *IssueNamer {
 	t.Helper()
-	namer, err := NewIssueNamer(cfg, defaultSlugifyConfig())
-	require.NoError(t, err)
+	namer, err := NewIssueNamer(issueCfg, namingCfg)
+	if err != nil {
+		t.Fatalf("NewIssueNamer() error = %v", err)
+	}
 	return namer
 }
 
-func TestNewIssueNamer_InvalidTemplates(t *testing.T) {
-	tests := []struct {
-		name           string
-		branchTemplate string
-		wantErrContain string
-	}{
-		{
-			name:           "syntax error",
-			branchTemplate: "issue/{{.Number",
-			wantErrContain: "invalid branch_template",
-		},
-		{
-			name:           "unknown field",
-			branchTemplate: "issue/{{.Bogus}}",
-			wantErrContain: "branch_template uses invalid field",
-		},
-		{
-			name:           "produces branch starting with dash",
-			branchTemplate: "-{{.Number}}",
-			wantErrContain: "branch_template produces invalid branch name",
-		},
-		{
-			name:           "produces empty branch",
-			branchTemplate: "",
-			wantErrContain: "branch_template produces invalid branch name",
-		},
-		{
-			name:           "missing number field",
-			branchTemplate: "issue/{{.TitleSlug}}",
-			wantErrContain: "branch_template must reference {{.Number}}",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := defaultIssueConfig()
-			cfg.BranchTemplate = tt.branchTemplate
-			_, err := NewIssueNamer(cfg, defaultSlugifyConfig())
-			require.Error(t, err)
-			assert.Contains(t, err.Error(), tt.wantErrContain)
-		})
-	}
-}
-
-func TestIssueNamer_TitleSlug(t *testing.T) {
+func TestNewIssueNamerValidatesTemplates(t *testing.T) {
 	tests := []struct {
 		name      string
-		maxLength int
-		title     string
-		want      string
+		branch    string
+		worktree  string
+		wantError string
+	}{
+		{name: "valid variables", branch: "issue/{{.Number}}-{{.TitleSlug}}", worktree: "is-{{.Number}}-{{.TitleSlug}}-{{.BranchSlug}}"},
+		{name: "branch parse error", branch: "issue/{{.Number", worktree: "is-{{.Number}}", wantError: "branch_template"},
+		{name: "raw title unavailable", branch: "issue/{{.Number}}-{{.Title}}", worktree: "is-{{.Number}}", wantError: "Title"},
+		{name: "branch slug unavailable", branch: "issue/{{.Number}}-{{.BranchSlug}}", worktree: "is-{{.Number}}", wantError: "BranchSlug"},
+		{name: "invalid branch", branch: "-{{.Number}}", worktree: "is-{{.Number}}", wantError: "starts with"},
+		{name: "number required", branch: "issue/{{.TitleSlug}}", worktree: "is-{{.Number}}", wantError: "must reference {{.Number}}"},
+		{name: "number in control structure accepted", branch: "{{if .TitleSlug}}issue/{{.Number}}{{end}}", worktree: "is-{{.Number}}"},
+		{name: "worktree parse error", branch: "issue/{{.Number}}", worktree: "is-{{.Number", wantError: "worktree_template"},
+		{name: "phrase slug unavailable", branch: "issue/{{.Number}}", worktree: "{{.PhraseSlug}}", wantError: "PhraseSlug"},
+		{name: "worktree slash", branch: "issue/{{.Number}}", worktree: "is/{{.Number}}", wantError: "contains '/'"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := NewIssueNamer(
+				config.IssueConfig{BranchTemplate: tt.branch, WorktreeTemplate: tt.worktree},
+				testNamingConfig(),
+			)
+			if tt.wantError == "" {
+				if err != nil {
+					t.Fatalf("NewIssueNamer() error = %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantError) {
+				t.Fatalf("NewIssueNamer() error = %v, want containing %q", err, tt.wantError)
+			}
+		})
+	}
+}
+
+func TestIssueNamerGenerate(t *testing.T) {
+	tests := []struct {
+		name         string
+		issueCfg     config.IssueConfig
+		namingCfg    config.NamingConfig
+		number       int
+		title        string
+		branchInput  string
+		wantBranch   string
+		wantWorktree string
 	}{
 		{
-			name:      "simple title",
-			maxLength: 40,
-			title:     "Fix login crash",
-			want:      "fix-login-crash",
+			name: "all template variables",
+			issueCfg: config.IssueConfig{
+				BranchTemplate:   "ticket/{{.Number}}-{{.TitleSlug}}",
+				WorktreeTemplate: "is-{{.Number}}-{{.TitleSlug}}-{{.BranchSlug}}",
+			},
+			namingCfg:    testNamingConfig(),
+			number:       117,
+			title:        "Issue & PR Numbers",
+			branchInput:  "issue/117-issue-pr-numbers",
+			wantBranch:   "ticket/117-issue-pr-numbers",
+			wantWorktree: "is-117-issue-pr-numbers-117-issue-pr-numbers",
 		},
 		{
-			name:      "punctuation collapses",
-			maxLength: 40,
-			title:     "Fix: login!! crash (regression)",
-			want:      "fix-login-crash-regression",
+			name:     "cap branch and worktree after rendering",
+			issueCfg: testIssueConfig(),
+			namingCfg: config.NamingConfig{
+				Lowercase: true,
+				MaxLength: 12,
+			},
+			number:       42,
+			title:        "abcdefgh",
+			branchInput:  "issue/42-abcdefgh",
+			wantBranch:   "issue/42-abc",
+			wantWorktree: "is-42-abcdef",
 		},
 		{
-			name:      "truncated at cap without hash suffix",
-			maxLength: 20,
-			title:     "Fix login crash when the password field is empty",
-			want:      "fix-login-crash-when",
-		},
-		{
-			name:      "trailing dash trimmed after truncation",
-			maxLength: 16,
-			title:     "Fix login crash when the password field is empty",
-			want:      "fix-login-crash",
-		},
-		{
-			name:      "zero cap disables truncation",
-			maxLength: 0,
-			title:     "Fix login crash when the password field is empty",
-			want:      "fix-login-crash-when-the-password-field-is-empty",
-		},
-		{
-			name:      "empty title",
-			maxLength: 40,
-			title:     "",
-			want:      "",
-		},
-		{
-			name:      "punctuation-only title",
-			maxLength: 40,
-			title:     "!!!",
-			want:      "",
+			name: "title slug is not independently capped",
+			issueCfg: config.IssueConfig{
+				BranchTemplate:   "{{.Number}}-{{.TitleSlug}}",
+				WorktreeTemplate: "is-{{.Number}}",
+			},
+			namingCfg:    testNamingConfig(),
+			number:       9,
+			title:        "abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+			branchInput:  "issue/9",
+			wantBranch:   "9-abcdefghijklmnopqrstuvwxyz-abcdefghijklmnopqrstuvwxyz",
+			wantWorktree: "is-9",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := defaultIssueConfig()
-			cfg.TitleSlugMaxLength = tt.maxLength
-			namer := newIssueNamer(t, cfg)
-			assert.Equal(t, tt.want, namer.TitleSlug(tt.title))
+			namer := requireIssueNamer(t, tt.issueCfg, tt.namingCfg)
+			branch, err := namer.GenerateBranchName(tt.number, tt.title)
+			if err != nil {
+				t.Fatalf("GenerateBranchName() error = %v", err)
+			}
+			if branch != tt.wantBranch {
+				t.Fatalf("GenerateBranchName() = %q, want %q", branch, tt.wantBranch)
+			}
+
+			worktree, err := namer.GenerateWorktreeName(tt.number, tt.title, tt.branchInput)
+			if err != nil {
+				t.Fatalf("GenerateWorktreeName() error = %v", err)
+			}
+			if worktree != tt.wantWorktree {
+				t.Fatalf("GenerateWorktreeName() = %q, want %q", worktree, tt.wantWorktree)
+			}
 		})
 	}
 }
 
-func TestIssueNamer_TitleSlug_MultibyteTruncation(t *testing.T) {
-	// With replace_non_alphanum disabled, multibyte characters survive
-	// slugification; truncation must count runes and never split one.
-	slugCfg := defaultSlugifyConfig()
-	slugCfg.ReplaceNonAlphanum = false
-
-	cfg := defaultIssueConfig()
-	cfg.TitleSlugMaxLength = 40
-	namer, err := NewIssueNamer(cfg, slugCfg)
-	require.NoError(t, err)
-
-	got := namer.TitleSlug(strings.Repeat("é", 45))
-	assert.True(t, utf8.ValidString(got), "truncation split a rune: %q", got)
-	assert.Equal(t, strings.Repeat("é", 40), got)
-}
-
-func TestIssueNamer_GenerateBranchName(t *testing.T) {
+func TestIssueNamerGenerateBranchNameRequiresCompleteNumber(t *testing.T) {
 	tests := []struct {
 		name           string
 		branchTemplate string
+		maxLength      int
 		number         int
 		title          string
 		want           string
+		wantError      string
 	}{
 		{
-			name:           "default template",
+			name:           "truncation cuts runtime number",
 			branchTemplate: "issue/{{.Number}}-{{.TitleSlug}}",
+			maxLength:      8,
 			number:         123,
-			title:          "Fix login crash",
-			want:           "issue/123-fix-login-crash",
+			title:          "title",
+			wantError:      "complete issue number 123",
 		},
 		{
-			name:           "number-only template",
-			branchTemplate: "issue/{{.Number}}",
+			name:           "truncation keeps complete runtime number",
+			branchTemplate: "issue/{{.Number}}-{{.TitleSlug}}",
+			maxLength:      9,
 			number:         123,
-			title:          "Fix login crash",
+			title:          "title",
 			want:           "issue/123",
 		},
 		{
-			name:           "empty title leaves trailing dash",
-			branchTemplate: "issue/{{.Number}}-{{.TitleSlug}}",
+			name:           "adjacent digit does not satisfy anchor boundary",
+			branchTemplate: "issue/{{.Number}}{{.TitleSlug}}",
 			number:         123,
-			title:          "!!!",
-			want:           "issue/123-",
+			title:          "4 title",
+			wantError:      "complete issue number 123",
 		},
 		{
-			name:           "long title capped at 40",
-			branchTemplate: "issue/{{.Number}}-{{.TitleSlug}}",
-			number:         7,
-			title:          "Fix login crash when the password field is empty (regression!!)",
-			want:           "issue/7-fix-login-crash-when-the-password-field",
+			name:           "truncation removes number from title first template",
+			branchTemplate: "{{.TitleSlug}}-{{.Number}}",
+			maxLength:      5,
+			number:         123,
+			title:          "login",
+			wantError:      "complete issue number 123",
+		},
+		{
+			name:           "title digits do not substitute for truncated number field",
+			branchTemplate: "{{.TitleSlug}}-{{.Number}}",
+			maxLength:      9,
+			number:         123,
+			title:          "login 123",
+			wantError:      "complete issue number 123",
+		},
+		{
+			name:           "partial number expansion does not combine with title digits",
+			branchTemplate: "{{.TitleSlug}}-{{.Number}}",
+			maxLength:      6,
+			number:         199,
+			title:          "199",
+			wantError:      "complete issue number 199",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := defaultIssueConfig()
-			cfg.BranchTemplate = tt.branchTemplate
-			namer := newIssueNamer(t, cfg)
+			issueCfg := testIssueConfig()
+			issueCfg.BranchTemplate = tt.branchTemplate
+			namingCfg := testNamingConfig()
+			namingCfg.MaxLength = tt.maxLength
+			namer := requireIssueNamer(t, issueCfg, namingCfg)
+
 			got, err := namer.GenerateBranchName(tt.number, tt.title)
-			require.NoError(t, err)
-			assert.Equal(t, tt.want, got)
+			if tt.wantError != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantError) {
+					t.Fatalf("GenerateBranchName() error = %v, want containing %q", err, tt.wantError)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("GenerateBranchName() error = %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("GenerateBranchName() = %q, want %q", got, tt.want)
+			}
 		})
 	}
 }
 
-func TestIssueNamer_GenerateWorktreeName(t *testing.T) {
+func TestIssueNamerNonAnchorUsesExactRegenerationWhenNumberSurvives(t *testing.T) {
+	issueCfg := testIssueConfig()
+	issueCfg.BranchTemplate = "{{.TitleSlug}}-{{.Number}}"
+	namingCfg := testNamingConfig()
+	namingCfg.MaxLength = 10
+	namer := requireIssueNamer(t, issueCfg, namingCfg)
+
+	branch, err := namer.GenerateBranchName(123, "abcdef")
+	if err != nil {
+		t.Fatalf("GenerateBranchName() error = %v", err)
+	}
+	if branch != "abcdef-123" {
+		t.Fatalf("GenerateBranchName() = %q, want %q", branch, "abcdef-123")
+	}
+	if !namer.MatchesIssueNumber("abcdef-123", 123, "abcdef") {
+		t.Fatal("MatchesIssueNumber() = false for exact regenerated branch")
+	}
+	if namer.MatchesIssueNumber("abcdeg-123", 123, "abcdef") {
+		t.Fatal("MatchesIssueNumber() = true for non-matching branch")
+	}
+}
+
+func TestIssueNamerTitleSlugIsUncapped(t *testing.T) {
+	namingCfg := testNamingConfig()
+	namingCfg.MaxLength = 5
+	namer := requireIssueNamer(t, testIssueConfig(), namingCfg)
+
+	if got := namer.TitleSlug("A very long issue title"); got != "a-very-long-issue-title" {
+		t.Fatalf("TitleSlug() = %q, want uncapped slug", got)
+	}
+}
+
+func TestIssueNamerStripsFirstMatchingPrefix(t *testing.T) {
+	issueCfg := testIssueConfig()
+	issueCfg.WorktreeTemplate = "is-{{.BranchSlug}}"
 	tests := []struct {
-		name              string
-		branchName        string
-		stripBranchPrefix []string
-		worktreePrefix    string
-		want              string
+		name     string
+		prefixes []string
+		want     string
+	}{
+		{name: "short first", prefixes: []string{"issue/", "issue/long/"}, want: "is-long-topic"},
+		{name: "long first", prefixes: []string{"issue/long/", "issue/"}, want: "is-topic"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			namingCfg := testNamingConfig()
+			namingCfg.StripPrefixes = tt.prefixes
+			namer := requireIssueNamer(t, issueCfg, namingCfg)
+			got, err := namer.GenerateWorktreeName(1, "title", "issue/long/topic")
+			if err != nil {
+				t.Fatalf("GenerateWorktreeName() error = %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("GenerateWorktreeName() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIssueNamerValidatesActualFinalOutput(t *testing.T) {
+	tests := []struct {
+		name      string
+		issueCfg  config.IssueConfig
+		generate  func(*IssueNamer) error
+		maxLength int
+		wantError string
 	}{
 		{
-			name:              "default issue namespace is replaced",
-			branchName:        "issue/123-fix-login",
-			stripBranchPrefix: []string{"issue/"},
-			worktreePrefix:    "is-",
-			want:              "is-123-fix-login",
+			name: "branch",
+			issueCfg: config.IssueConfig{
+				BranchTemplate:   `{{if lt .Number 0}}-bad{{else}}issue/{{.Number}}{{end}}`,
+				WorktreeTemplate: "is-{{.Number}}",
+			},
+			generate: func(n *IssueNamer) error {
+				_, err := n.GenerateBranchName(-1, "title")
+				return err
+			},
+			wantError: "starts with",
 		},
 		{
-			name:              "first matching branch prefix is stripped",
-			branchName:        "ticket/123-fix-login",
-			stripBranchPrefix: []string{"issue/", "ticket/"},
-			worktreePrefix:    "is-",
-			want:              "is-123-fix-login",
-		},
-		{
-			name:              "earlier overlapping branch prefix wins",
-			branchName:        "issue/123-fix-login",
-			stripBranchPrefix: []string{"issue/", "issue/123-"},
-			worktreePrefix:    "is-",
-			want:              "is-123-fix-login",
-		},
-		{
-			name:              "reversing overlapping prefixes changes the result",
-			branchName:        "issue/123-fix-login",
-			stripBranchPrefix: []string{"issue/123-", "issue/"},
-			worktreePrefix:    "is-",
-			want:              "is-fix-login",
-		},
-		{
-			name:              "only one branch prefix is stripped",
-			branchName:        "feature/issue/123-fix-login",
-			stripBranchPrefix: []string{"feature/", "issue/"},
-			worktreePrefix:    "is-",
-			want:              "is-issue-123-fix-login",
-		},
-		{
-			name:              "unmatched branch prefix remains",
-			branchName:        "ticket/123-fix-login",
-			stripBranchPrefix: []string{"issue/"},
-			worktreePrefix:    "is-",
-			want:              "is-ticket-123-fix-login",
-		},
-		{
-			name:              "empty branch prefix list strips nothing",
-			branchName:        "issue/123-fix-login",
-			stripBranchPrefix: nil,
-			worktreePrefix:    "is-",
-			want:              "is-issue-123-fix-login",
-		},
-		{
-			name:              "stripping the entire branch returns empty",
-			branchName:        "issue/",
-			stripBranchPrefix: []string{"issue/"},
-			worktreePrefix:    "is-",
-			want:              "",
-		},
-		{
-			name:              "smart prefix detection avoids doubling",
-			branchName:        "issue/is-123-fix-login",
-			stripBranchPrefix: []string{"issue/"},
-			worktreePrefix:    "is-",
-			want:              "is-123-fix-login",
-		},
-		{
-			name:              "custom worktree prefix",
-			branchName:        "issue/123-fix-login",
-			stripBranchPrefix: []string{"issue/"},
-			worktreePrefix:    "task-",
-			want:              "task-123-fix-login",
-		},
-		{
-			name:              "trailing dash branch slugs cleanly",
-			branchName:        "issue/123-",
-			stripBranchPrefix: []string{"issue/"},
-			worktreePrefix:    "is-",
-			want:              "is-123",
-		},
-		{
-			name:              "empty branch",
-			branchName:        "",
-			stripBranchPrefix: []string{"issue/"},
-			worktreePrefix:    "is-",
-			want:              "",
+			name: "worktree after truncation",
+			issueCfg: config.IssueConfig{
+				BranchTemplate:   "issue/{{.Number}}",
+				WorktreeTemplate: `{{if lt .Number 0}}.x{{else}}is-{{.Number}}{{end}}`,
+			},
+			generate: func(n *IssueNamer) error {
+				_, err := n.GenerateWorktreeName(-1, "title", "issue/1")
+				return err
+			},
+			maxLength: 1,
+			wantError: `is "."`,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := defaultIssueConfig()
-			cfg.StripBranchPrefix = tt.stripBranchPrefix
-			cfg.WorktreePrefix = tt.worktreePrefix
-			namer := newIssueNamer(t, cfg)
-			assert.Equal(t, tt.want, namer.GenerateWorktreeName(tt.branchName))
+			namingCfg := testNamingConfig()
+			namingCfg.MaxLength = tt.maxLength
+			namer := requireIssueNamer(t, tt.issueCfg, namingCfg)
+			err := tt.generate(namer)
+			if err == nil || !strings.Contains(err.Error(), tt.wantError) {
+				t.Fatalf("generation error = %v, want containing %q", err, tt.wantError)
+			}
 		})
 	}
 }
 
-func TestIssueNamer_MatchesIssueNumber(t *testing.T) {
+func TestIssueNamerWorktreeLiteralPrefix(t *testing.T) {
+	issueCfg := testIssueConfig()
+	issueCfg.WorktreeTemplate = "issue-dir-{{.Number}}-{{.TitleSlug}}"
+	namer := requireIssueNamer(t, issueCfg, testNamingConfig())
+
+	if got := namer.WorktreeLiteralPrefix(); got != "issue-dir-" {
+		t.Fatalf("WorktreeLiteralPrefix() = %q, want %q", got, "issue-dir-")
+	}
+}
+
+func TestIssueNamerRejectsTruncatedTitleFirstCollision(t *testing.T) {
+	issueCfg := testIssueConfig()
+	issueCfg.BranchTemplate = "{{.TitleSlug}}-{{.Number}}"
+	namingCfg := testNamingConfig()
+	namingCfg.MaxLength = 6
+	namer := requireIssueNamer(t, issueCfg, namingCfg)
+
+	if namer.MatchesIssueNumber("199-19", 199, "199") {
+		t.Fatal("MatchesIssueNumber() matched a branch with a partial issue number")
+	}
+	if !namer.MatchesIssueNumber("199-19", 19, "199") {
+		t.Fatal("MatchesIssueNumber() rejected the issue whose complete number survives")
+	}
+}
+
+func TestIssueNamerMatchesIssueNumber(t *testing.T) {
 	tests := []struct {
 		name           string
 		branchTemplate string
-		branchName     string
+		branch         string
 		number         int
 		title          string
 		want           bool
 	}{
-		{
-			name:           "anchored match on number and boundary",
-			branchTemplate: "issue/{{.Number}}-{{.TitleSlug}}",
-			branchName:     "issue/123-fix-login",
-			number:         123,
-			title:          "Fix login",
-			want:           true,
-		},
-		{
-			name:           "anchored match survives title edits",
-			branchTemplate: "issue/{{.Number}}-{{.TitleSlug}}",
-			branchName:     "issue/123-old-title",
-			number:         123,
-			title:          "Completely renamed title",
-			want:           true,
-		},
-		{
-			name:           "longer number does not match",
-			branchTemplate: "issue/{{.Number}}-{{.TitleSlug}}",
-			branchName:     "issue/1234-fix-login",
-			number:         123,
-			title:          "Fix login",
-			want:           false,
-		},
-		{
-			name:           "shorter number does not match",
-			branchTemplate: "issue/{{.Number}}-{{.TitleSlug}}",
-			branchName:     "issue/12-fix-login",
-			number:         123,
-			title:          "Fix login",
-			want:           false,
-		},
-		{
-			name:           "bare number branch matches",
-			branchTemplate: "issue/{{.Number}}-{{.TitleSlug}}",
-			branchName:     "issue/123",
-			number:         123,
-			title:          "Fix login",
-			want:           true,
-		},
-		{
-			name:           "unrelated branch does not match",
-			branchTemplate: "issue/{{.Number}}-{{.TitleSlug}}",
-			branchName:     "feature/add-auth",
-			number:         123,
-			title:          "Fix login",
-			want:           false,
-		},
-		{
-			name:           "unrelated branch sharing numeric prefix does not match",
-			branchTemplate: "issue/{{.Number}}-{{.TitleSlug}}",
-			branchName:     "issue/2fa-improvements",
-			number:         2,
-			title:          "Add 2FA",
-			want:           false,
-		},
-		{
-			name:           "non-separator boundary does not match",
-			branchTemplate: "issue/{{.Number}}-{{.TitleSlug}}",
-			branchName:     "issue/123abc",
-			number:         123,
-			title:          "Fix login",
-			want:           false,
-		},
-		{
-			name:           "slash separator template matches its own shape",
-			branchTemplate: "issue/{{.Number}}/{{.TitleSlug}}",
-			branchName:     "issue/123/fix-login",
-			number:         123,
-			title:          "Fix login",
-			want:           true,
-		},
-		{
-			name:           "slash separator template rejects dash-separated branch",
-			branchTemplate: "issue/{{.Number}}/{{.TitleSlug}}",
-			branchName:     "issue/123-fix-login",
-			number:         123,
-			title:          "Fix login",
-			want:           false,
-		},
-		{
-			name:           "number-only template matches its own output",
-			branchTemplate: "issue/{{.Number}}",
-			branchName:     "issue/123",
-			number:         123,
-			title:          "Fix login",
-			want:           true,
-		},
-		{
-			name:           "number-only template accepts non-digit continuation",
-			branchTemplate: "issue/{{.Number}}",
-			branchName:     "issue/123-extra",
-			number:         123,
-			title:          "Fix login",
-			want:           true,
-		},
-		{
-			name:           "number-only template rejects digit continuation",
-			branchTemplate: "issue/{{.Number}}",
-			branchName:     "issue/1234",
-			number:         123,
-			title:          "Fix login",
-			want:           false,
-		},
-		{
-			name:           "title-first template falls back to exact regeneration",
-			branchTemplate: "{{.TitleSlug}}-{{.Number}}",
-			branchName:     "fix-login-123",
-			number:         123,
-			title:          "Fix login",
-			want:           true,
-		},
-		{
-			name:           "title-first template misses after title edit",
-			branchTemplate: "{{.TitleSlug}}-{{.Number}}",
-			branchName:     "fix-login-123",
-			number:         123,
-			title:          "Renamed title",
-			want:           false,
-		},
+		{name: "anchored match survives title edit", branchTemplate: "issue/{{.Number}}-{{.TitleSlug}}", branch: "issue/123-old-title", number: 123, title: "new title", want: true},
+		{name: "anchored exact number", branchTemplate: "issue/{{.Number}}-{{.TitleSlug}}", branch: "issue/123", number: 123, title: "title", want: true},
+		{name: "reject larger number", branchTemplate: "issue/{{.Number}}-{{.TitleSlug}}", branch: "issue/1234-title", number: 123, title: "title", want: false},
+		{name: "enforce configured boundary", branchTemplate: "issue/{{.Number}}-{{.TitleSlug}}", branch: "issue/123x-title", number: 123, title: "title", want: false},
+		{name: "slash boundary", branchTemplate: "issue/{{.Number}}/{{.TitleSlug}}", branch: "issue/123/old-title", number: 123, title: "new title", want: true},
+		{name: "number last permits nondigit suffix", branchTemplate: "issue/{{.Number}}", branch: "issue/123-old", number: 123, title: "title", want: true},
+		{name: "number last rejects digit suffix", branchTemplate: "issue/{{.Number}}", branch: "issue/1234", number: 123, title: "title", want: false},
+		{name: "field before number falls back to exact match", branchTemplate: "{{.TitleSlug}}-{{.Number}}", branch: "current-title-123", number: 123, title: "current title", want: true},
+		{name: "fallback does not survive title edit", branchTemplate: "{{.TitleSlug}}-{{.Number}}", branch: "old-title-123", number: 123, title: "current title", want: false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := defaultIssueConfig()
-			cfg.BranchTemplate = tt.branchTemplate
-			namer := newIssueNamer(t, cfg)
-			assert.Equal(t, tt.want, namer.MatchesIssueNumber(tt.branchName, tt.number, tt.title))
-		})
-	}
-}
-
-func TestNumberAnchorPrefix(t *testing.T) {
-	tests := []struct {
-		name           string
-		branchTemplate string
-		wantPrefix     string
-		wantBoundary   string
-		wantOK         bool
-	}{
-		{
-			name:           "literal prefix before number",
-			branchTemplate: "issue/{{.Number}}-{{.TitleSlug}}",
-			wantPrefix:     "issue/",
-			wantBoundary:   "-",
-			wantOK:         true,
-		},
-		{
-			name:           "number first",
-			branchTemplate: "{{.Number}}-{{.TitleSlug}}",
-			wantPrefix:     "",
-			wantBoundary:   "-",
-			wantOK:         true,
-		},
-		{
-			name:           "spaced action still anchors",
-			branchTemplate: "issue/{{ .Number }}-{{.TitleSlug}}",
-			wantPrefix:     "issue/",
-			wantBoundary:   "-",
-			wantOK:         true,
-		},
-		{
-			name:           "slash separator",
-			branchTemplate: "issue/{{.Number}}/{{.TitleSlug}}",
-			wantPrefix:     "issue/",
-			wantBoundary:   "/",
-			wantOK:         true,
-		},
-		{
-			name:           "number last has empty boundary",
-			branchTemplate: "issue/{{.Number}}",
-			wantPrefix:     "issue/",
-			wantBoundary:   "",
-			wantOK:         true,
-		},
-		{
-			name:           "title before number disables anchor",
-			branchTemplate: "{{.TitleSlug}}-{{.Number}}",
-			wantOK:         false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := defaultIssueConfig()
-			cfg.BranchTemplate = tt.branchTemplate
-			namer := newIssueNamer(t, cfg)
-			assert.Equal(t, tt.wantOK, namer.numberAnchorOK)
-			if tt.wantOK {
-				assert.Equal(t, tt.wantPrefix, namer.numberAnchor)
-				assert.Equal(t, tt.wantBoundary, namer.numberBoundary)
+			issueCfg := testIssueConfig()
+			issueCfg.BranchTemplate = tt.branchTemplate
+			namer := requireIssueNamer(t, issueCfg, testNamingConfig())
+			if got := namer.MatchesIssueNumber(tt.branch, tt.number, tt.title); got != tt.want {
+				t.Fatalf("MatchesIssueNumber() = %v, want %v", got, tt.want)
 			}
 		})
 	}

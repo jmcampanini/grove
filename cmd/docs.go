@@ -54,7 +54,7 @@ Run grove config to inspect the merged effective configuration. Run grove config
 
 Some values can also be set with global CLI flags, which take priority over all config files:
 
-- --worktree-prefix: overrides local_branch.worktree_prefix.
+- --worktree-template: overrides local_branch.worktree_template.
 
 ## TOML schema
 
@@ -66,29 +66,45 @@ Some values can also be set with global CLI flags, which take priority over all 
 
     [issue]
     branch_template = "issue/{{.Number}}-{{.TitleSlug}}"
-    strip_branch_prefix = ["issue/"]
-    title_slug_max_length = 40
-    worktree_prefix = "is-"
+    worktree_template = "is-{{.Number}}-{{.TitleSlug}}"
 
     [local_branch]
-    branch_prefix = "feature/"
-    strip_branch_prefix = ["feature/"]
-    worktree_prefix = "wt-"
+    branch_template = "feature/{{.PhraseSlug}}"
+    worktree_template = "wt-{{.BranchSlug}}"
+
+    [naming]
+    lowercase = true
+    max_length = 30
+    strip_prefixes = ["feature/", "fix/", "issue/"]
 
     [pull_request]
-    branch_template = "{{.BranchName}}"
-    worktree_prefix = "pr-"
-
-    [slugify]
-    collapse_dashes = true
-    hash_length = 4
-    lowercase = true
-    max_length = 50
-    replace_non_alphanum = true
-    trim_dashes = true
+    branch_template = "{{.Branch}}"
+    worktree_template = "pr-{{.Number}}-{{.TitleSlug}}"
 
     [workspace]
     primary_branches = ["main", "develop", "master"]
+
+## Naming templates
+
+Each flow has separate branch and worktree templates. Variables are available as follows:
+
+| Flow | branch_template | worktree_template |
+|---|---|---|
+| local_branch | {{.PhraseSlug}} | {{.BranchSlug}} |
+| issue | {{.Number}}, {{.TitleSlug}} | {{.Number}}, {{.TitleSlug}}, {{.BranchSlug}} |
+| pull_request | {{.Number}}, {{.Branch}} | {{.Number}}, {{.TitleSlug}}, {{.BranchSlug}} |
+
+{{.Number}} is the issue or pull request number. {{.Branch}} is the raw branch name and can contain a slash.
+
+Every variable whose name ends in Slug uses the same safety normalization: each run of characters outside ASCII letters and digits becomes one dash, surrounding dashes are removed, and letters are lowercased when naming.lowercase is true. Before {{.BranchSlug}} is normalized, the first matching naming.strip_prefixes entry is removed. {{.PhraseSlug}} comes from the phrase passed to grove create, and {{.TitleSlug}} comes from the issue or pull request title.
+
+Template literal text is rendered verbatim. Variables are normalized before rendering, and the rendered result is not slugged again. This preserves literal separators and casing exactly as written in the template.
+
+naming.max_length caps each final rendered branch and worktree name. Zero disables the cap. Truncation removes runes from the end without splitting a rune, then removes trailing dashes. Pull request branch names are exempt from this cap because they must match the remote branch.
+
+Put {{.Number}} early in a custom issue or pull request template when the number must survive truncation, because the cap removes content from the end. Issue branch generation fails if the cap removes the complete runtime issue number. Truncated names receive no hash suffix, so different inputs can collide; Grove reports the existing branch or worktree conflict instead of disambiguating it.
+
+The grove namer slug command performs safety normalization only. It does not apply naming.max_length because that cap belongs to final branch and worktree generation.
 
 ## External command safety
 
@@ -99,13 +115,11 @@ Some values can also be set with global CLI flags, which take priority over all 
 ## Validation notes
 
 - git.timeout and github.preview_cache_ttl must be zero or positive durations.
-- issue.branch_template must reference {{.Number}}; issue matching is anchored on the issue number.
-- issue.strip_branch_prefix removes the first matching prefix before generating a worktree directory name.
-- issue.title_slug_max_length must be zero or positive; the slug is truncated cleanly with no hash suffix.
-- issue.worktree_prefix cannot be empty.
-- pull_request.worktree_prefix cannot be empty.
-- slugify.hash_length and slugify.max_length must be zero or positive.
-- slugify.hash_length must leave at least two characters when slugify.max_length is set.
+- All branch_template and worktree_template values must be non-empty. Commands that use a template parse it and reject unavailable variables when constructing the corresponding namer.
+- issue.branch_template must reference {{.Number}} because issue matching is anchored on the issue number.
+- After rendering and truncation, Grove rejects empty branch names, leading dashes, double dots, and control characters. Git reports additional invalid-ref edge cases during branch creation.
+- Final worktree names must be non-empty, contain no slash or control character, not begin with a dash, and not equal to **.** or **..**.
+- naming.max_length must be zero or positive.
 - workspace.primary_branches must include at least one branch name.
 
 ## Logging

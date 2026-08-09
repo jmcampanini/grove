@@ -33,10 +33,9 @@ Creation mode flags are mutually exclusive; choose at most one:
   --from-remote-primary
   --reuse
 
-The phrase is converted to a branch name using the configured slugify rules
-and prefix. A worktree is then created with the configured worktree naming.
-Use the global --worktree-prefix flag to override the configured worktree
-directory prefix for a single invocation.
+The phrase is converted to branch and worktree names using the configured
+local branch templates. Use the global --worktree-template flag to override
+local_branch.worktree_template for a single invocation.
 
 Example:
   grove create "add user authentication"
@@ -46,7 +45,7 @@ Example:
   grove create "experiment" --from origin/develop
   grove create "add user authentication" --from-remote-primary
   grove create "add user authentication" --reuse
-  grove create "run tests" --worktree-prefix subagent-
+  grove create "run tests" --worktree-template "subagent-{{.BranchSlug}}"
 
 Note: The create command takes a single quoted string argument.
 
@@ -111,21 +110,27 @@ func executeCreate(stdout io.Writer, ctx *createContext, phrase string) error {
 		return err
 	}
 
-	namer := naming.NewLocalBranchNamer(ctx.cfg.LocalBranch, ctx.cfg.Slugify)
+	namer, err := naming.NewLocalBranchNamer(ctx.cfg.LocalBranch, ctx.cfg.Naming)
+	if err != nil {
+		return fmt.Errorf("failed to initialize local branch namer: %w", err)
+	}
 
 	workspacePath, err := ctx.gitClient.GetWorkspacePath()
 	if err != nil {
 		return fmt.Errorf("failed to get workspace path: %w", err)
 	}
 
-	branchName := namer.GenerateBranchName(phrase)
-	if branchName == "" || branchName == ctx.cfg.LocalBranch.BranchPrefix {
+	branchName, err := namer.GenerateBranchName(phrase)
+	if errors.Is(err, naming.ErrEmptySlug) {
 		return fmt.Errorf(`phrase %q produces an empty branch name after slugification
 
 Please provide a phrase with at least one alphanumeric character.
 Examples:
   grove create "add user auth"
   grove create "fix-bug-123"`, phrase)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to generate branch name: %w", err)
 	}
 
 	exists, err := ctx.gitClient.BranchExists(branchName, false)
@@ -139,7 +144,10 @@ Examples:
 		return reuseExistingBranch(stdout, ctx, namer, branchName, workspacePath)
 	}
 
-	worktreeName := namer.GenerateWorktreeName(branchName)
+	worktreeName, err := namer.GenerateWorktreeName(branchName)
+	if err != nil {
+		return fmt.Errorf("failed to generate worktree name for branch %q: %w", branchName, err)
+	}
 	worktreePath := filepath.Join(workspacePath, worktreeName)
 
 	if _, err := os.Stat(worktreePath); err == nil {
@@ -223,7 +231,10 @@ func reuseExistingBranch(stdout io.Writer, ctx *createContext, namer *naming.Loc
 		}
 	}
 
-	worktreeName := namer.GenerateWorktreeName(branchName)
+	worktreeName, err := namer.GenerateWorktreeName(branchName)
+	if err != nil {
+		return fmt.Errorf("failed to generate worktree name for branch %q: %w", branchName, err)
+	}
 	worktreePath := filepath.Join(workspacePath, worktreeName)
 
 	if _, err := os.Stat(worktreePath); err == nil {

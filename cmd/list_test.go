@@ -14,62 +14,72 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// testNamer creates a LocalBranchNamer with the given prefix for testing.
-func testNamer(prefix string) *naming.LocalBranchNamer {
-	return naming.NewLocalBranchNamer(
-		config.LocalBranchConfig{WorktreePrefix: prefix},
-		config.SlugifyConfig{},
-	)
+func testLocalNamer(t *testing.T, worktreeTemplate string) *naming.LocalBranchNamer {
+	t.Helper()
+	cfg := defaultTestConfig()
+	cfg.LocalBranch.WorktreeTemplate = worktreeTemplate
+	namer, err := naming.NewLocalBranchNamer(cfg.LocalBranch, cfg.Naming)
+	require.NoError(t, err)
+	return namer
+}
+
+func testPRNamer(t *testing.T, worktreeTemplate string) *naming.PullRequestNamer {
+	t.Helper()
+	cfg := defaultTestConfig()
+	cfg.PullRequest.WorktreeTemplate = worktreeTemplate
+	namer, err := naming.NewPullRequestNamer(cfg.PullRequest, cfg.Naming)
+	require.NoError(t, err)
+	return namer
 }
 
 func TestGetDisplayName(t *testing.T) {
 	tests := []struct {
-		name     string
-		absPath  string
-		wtPrefix string
-		want     string
+		absPath    string
+		name       string
+		want       string
+		wtTemplate string
 	}{
 		{
-			name:     "standard worktree with prefix",
-			absPath:  "/workspace/wt-add-auth",
-			wtPrefix: "wt-",
-			want:     "add-auth",
+			name:       "standard worktree with template literal",
+			absPath:    "/workspace/wt-add-auth",
+			wtTemplate: "wt-{{.BranchSlug}}",
+			want:       "add-auth",
 		},
 		{
-			name:     "main worktree without prefix",
-			absPath:  "/workspace/main",
-			wtPrefix: "wt-",
-			want:     "[main]",
+			name:       "main worktree without literal match",
+			absPath:    "/workspace/main",
+			wtTemplate: "wt-{{.BranchSlug}}",
+			want:       "[main]",
 		},
 		{
-			name:     "different prefix",
-			absPath:  "/workspace/work-feature",
-			wtPrefix: "work-",
-			want:     "feature",
+			name:       "custom template literal",
+			absPath:    "/workspace/work-feature",
+			wtTemplate: "work-{{.BranchSlug}}",
+			want:       "feature",
 		},
 		{
-			name:     "empty prefix matches everything",
-			absPath:  "/workspace/anything",
-			wtPrefix: "",
-			want:     "anything",
+			name:       "empty literal matches everything without stripping",
+			absPath:    "/workspace/anything",
+			wtTemplate: "{{.BranchSlug}}",
+			want:       "anything",
 		},
 		{
-			name:     "partial prefix match wraps in brackets",
-			absPath:  "/workspace/wt_add-auth",
-			wtPrefix: "wt-",
-			want:     "[wt_add-auth]",
+			name:       "partial literal match wraps in brackets",
+			absPath:    "/workspace/wt_add-auth",
+			wtTemplate: "wt-{{.BranchSlug}}",
+			want:       "[wt_add-auth]",
 		},
 		{
-			name:     "nested path extracts basename",
-			absPath:  "/deep/nested/path/wt-feature",
-			wtPrefix: "wt-",
-			want:     "feature",
+			name:       "nested path extracts basename",
+			absPath:    "/deep/nested/path/wt-feature",
+			wtTemplate: "wt-{{.BranchSlug}}",
+			want:       "feature",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			namer := testNamer(tt.wtPrefix)
+			namer := testLocalNamer(t, tt.wtTemplate)
 			got := getDisplayName(namer, tt.absPath)
 			assert.Equal(t, tt.want, got)
 		})
@@ -127,15 +137,15 @@ func TestFormatWorktree(t *testing.T) {
 	now := time.Now()
 
 	tests := []struct {
-		name        string
-		prPrefix    string
-		wantDisplay string
-		wantPath    string
-		worktree    git.Worktree
-		wtPrefix    string
+		localLiteral string
+		name         string
+		prLiteral    string
+		wantDisplay  string
+		wantPath     string
+		worktree     git.Worktree
 	}{
 		{
-			name: "local branch with prefix stripped",
+			name: "local branch with template literal stripped",
 			worktree: git.Worktree{
 				AbsolutePath: "/ws/wt-add-auth",
 				Ref: git.NewLocalBranch(
@@ -147,10 +157,10 @@ func TestFormatWorktree(t *testing.T) {
 					git.NewCommit("abc1234def5678", "Add auth", now, "user"),
 				),
 			},
-			wtPrefix:    "wt-",
-			prPrefix:    "pr-",
-			wantPath:    "/ws/wt-add-auth",
-			wantDisplay: "local branch add-auth feature/add-auth",
+			localLiteral: "wt-",
+			prLiteral:    "pr-",
+			wantPath:     "/ws/wt-add-auth",
+			wantDisplay:  "local branch add-auth feature/add-auth",
 		},
 		{
 			name: "local branch without prefix match",
@@ -165,10 +175,10 @@ func TestFormatWorktree(t *testing.T) {
 					git.NewCommit("abc1234def5678", "Initial", now, "user"),
 				),
 			},
-			wtPrefix:    "wt-",
-			prPrefix:    "pr-",
-			wantPath:    "/ws/main",
-			wantDisplay: "local branch [main] main",
+			localLiteral: "wt-",
+			prLiteral:    "pr-",
+			wantPath:     "/ws/main",
+			wantDisplay:  "local branch [main] main",
 		},
 		{
 			name: "tag worktree",
@@ -183,10 +193,10 @@ func TestFormatWorktree(t *testing.T) {
 					now,
 				),
 			},
-			wtPrefix:    "wt-",
-			prPrefix:    "pr-",
-			wantPath:    "/ws/wt-v1",
-			wantDisplay: "tag v1 v1.0.0",
+			localLiteral: "wt-",
+			prLiteral:    "pr-",
+			wantPath:     "/ws/wt-v1",
+			wantDisplay:  "tag v1 v1.0.0",
 		},
 		{
 			name: "detached HEAD worktree",
@@ -194,10 +204,10 @@ func TestFormatWorktree(t *testing.T) {
 				AbsolutePath: "/ws/wt-hotfix",
 				Ref:          git.NewCommit("abc1234def5678", "Hotfix", now, "user"),
 			},
-			wtPrefix:    "wt-",
-			prPrefix:    "pr-",
-			wantPath:    "/ws/wt-hotfix",
-			wantDisplay: "detached hotfix abc1234",
+			localLiteral: "wt-",
+			prLiteral:    "pr-",
+			wantPath:     "/ws/wt-hotfix",
+			wantDisplay:  "detached hotfix abc1234",
 		},
 		{
 			name: "detached HEAD with short SHA",
@@ -205,10 +215,10 @@ func TestFormatWorktree(t *testing.T) {
 				AbsolutePath: "/ws/wt-short",
 				Ref:          git.NewCommit("abc", "Short SHA", now, "user"),
 			},
-			wtPrefix:    "wt-",
-			prPrefix:    "pr-",
-			wantPath:    "/ws/wt-short",
-			wantDisplay: "detached short abc",
+			localLiteral: "wt-",
+			prLiteral:    "pr-",
+			wantPath:     "/ws/wt-short",
+			wantDisplay:  "detached short abc",
 		},
 		{
 			name: "detached HEAD with empty SHA",
@@ -216,35 +226,54 @@ func TestFormatWorktree(t *testing.T) {
 				AbsolutePath: "/ws/wt-empty",
 				Ref:          git.NewCommit("", "No SHA", now, "user"),
 			},
-			wtPrefix:    "wt-",
-			prPrefix:    "pr-",
-			wantPath:    "/ws/wt-empty",
-			wantDisplay: "detached empty (no sha)",
+			localLiteral: "wt-",
+			prLiteral:    "pr-",
+			wantPath:     "/ws/wt-empty",
+			wantDisplay:  "detached empty (no sha)",
 		},
 		{
-			name: "PR worktree shows [PR] marker",
+			name: "custom PR template literal shows [PR] marker",
 			worktree: git.Worktree{
-				AbsolutePath: "/ws/pr-feature-auth",
+				AbsolutePath: "/ws/review-42-feature-auth",
 				Ref: git.NewLocalBranch(
 					"feature/auth",
 					"origin/feature/auth",
-					"/ws/pr-feature-auth",
+					"/ws/review-42-feature-auth",
 					true,
 					0, 0,
 					git.NewCommit("abc1234def5678", "Add auth", now, "user"),
 				),
 			},
-			wtPrefix:    "wt-",
-			prPrefix:    "pr-",
-			wantPath:    "/ws/pr-feature-auth",
-			wantDisplay: "local branch [PR] [pr-feature-auth] feature/auth",
+			localLiteral: "wt-",
+			prLiteral:    "review-",
+			wantPath:     "/ws/review-42-feature-auth",
+			wantDisplay:  "local branch [PR] [review-42-feature-auth] feature/auth",
+		},
+		{
+			name: "action-leading templates strip nothing and tag no PR",
+			worktree: git.Worktree{
+				AbsolutePath: "/ws/42-feature-auth",
+				Ref: git.NewLocalBranch(
+					"feature/auth",
+					"origin/feature/auth",
+					"/ws/42-feature-auth",
+					true,
+					0, 0,
+					git.NewCommit("abc1234def5678", "Add auth", now, "user"),
+				),
+			},
+			localLiteral: "",
+			prLiteral:    "",
+			wantPath:     "/ws/42-feature-auth",
+			wantDisplay:  "local branch 42-feature-auth feature/auth",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			namer := testNamer(tt.wtPrefix)
-			gotPath, gotDisplay := formatWorktree(tt.worktree, namer, tt.prPrefix)
+			localNamer := testLocalNamer(t, tt.localLiteral+"{{.BranchSlug}}")
+			prNamer := testPRNamer(t, tt.prLiteral+"{{.Number}}")
+			gotPath, gotDisplay := formatWorktree(tt.worktree, localNamer, prNamer)
 			assert.Equal(t, tt.wantPath, gotPath)
 			assert.Equal(t, tt.wantDisplay, gotDisplay)
 		})
@@ -266,8 +295,9 @@ func TestFormatWorktreeTabSeparation(t *testing.T) {
 		),
 	}
 
-	namer := testNamer("wt-")
-	_, display := formatWorktree(worktree, namer, "pr-")
+	localNamer := testLocalNamer(t, "wt-{{.BranchSlug}}")
+	prNamer := testPRNamer(t, "pr-{{.Number}}")
+	_, display := formatWorktree(worktree, localNamer, prNamer)
 
 	// Verify no tabs in display string
 	assert.NotContains(t, display, "\t", "display string should not contain tabs")
@@ -281,52 +311,52 @@ func TestFormatWorktreeTabSeparation(t *testing.T) {
 
 func TestFormatWorktreeName(t *testing.T) {
 	tests := []struct {
-		dirName     string
-		displayName string
-		name        string
-		prPrefix    string
-		want        string
+		dirName   string
+		display   string
+		name      string
+		prLiteral string
+		want      string
 	}{
 		{
-			name:        "PR worktree gets marker",
-			displayName: "feature-auth",
-			dirName:     "pr-feature-auth",
-			prPrefix:    "pr-",
-			want:        "[PR] feature-auth",
+			name:      "PR worktree gets marker",
+			display:   "feature-auth",
+			dirName:   "pr-feature-auth",
+			prLiteral: "pr-",
+			want:      "[PR] feature-auth",
 		},
 		{
-			name:        "regular worktree no marker",
-			displayName: "feature-auth",
-			dirName:     "wt-feature-auth",
-			prPrefix:    "pr-",
-			want:        "feature-auth",
+			name:      "regular worktree no marker",
+			display:   "feature-auth",
+			dirName:   "wt-feature-auth",
+			prLiteral: "pr-",
+			want:      "feature-auth",
 		},
 		{
-			name:        "main worktree no marker",
-			displayName: "[main]",
-			dirName:     "main",
-			prPrefix:    "pr-",
-			want:        "[main]",
+			name:      "main worktree no marker",
+			display:   "[main]",
+			dirName:   "main",
+			prLiteral: "pr-",
+			want:      "[main]",
 		},
 		{
-			name:        "custom PR prefix",
-			displayName: "bug-fix",
-			dirName:     "review-bug-fix",
-			prPrefix:    "review-",
-			want:        "[PR] bug-fix",
+			name:      "custom PR literal",
+			display:   "bug-fix",
+			dirName:   "review-bug-fix",
+			prLiteral: "review-",
+			want:      "[PR] bug-fix",
 		},
 		{
-			name:        "empty prefix never matches",
-			displayName: "feature",
-			dirName:     "feature",
-			prPrefix:    "",
-			want:        "feature",
+			name:      "empty literal never matches",
+			display:   "feature",
+			dirName:   "feature",
+			prLiteral: "",
+			want:      "feature",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := formatWorktreeName(tt.displayName, tt.dirName, tt.prPrefix)
+			got := formatWorktreeName(tt.display, tt.dirName, tt.prLiteral)
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -345,11 +375,13 @@ func TestExecuteList(t *testing.T) {
 	}
 
 	tests := []struct {
+		configure        func(*config.Config)
 		fzf              bool
 		listWorktreesFn  func() ([]git.Worktree, error)
 		mainWorktreePath string
 		name             string
 		wantErr          string
+		wantErrContains  string
 		wantOutput       string
 	}{
 		{
@@ -460,15 +492,39 @@ func TestExecuteList(t *testing.T) {
 			wantErr: "failed to list worktrees: connection refused",
 		},
 		{
-			name:             "PR worktree gets PR marker in fzf mode",
+			name:             "numbered PR worktree gets PR marker in fzf mode",
 			mainWorktreePath: "/ws/main",
 			fzf:              true,
 			listWorktreesFn: func() ([]git.Worktree, error) {
 				return []git.Worktree{
-					branchWT("/ws/pr-auth-fix", "feature/auth-fix", "aaa1111aaa1111"),
+					branchWT("/ws/pr-42-auth-fix", "feature/auth-fix", "aaa1111aaa1111"),
 				}, nil
 			},
-			wantOutput: "/ws/pr-auth-fix\tlocal branch [PR] [pr-auth-fix] feature/auth-fix\n",
+			wantOutput: "/ws/pr-42-auth-fix\tlocal branch [PR] [pr-42-auth-fix] feature/auth-fix\n",
+		},
+		{
+			name:             "local namer constructor error has context",
+			mainWorktreePath: "/ws/main",
+			fzf:              true,
+			configure: func(cfg *config.Config) {
+				cfg.LocalBranch.WorktreeTemplate = "{{.Unknown}}"
+			},
+			listWorktreesFn: func() ([]git.Worktree, error) {
+				return nil, nil
+			},
+			wantErrContains: "failed to create local branch namer:",
+		},
+		{
+			name:             "PR namer constructor error has context",
+			mainWorktreePath: "/ws/main",
+			fzf:              true,
+			configure: func(cfg *config.Config) {
+				cfg.PullRequest.WorktreeTemplate = "{{.Unknown}}"
+			},
+			listWorktreesFn: func() ([]git.Worktree, error) {
+				return nil, nil
+			},
+			wantErrContains: "failed to create PR namer:",
 		},
 		{
 			name:             "main worktree path not found outputs all worktrees sorted",
@@ -488,8 +544,12 @@ func TestExecuteList(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
 
+			cfg := defaultTestConfig()
+			if tt.configure != nil {
+				tt.configure(&cfg)
+			}
 			ctx := &listContext{
-				cfg:              defaultTestConfig(),
+				cfg:              cfg,
 				gitClient:        &mockGit{listWorktreesFn: tt.listWorktreesFn},
 				mainWorktreePath: tt.mainWorktreePath,
 			}
@@ -497,8 +557,10 @@ func TestExecuteList(t *testing.T) {
 			err := executeList(&buf, ctx, tt.fzf)
 
 			if tt.wantErr != "" {
+				require.EqualError(t, err, tt.wantErr)
+			} else if tt.wantErrContains != "" {
 				require.Error(t, err)
-				assert.Equal(t, tt.wantErr, err.Error())
+				assert.Contains(t, err.Error(), tt.wantErrContains)
 			} else {
 				require.NoError(t, err)
 				assert.Equal(t, tt.wantOutput, buf.String())
