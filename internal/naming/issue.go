@@ -49,8 +49,8 @@ func NewIssueNamer(issueCfg config.IssueConfig, namingCfg config.NamingConfig) (
 	if err != nil {
 		return nil, err
 	}
-	if !templateReferencesNumber(branchTemplate) {
-		return nil, errors.New("branch_template must reference {{.Number}}: issue matching is anchored on the issue number")
+	if !templateHasDirectNumberAction(branchTemplate) {
+		return nil, errors.New("branch_template must directly render {{.Number}}: issue matching requires the complete issue number")
 	}
 
 	worktreeTemplate, err := parseNameTemplate(
@@ -144,7 +144,15 @@ func issueNumberProbe(tmpl *template.Template, marker string) (*template.Templat
 			continue
 		}
 		tree := associated.Copy()
-		replaced += replaceNumberActions(tree.Root, marker)
+		replaced += walkNumberActions(tree.Root, func(action *parse.ActionNode) {
+			field := action.Pipe.Cmds[0].Args[0].(*parse.FieldNode)
+			action.Pipe.Cmds[0].Args[0] = &parse.StringNode{
+				NodeType: parse.NodeString,
+				Pos:      field.Pos,
+				Quoted:   strconv.Quote(marker),
+				Text:     marker,
+			}
+		})
 		if _, err := probe.AddParseTree(associated.Name(), tree); err != nil {
 			return nil, false
 		}
@@ -155,36 +163,32 @@ func issueNumberProbe(tmpl *template.Template, marker string) (*template.Templat
 	return probe.Lookup(tmpl.Name()), true
 }
 
-func replaceNumberActions(node parse.Node, marker string) int {
+func walkNumberActions(node parse.Node, visit func(*parse.ActionNode)) int {
 	if isNilParseNode(node) {
 		return 0
 	}
 
 	switch node := node.(type) {
 	case *parse.ListNode:
-		replaced := 0
+		count := 0
 		for _, child := range node.Nodes {
-			replaced += replaceNumberActions(child, marker)
+			count += walkNumberActions(child, visit)
 		}
-		return replaced
+		return count
 	case *parse.ActionNode:
 		if !isNumberField(node) {
 			return 0
 		}
-		field := node.Pipe.Cmds[0].Args[0].(*parse.FieldNode)
-		node.Pipe.Cmds[0].Args[0] = &parse.StringNode{
-			NodeType: parse.NodeString,
-			Pos:      field.Pos,
-			Quoted:   strconv.Quote(marker),
-			Text:     marker,
+		if visit != nil {
+			visit(node)
 		}
 		return 1
 	case *parse.IfNode:
-		return replaceNumberActions(node.List, marker) + replaceNumberActions(node.ElseList, marker)
+		return walkNumberActions(node.List, visit) + walkNumberActions(node.ElseList, visit)
 	case *parse.RangeNode:
-		return replaceNumberActions(node.List, marker) + replaceNumberActions(node.ElseList, marker)
+		return walkNumberActions(node.List, visit) + walkNumberActions(node.ElseList, visit)
 	case *parse.WithNode:
-		return replaceNumberActions(node.List, marker) + replaceNumberActions(node.ElseList, marker)
+		return walkNumberActions(node.List, visit) + walkNumberActions(node.ElseList, visit)
 	default:
 		return 0
 	}
@@ -264,19 +268,9 @@ func numberAnchorPrefix(tmpl *template.Template) (prefix, boundary string, ok bo
 	return "", "", false
 }
 
-func templateReferencesNumber(tmpl *template.Template) bool {
-	if tmpl.Tree == nil || tmpl.Root == nil {
-		return false
-	}
-	for _, node := range tmpl.Root.Nodes {
-		switch node := node.(type) {
-		case *parse.TextNode:
-			continue
-		case *parse.ActionNode:
-			if isNumberField(node) {
-				return true
-			}
-		default:
+func templateHasDirectNumberAction(tmpl *template.Template) bool {
+	for _, associated := range tmpl.Templates() {
+		if associated.Tree != nil && walkNumberActions(associated.Root, nil) > 0 {
 			return true
 		}
 	}

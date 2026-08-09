@@ -116,7 +116,7 @@ The grove namer slug command performs safety normalization only. It does not app
 
 - git.timeout and github.preview_cache_ttl must be zero or positive durations.
 - All branch_template and worktree_template values must be non-empty. Commands that use a template parse it and reject unavailable variables when constructing the corresponding namer.
-- issue.branch_template must reference {{.Number}} because issue matching is anchored on the issue number.
+- issue.branch_template must directly render {{.Number}} because issue matching requires the complete issue number.
 - After rendering and truncation, Grove rejects empty branch names, leading dashes, double dots, and control characters. Git reports additional invalid-ref edge cases during branch creation.
 - Final worktree names must be non-empty, contain no slash or control character, not begin with a dash, and not equal to **.** or **..**.
 - naming.max_length must be zero or positive.

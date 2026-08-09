@@ -13,12 +13,9 @@ Matching is branch-anchored (`internal/issue/matcher.go`, `internal/pr/matcher.g
 
 ```toml
 [naming]
-strip_prefixes       = ["feature/", "fix/", "issue/"]
-max_length           = 30        # caps every generated name; 0 disables
-collapse_dashes      = true
-lowercase            = true
-replace_non_alphanum = true
-trim_dashes          = true
+lowercase      = true
+max_length     = 30        # caps every generated name; 0 disables
+strip_prefixes = ["feature/", "fix/", "issue/"]
 
 [local_branch]
 branch_template   = "feature/{{.PhraseSlug}}"
@@ -37,7 +34,7 @@ Removed entirely (clean break): `[slugify]` section, `slugify.max_length`, `slug
 
 ## Template variables
 
-Rule: a bare noun is the raw value; a `*Slug` variable is its directory-safe form (slugified via the `[naming]` booleans; `BranchSlug` is additionally prefix-stripped first).
+Rule: a bare noun is the raw value. A `*Slug` variable replaces each run outside ASCII letters and digits with one dash and trims surrounding dashes; `naming.lowercase` controls letter casing. `BranchSlug` is additionally prefix-stripped first.
 
 | Variable | Meaning | Example |
 |---|---|---|
@@ -66,7 +63,7 @@ No custom template functions are registered, by design; the supported contract i
   - all four template kinds: parse errors and unknown fields rejected;
   - branch templates: rendered result must be a valid branch name (existing `isValidBranchName`);
   - worktree templates: rendered result must be non-empty, contain no `/`, not start with `-`, not be `.`/`..`, no control characters;
-  - `issue.branch_template` must still reference `{{.Number}}` (matching is anchored on it); no such requirement for worktree templates;
+  - `issue.branch_template` must directly render `{{.Number}}` (matching requires the complete issue number); no such requirement for worktree templates;
   - `config.Validate`: templates non-empty, `naming.max_length >= 0`.
 - **Matching**: unchanged. Issue matching stays number-anchored on branch names; PR matching stays dual (template-generated branch, raw head branch). Only the `PullRequestTemplateData.BranchName` field renames to `Branch`.
 - **Empty results**: an empty slug (e.g. phrase `"***"`) fails generation with the existing guidance error.
@@ -75,12 +72,12 @@ No custom template functions are registered, by design; the supported contract i
 
 ### 1. `internal/config`
 
-- `config.go`: add `NamingConfig` (fields alpha-ordered: `CollapseDashes`, `Lowercase`, `MaxLength`, `ReplaceNonAlphanum`, `StripPrefixes`, `TrimDashes`); replace `Slugify` with `Naming` in `Config` (keep section fields alpha-ordered). Rewrite `IssueConfig`/`LocalBranchConfig`/`PullRequestConfig` to exactly `BranchTemplate` + `WorktreeTemplate`. Move the CLI-flag struct tag from the old `LocalBranch.WorktreePrefix` to `LocalBranch.WorktreeTemplate` as `config:"worktree-template"` with updated help text. Update `Validate()` per the semantics above.
+- `config.go`: add `NamingConfig` (fields alpha-ordered: `Lowercase`, `MaxLength`, `StripPrefixes`); replace `Slugify` with `Naming` in `Config` (keep section fields alpha-ordered). Rewrite `IssueConfig`/`LocalBranchConfig`/`PullRequestConfig` to exactly `BranchTemplate` + `WorktreeTemplate`. Move the CLI-flag struct tag from the old `LocalBranch.WorktreePrefix` to `LocalBranch.WorktreeTemplate` as `config:"worktree-template"` with updated help text. Update `Validate()` per the semantics above.
 - `defaults.go`: the target configuration above.
 
 ### 2. `internal/naming`
 
-- `slugify.go`: drop `MaxLength`/`HashLength` from `SlugifyOptions` (four booleans remain); delete `computeHash`/`truncateWithHash`; add `TruncateName(name string, max int) string` (rune-safe cut + `TrimRight "-"`).
+- `slugify.go`: retain only `Lowercase` in `SlugifyOptions`; make replacement, dash collapsing, and surrounding-dash trimming invariant; delete `computeHash`/`truncateWithHash`; add `TruncateName(name string, max int) string` (rune-safe cut + `TrimRight "-"`).
 - Shared helpers: template parse/execute-with-test-data validation; worktree-name validity check; `leadingLiteral(tmpl)` extracting the literal text before the first action (generalized from `numberAnchorPrefix`), exposed as `WorktreeLiteralPrefix()` on each namer for `grove list`.
 - `local_branch.go`: namer holds both parsed templates + naming options; constructor becomes fallible (`NewLocalBranchNamer(cfg.LocalBranch, cfg.Naming) (*LocalBranchNamer, error)`). `GenerateBranchName(phrase)` renders `{PhraseSlug}` then caps; `GenerateWorktreeName(branch)` computes `BranchSlug`, renders, caps. `HasPrefix`/`ExtractFromAbsolutePath` reimplemented on the worktree template's leading literal.
 - `issue.go`: keep number-anchor matching logic as is. `TitleSlug` loses its own cap (plain slug of title). Add worktree template with data `{Number, TitleSlug, BranchSlug}`; `GenerateWorktreeName` signature gains issue data (`number, title, branch`). Cap both rendered outputs.
@@ -98,7 +95,7 @@ No custom template functions are registered, by design; the supported contract i
 - `pr_checkout.go`: generate the worktree name from PR data (number, title, local branch) instead of branch alone.
 - `issue_list.go`, `pr_list.go`: update namer construction (`cfg.Naming`).
 - `list.go`: derive display stripping from the local namer's worktree-template literal and the `[PR]` tag from the PR namer's literal; handle namer construction errors.
-- `namer.go`, `namer_slug.go`, `namer_branch.go`, `namer_worktree.go`: use `cfg.Naming`; `namer slug` applies the four booleans (no cap — the cap belongs to name generation, not raw slugs; decide in-code and document in command help).
+- `namer.go`, `namer_slug.go`, `namer_branch.go`, `namer_worktree.go`: use `cfg.Naming`; `namer slug` applies invariant safety normalization and the configurable lowercase behavior (no cap — the cap belongs to name generation, not raw slugs; decide in-code and document in command help).
 - `docs.go`: rewrite the TOML schema block, validation notes, and the flags section; document the variables table and the truncation/number-early caveat.
 
 ### 5. Tests (table-driven where applicable)
@@ -115,8 +112,8 @@ Sweep before finishing (clean break): no surviving references to `worktree_prefi
 
 1. `make check` (vet, lint, tests) and `make build`.
 2. Scratch-repo workflow in `.sandbox/`: init a bare-remote + workspace clone, then with `build/grove`:
-   - `grove create "add user authentication"` → path ends `wt-add-user-authentication`; branch `feature/add-user-authentication` (cap 30 applied where relevant; verify a long phrase truncates cleanly, and a repeat long phrase errors "branch already exists");
-   - `grove checkout feature/add-user-authentication` from the main worktree errors as expected; `grove list --fzf` strips `wt-` in display;
+   - `grove create "add user authentication"` → path ends `wt-add-user-authenticatio`; branch `feature/add-user-authenticatio` (cap 30 applied; verify another long phrase truncates cleanly, and a repeat long phrase errors "branch already exists");
+   - `grove checkout feature/add-user-authenticatio` from the main worktree errors as expected; `grove list --fzf` strips `wt-` in display;
    - custom `grove.toml` overriding templates + `grove config --provenance` shows the new keys and sources;
    - `grove namer slug|branch|worktree` reflect the new pipeline;
    - `grove create "x" --worktree-template "subagent-{{.BranchSlug}}"` → `subagent-…` directory.

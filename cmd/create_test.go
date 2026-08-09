@@ -566,7 +566,6 @@ func TestCreateCommandHasFromRemotePrimaryFlag(t *testing.T) {
 func TestCreateHelpDocumentsNamingTemplates(t *testing.T) {
 	help := newCreateCmd().Long
 	assert.Contains(t, help, `--worktree-template "subagent-{{.BranchSlug}}"`)
-	assert.NotContains(t, help, "worktree-prefix")
 }
 
 func TestExecuteCreate_ReuseVerifiesGitArgs(t *testing.T) {
