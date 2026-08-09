@@ -139,9 +139,6 @@ func formatWorktree(wt git.Worktree, localNamer *naming.LocalBranchNamer, prName
 
 func getDisplayName(namer *naming.LocalBranchNamer, absPath string) string {
 	basename := filepath.Base(absPath)
-	if namer.WorktreeLiteralPrefix() == "" {
-		return basename
-	}
 	if namer.HasPrefix(basename) {
 		return namer.ExtractFromAbsolutePath(absPath)
 	}

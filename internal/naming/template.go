@@ -124,19 +124,17 @@ func validateTemplateNodes(nodes []parse.Node, templateName string, allowed map[
 }
 
 func validateTemplatePipe(pipe *parse.PipeNode, templateName string, allowed map[string]struct{}, names []string) error {
-	declarations := make([]parse.Node, len(pipe.Decl))
-	for i, declaration := range pipe.Decl {
-		declarations[i] = declaration
+	for _, declaration := range pipe.Decl {
+		if err := validateTemplateNode(declaration, templateName, allowed, names); err != nil {
+			return err
+		}
 	}
-	if err := validateTemplateNodes(declarations, templateName, allowed, names); err != nil {
-		return err
+	for _, command := range pipe.Cmds {
+		if err := validateTemplateNode(command, templateName, allowed, names); err != nil {
+			return err
+		}
 	}
-
-	commands := make([]parse.Node, len(pipe.Cmds))
-	for i, command := range pipe.Cmds {
-		commands[i] = command
-	}
-	return validateTemplateNodes(commands, templateName, allowed, names)
+	return nil
 }
 
 func validateTemplateField(field *parse.FieldNode, templateName string, allowed map[string]struct{}, names []string) error {
@@ -187,12 +185,13 @@ func nestedFieldError(templateName, field string) error {
 }
 
 func validateTemplateBranch(branch *parse.BranchNode, templateName string, allowed map[string]struct{}, names []string) error {
-	return validateTemplateNodes(
-		[]parse.Node{branch.Pipe, branch.List, branch.ElseList},
-		templateName,
-		allowed,
-		names,
-	)
+	if err := validateTemplateNode(branch.Pipe, templateName, allowed, names); err != nil {
+		return err
+	}
+	if err := validateTemplateNode(branch.List, templateName, allowed, names); err != nil {
+		return err
+	}
+	return validateTemplateNode(branch.ElseList, templateName, allowed, names)
 }
 
 func renderName(tmpl *template.Template, data any, maxLength int, validate nameValidator) (string, error) {

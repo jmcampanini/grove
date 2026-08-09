@@ -109,7 +109,7 @@ func (n *IssueNamer) preservesIssueNumber(name string, number int, title string)
 		return false
 	}
 
-	marker, ok := issueNumberMarker(name, len([]rune(strconv.Itoa(number))))
+	marker, ok := issueNumberMarker(name, len(strconv.Itoa(number)))
 	if !ok {
 		return false
 	}
