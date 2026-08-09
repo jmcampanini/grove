@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"errors"
 	"strings"
 	"testing"
 
@@ -16,12 +17,13 @@ func TestExecuteNamerBranch(t *testing.T) {
 		phrase         string
 		wantErr        bool
 		wantErrContain string
+		wantErrIs      error
 		wantOutput     string
 	}{
 		{
-			name:       "simple phrase",
-			phrase:     "add user auth",
-			wantOutput: "feature/add-user-auth",
+			name:       "whole branch name is capped",
+			phrase:     "add user authentication",
+			wantOutput: "feature/add-user-authenticatio",
 		},
 		{
 			name:       "special characters",
@@ -34,9 +36,9 @@ func TestExecuteNamerBranch(t *testing.T) {
 			wantOutput: "feature/add-oauth2-google",
 		},
 		{
-			name:       "long phrase triggers hash truncation",
+			name:       "long whole name is truncated",
 			phrase:     "implement comprehensive user authentication and authorization system with role based access",
-			wantOutput: "feature/implement-comprehensive-user-authentication-a-nquu",
+			wantOutput: "feature/implement-comprehensiv",
 		},
 		{
 			name:           "empty phrase",
@@ -48,24 +50,28 @@ func TestExecuteNamerBranch(t *testing.T) {
 			name:           "all special chars slugifies to empty",
 			phrase:         "@#$%^&*",
 			wantErr:        true,
-			wantErrContain: "empty name after slugification",
+			wantErrContain: "failed to generate branch name",
+			wantErrIs:      naming.ErrEmptySlug,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := defaultTestConfig()
-			ctx := &namerContext{
-				namer: naming.NewLocalBranchNamer(cfg.LocalBranch, cfg.Slugify),
-			}
+			namer, err := naming.NewLocalBranchNamer(cfg.LocalBranch, cfg.Naming)
+			require.NoError(t, err)
+			ctx := &namerContext{namer: namer}
 
 			var buf bytes.Buffer
-			err := executeNamerBranch(&buf, ctx, tt.phrase)
+			err = executeNamerBranch(&buf, ctx, tt.phrase)
 
 			if tt.wantErr {
 				require.Error(t, err)
 				if tt.wantErrContain != "" {
 					assert.Contains(t, err.Error(), tt.wantErrContain)
+				}
+				if tt.wantErrIs != nil {
+					assert.True(t, errors.Is(err, tt.wantErrIs))
 				}
 				return
 			}

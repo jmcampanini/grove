@@ -12,28 +12,23 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func defaultSlugifyConfig() config.SlugifyConfig {
-	return config.SlugifyConfig{
-		CollapseDashes:     true,
-		HashLength:         0,
-		Lowercase:          true,
-		MaxLength:          0,
-		ReplaceNonAlphanum: true,
-		TrimDashes:         true,
+func defaultNamingConfig() config.NamingConfig {
+	return config.NamingConfig{
+		Lowercase:     true,
+		MaxLength:     30,
+		StripPrefixes: []string{"feature/", "fix/", "issue/"},
 	}
 }
 
 func defaultIssueConfig() config.IssueConfig {
 	return config.IssueConfig{
-		BranchTemplate:     "issue/{{.Number}}-{{.TitleSlug}}",
-		StripBranchPrefix:  []string{"issue/"},
-		TitleSlugMaxLength: 40,
-		WorktreePrefix:     "is-",
+		BranchTemplate:   "issue/{{.Number}}-{{.TitleSlug}}",
+		WorktreeTemplate: "is-{{.Number}}-{{.TitleSlug}}",
 	}
 }
 
 func createNamer(t *testing.T, issueCfg config.IssueConfig) *naming.IssueNamer {
-	namer, err := naming.NewIssueNamer(issueCfg, defaultSlugifyConfig())
+	namer, err := naming.NewIssueNamer(issueCfg, defaultNamingConfig())
 	require.NoError(t, err)
 	return namer
 }
@@ -103,10 +98,8 @@ func TestMatcher_FindWorktreeForIssue(t *testing.T) {
 		{
 			name: "number-only template",
 			issueCfg: config.IssueConfig{
-				BranchTemplate:     "issue/{{.Number}}",
-				StripBranchPrefix:  []string{"issue/"},
-				TitleSlugMaxLength: 40,
-				WorktreePrefix:     "is-",
+				BranchTemplate:   "issue/{{.Number}}",
+				WorktreeTemplate: "is-{{.Number}}-{{.TitleSlug}}",
 			},
 			issue: createIssue(456, "Anything"),
 			worktrees: []git.Worktree{
@@ -118,9 +111,8 @@ func TestMatcher_FindWorktreeForIssue(t *testing.T) {
 		{
 			name: "title-first template matches exact regeneration",
 			issueCfg: config.IssueConfig{
-				BranchTemplate:     "{{.TitleSlug}}-{{.Number}}",
-				TitleSlugMaxLength: 40,
-				WorktreePrefix:     "is-",
+				BranchTemplate:   "{{.TitleSlug}}-{{.Number}}",
+				WorktreeTemplate: "is-{{.Number}}-{{.TitleSlug}}",
 			},
 			issue: createIssue(789, "Fix bug"),
 			worktrees: []git.Worktree{
@@ -131,9 +123,8 @@ func TestMatcher_FindWorktreeForIssue(t *testing.T) {
 		{
 			name: "title-first template misses after title edit",
 			issueCfg: config.IssueConfig{
-				BranchTemplate:     "{{.TitleSlug}}-{{.Number}}",
-				TitleSlugMaxLength: 40,
-				WorktreePrefix:     "is-",
+				BranchTemplate:   "{{.TitleSlug}}-{{.Number}}",
+				WorktreeTemplate: "is-{{.Number}}-{{.TitleSlug}}",
 			},
 			issue: createIssue(789, "Renamed bug"),
 			worktrees: []git.Worktree{

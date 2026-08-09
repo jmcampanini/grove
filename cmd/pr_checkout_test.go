@@ -362,7 +362,7 @@ func TestCheckoutPRWorktree(t *testing.T) {
 			},
 			cfg:        defaultTestConfig(),
 			wantErr:    false,
-			wantStdout: "/workspace/pr-feature-add-auth",
+			wantStdout: "/workspace/pr-123-add-auth",
 		},
 		{
 			name: "new worktree creation success",
@@ -387,13 +387,13 @@ func TestCheckoutPRWorktree(t *testing.T) {
 				},
 				createWorktreeForExistingBranchFn: func(branchName, worktreeAbsPath string) error {
 					assert.Equal(t, "feature/add-auth", branchName)
-					assert.Equal(t, "/workspace/pr-feature-add-auth", worktreeAbsPath)
+					assert.Equal(t, "/workspace/pr-123-add-auth", worktreeAbsPath)
 					return nil
 				},
 			},
 			cfg:        defaultTestConfig(),
 			wantErr:    false,
-			wantStdout: "/workspace/pr-feature-add-auth",
+			wantStdout: "/workspace/pr-123-add-auth",
 		},
 		{
 			name: "merged PR with deleted branch uses PR ref",
@@ -418,13 +418,13 @@ func TestCheckoutPRWorktree(t *testing.T) {
 				},
 				createWorktreeForExistingBranchFn: func(branchName, worktreeAbsPath string) error {
 					assert.Equal(t, "feature/old-branch", branchName)
-					assert.Equal(t, "/workspace/pr-feature-old-branch", worktreeAbsPath)
+					assert.Equal(t, "/workspace/pr-789-old-merged-pr", worktreeAbsPath)
 					return nil
 				},
 			},
 			cfg:        defaultTestConfig(),
 			wantErr:    false,
-			wantStdout: "/workspace/pr-feature-old-branch",
+			wantStdout: "/workspace/pr-789-old-merged-pr",
 		},
 		{
 			name: "PR number template generates different branch name",
@@ -448,7 +448,7 @@ func TestCheckoutPRWorktree(t *testing.T) {
 				},
 				createWorktreeForExistingBranchFn: func(branchName, worktreeAbsPath string) error {
 					assert.Equal(t, "pr/456", branchName)
-					assert.Equal(t, "/workspace/pr-456", worktreeAbsPath)
+					assert.Equal(t, "/workspace/pr-456-test-pr", worktreeAbsPath)
 					return nil
 				},
 			},
@@ -458,7 +458,29 @@ func TestCheckoutPRWorktree(t *testing.T) {
 				return cfg
 			}(),
 			wantErr:    false,
-			wantStdout: "/workspace/pr-456",
+			wantStdout: "/workspace/pr-456-test-pr",
+		},
+		{
+			name: "worktree generation error occurs before git operations",
+			prInfo: github.PullRequest{
+				BranchName: "feature/add-auth",
+				Number:     123,
+				State:      github.PRStateOpen,
+				Title:      "Add auth",
+			},
+			gitMock: &mockGit{
+				listWorktreesFn: func() ([]git.Worktree, error) {
+					t.Error("ListWorktrees should not be called after worktree generation fails")
+					return nil, nil
+				},
+			},
+			cfg: func() config.Config {
+				cfg := config.DefaultConfig()
+				cfg.PullRequest.WorktreeTemplate = `{{if eq .Number 123}}{{index "" 1}}{{else}}ok{{end}}`
+				return cfg
+			}(),
+			wantErr:        true,
+			wantErrContain: "failed to generate worktree name",
 		},
 		{
 			name: "fetch error",

@@ -23,10 +23,12 @@ func runNamerWorktree(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	ctx := &namerContext{
-		namer: naming.NewLocalBranchNamer(cfg.LocalBranch, cfg.Slugify),
+	namer, err := naming.NewLocalBranchNamer(cfg.LocalBranch, cfg.Naming)
+	if err != nil {
+		return fmt.Errorf("failed to initialize local branch namer: %w", err)
 	}
 
+	ctx := &namerContext{namer: namer}
 	return executeNamerWorktree(cmd.OutOrStdout(), ctx, args[0])
 }
 
@@ -36,9 +38,9 @@ func executeNamerWorktree(w io.Writer, ctx *namerContext, phrase string) error {
 		return err
 	}
 
-	name := ctx.namer.GenerateWorktreeName(branchName)
-	if name == "" {
-		return fmt.Errorf("branch name %q produces an empty worktree name after prefix stripping", branchName)
+	name, err := ctx.namer.GenerateWorktreeName(branchName)
+	if err != nil {
+		return fmt.Errorf("failed to generate worktree name for branch %q: %w", branchName, err)
 	}
 
 	if _, err = fmt.Fprintln(w, name); err != nil {

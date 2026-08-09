@@ -55,8 +55,8 @@ func (m *Matcher) MatchAll(prs []github.PullRequest, worktrees []git.Worktree) [
 func (m *Matcher) FindWorktreeForPR(pr github.PullRequest, worktrees []git.Worktree) *git.Worktree {
 	// Apply template to get expected local branch name
 	prData := naming.PullRequestTemplateData{
-		BranchName: pr.BranchName,
-		Number:     pr.Number,
+		Branch: pr.BranchName,
+		Number: pr.Number,
 	}
 	expectedBranch, err := m.namer.GenerateBranchName(prData)
 	if err != nil {

@@ -102,9 +102,9 @@ func generateBranchName(ctx *namerContext, phrase string) (string, error) {
 		return "", errors.New("phrase cannot be empty")
 	}
 
-	name := ctx.namer.GenerateBranchName(phrase)
-	if name == "" {
-		return "", fmt.Errorf("phrase %q produces an empty name after slugification", phrase)
+	name, err := ctx.namer.GenerateBranchName(phrase)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate branch name for phrase %q: %w", phrase, err)
 	}
 
 	return name, nil

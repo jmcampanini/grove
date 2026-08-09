@@ -15,26 +15,27 @@ import (
 
 func TestExecuteCheckout(t *testing.T) {
 	tests := []struct {
-		name           string
-		ref            string
-		gitMock        func(workspaceDir string) *mockGit
-		setupFS        func(t *testing.T, workspaceDir string)
-		wantErr        bool
-		wantErrContain string
-		wantOutput     string
+		gitMock          func(workspaceDir string) *mockGit
+		name             string
+		ref              string
+		setupFS          func(t *testing.T, workspaceDir string)
+		wantErr          bool
+		wantErrContain   string
+		wantOutput       string
+		worktreeTemplate string
 	}{
 		{
 			name: "local branch exists",
-			ref:  "feature/fix-login",
+			ref:  "feature/add-user-authentication",
 			gitMock: func(workspaceDir string) *mockGit {
 				return &mockGit{
 					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
 					branchExistsFn: func(branchName string, _ bool) (bool, error) {
-						return branchName == "feature/fix-login", nil
+						return branchName == "feature/add-user-authentication", nil
 					},
 				}
 			},
-			wantOutput: "wt-fix-login",
+			wantOutput: "wt-add-user-authentication",
 		},
 		{
 			name: "local branch without prefix",
@@ -177,6 +178,20 @@ func TestExecuteCheckout(t *testing.T) {
 			},
 			wantErr:        true,
 			wantErrContain: "branch name cannot be empty",
+		},
+		{
+			name:             "invalid naming template",
+			ref:              "feature/fix-login",
+			worktreeTemplate: "{{.Unknown}}",
+			gitMock: func(_ string) *mockGit {
+				return &mockGit{
+					branchExistsFn: func(_ string, _ bool) (bool, error) {
+						return true, nil
+					},
+				}
+			},
+			wantErr:        true,
+			wantErrContain: "failed to initialize local branch namer",
 		},
 		{
 			name: "workspace path error",
@@ -341,8 +356,12 @@ func TestExecuteCheckout(t *testing.T) {
 			}
 
 			var stdout bytes.Buffer
+			cfg := defaultTestConfig()
+			if tt.worktreeTemplate != "" {
+				cfg.LocalBranch.WorktreeTemplate = tt.worktreeTemplate
+			}
 			ctx := &checkoutContext{
-				cfg:       defaultTestConfig(),
+				cfg:       cfg,
 				gitClient: tt.gitMock(workspaceDir),
 				logger:    testLogger(),
 			}

@@ -76,13 +76,41 @@ func TestStartIssueWorktree(t *testing.T) {
 				},
 				createWorktreeForExistingBranchFn: func(branchName, worktreeAbsPath string) error {
 					assert.Equal(t, "issue/123-add-auth", branchName)
-					assert.Equal(t, "/workspace/is-123-add-auth", worktreeAbsPath)
+					assert.Equal(t, "/workspace/is-123-completely-renamed-titl", worktreeAbsPath)
 					return nil
 				},
 			},
 			cfg:        defaultTestConfig(),
 			wantErr:    false,
-			wantStdout: "/workspace/is-123-add-auth",
+			wantStdout: "/workspace/is-123-completely-renamed-titl",
+		},
+		{
+			name: "custom worktree template receives reused branch slug",
+			issueInfo: github.Issue{
+				Number: 123,
+				State:  github.IssueStateOpen,
+				Title:  "Renamed title",
+			},
+			gitMock: &mockGit{
+				listWorktreesFn: func() ([]git.Worktree, error) {
+					return []git.Worktree{}, nil
+				},
+				listLocalBranchesFn: func() ([]git.LocalBranch, error) {
+					return []git.LocalBranch{createTestLocalBranch("issue/123-add-auth")}, nil
+				},
+				createWorktreeForExistingBranchFn: func(branchName, worktreeAbsPath string) error {
+					assert.Equal(t, "issue/123-add-auth", branchName)
+					assert.Equal(t, "/workspace/case-123-renamed-title-123-add-auth", worktreeAbsPath)
+					return nil
+				},
+			},
+			cfg: func() config.Config {
+				cfg := config.DefaultConfig()
+				cfg.Issue.WorktreeTemplate = "case-{{.Number}}-{{.TitleSlug}}-{{.BranchSlug}}"
+				cfg.Naming.MaxLength = 0
+				return cfg
+			}(),
+			wantStdout: "/workspace/case-123-renamed-title-123-add-auth",
 		},
 		{
 			name: "new branch created from fetched remote primary",
@@ -140,14 +168,14 @@ func TestStartIssueWorktree(t *testing.T) {
 					return []git.Worktree{}, nil
 				},
 				createWorktreeForNewBranchFromRefFn: func(newBranchName, worktreeAbsPath, baseRef string) error {
-					assert.Equal(t, "issue/7-fix-login-crash-when-the-password-field", newBranchName)
-					assert.Equal(t, "/workspace/is-7-fix-login-crash-when-the-password-field", worktreeAbsPath)
+					assert.Equal(t, "issue/7-fix-login-crash-when-t", newBranchName)
+					assert.Equal(t, "/workspace/is-7-fix-login-crash-when-the", worktreeAbsPath)
 					return nil
 				},
 			},
 			cfg:        defaultTestConfig(),
 			wantErr:    false,
-			wantStdout: "/workspace/is-7-fix-login-crash-when-the-password-field",
+			wantStdout: "/workspace/is-7-fix-login-crash-when-the",
 		},
 		{
 			name: "number-only template",
@@ -162,7 +190,7 @@ func TestStartIssueWorktree(t *testing.T) {
 				},
 				createWorktreeForNewBranchFromRefFn: func(newBranchName, worktreeAbsPath, baseRef string) error {
 					assert.Equal(t, "issue/456", newBranchName)
-					assert.Equal(t, "/workspace/is-456", worktreeAbsPath)
+					assert.Equal(t, "/workspace/is-456-anything", worktreeAbsPath)
 					return nil
 				},
 			},
@@ -172,7 +200,31 @@ func TestStartIssueWorktree(t *testing.T) {
 				return cfg
 			}(),
 			wantErr:    false,
-			wantStdout: "/workspace/is-456",
+			wantStdout: "/workspace/is-456-anything",
+		},
+		{
+			name: "worktree generation error occurs before stale prune",
+			issueInfo: github.Issue{
+				Number: 123,
+				State:  github.IssueStateOpen,
+				Title:  "Add auth",
+			},
+			gitMock: &mockGit{
+				listWorktreesFn: func() ([]git.Worktree, error) {
+					return []git.Worktree{createTestWorktree("/missing/is-123-add-auth", "issue/123-add-auth")}, nil
+				},
+				pruneWorktreesFn: func() error {
+					t.Error("PruneWorktrees should not be called after worktree generation fails")
+					return nil
+				},
+			},
+			cfg: func() config.Config {
+				cfg := config.DefaultConfig()
+				cfg.Issue.WorktreeTemplate = `{{if eq .Number 123}}{{index "" 1}}{{else}}ok{{end}}`
+				return cfg
+			}(),
+			wantErr:        true,
+			wantErrContain: "failed to generate worktree name",
 		},
 		{
 			name: "remote default branch unresolved",

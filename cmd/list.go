@@ -81,16 +81,22 @@ func executeList(w io.Writer, ctx *listContext, fzf bool) error {
 		return others[i].AbsolutePath < others[j].AbsolutePath
 	})
 
-	namer := naming.NewLocalBranchNamer(ctx.cfg.LocalBranch, ctx.cfg.Slugify)
-	prWorktreePrefix := ctx.cfg.PullRequest.WorktreePrefix
+	localNamer, err := naming.NewLocalBranchNamer(ctx.cfg.LocalBranch, ctx.cfg.Naming)
+	if err != nil {
+		return fmt.Errorf("failed to create local branch namer: %w", err)
+	}
+	prNamer, err := naming.NewPullRequestNamer(ctx.cfg.PullRequest, ctx.cfg.Naming)
+	if err != nil {
+		return fmt.Errorf("failed to create PR namer: %w", err)
+	}
 
 	if mainWT != nil {
-		if err := writeWorktree(w, *mainWT, namer, prWorktreePrefix, fzf); err != nil {
+		if err := writeWorktree(w, *mainWT, localNamer, prNamer, fzf); err != nil {
 			return err
 		}
 	}
 	for _, wt := range others {
-		if err := writeWorktree(w, wt, namer, prWorktreePrefix, fzf); err != nil {
+		if err := writeWorktree(w, wt, localNamer, prNamer, fzf); err != nil {
 			return err
 		}
 	}
@@ -98,9 +104,9 @@ func executeList(w io.Writer, ctx *listContext, fzf bool) error {
 	return nil
 }
 
-func writeWorktree(w io.Writer, wt git.Worktree, namer *naming.LocalBranchNamer, prWorktreePrefix string, fzf bool) error {
+func writeWorktree(w io.Writer, wt git.Worktree, localNamer *naming.LocalBranchNamer, prNamer *naming.PullRequestNamer, fzf bool) error {
 	if fzf {
-		path, display := formatWorktree(wt, namer, prWorktreePrefix)
+		path, display := formatWorktree(wt, localNamer, prNamer)
 		_, err := fmt.Fprintf(w, "%s\t%s\n", path, display)
 		return err
 	}
@@ -108,9 +114,9 @@ func writeWorktree(w io.Writer, wt git.Worktree, namer *naming.LocalBranchNamer,
 	return err
 }
 
-func formatWorktree(wt git.Worktree, namer *naming.LocalBranchNamer, prWorktreePrefix string) (path, display string) {
-	name := getDisplayName(namer, wt.AbsolutePath)
-	name = formatWorktreeName(name, filepath.Base(wt.AbsolutePath), prWorktreePrefix)
+func formatWorktree(wt git.Worktree, localNamer *naming.LocalBranchNamer, prNamer *naming.PullRequestNamer) (path, display string) {
+	name := getDisplayName(localNamer, wt.AbsolutePath)
+	name = formatWorktreeName(name, filepath.Base(wt.AbsolutePath), prNamer.WorktreeLiteralPrefix())
 
 	switch wt.Ref.Type() {
 	case git.WorktreeRefTypeBranch:
@@ -136,7 +142,6 @@ func getDisplayName(namer *naming.LocalBranchNamer, absPath string) string {
 	if namer.HasPrefix(basename) {
 		return namer.ExtractFromAbsolutePath(absPath)
 	}
-	// Non-standard worktree name - mark with brackets
 	return "[" + basename + "]"
 }
 
@@ -150,8 +155,8 @@ func shortSHASafe(sha string, maxLen int) string {
 	return sha[:maxLen]
 }
 
-func formatWorktreeName(displayName, dirName, prWorktreePrefix string) string {
-	if prWorktreePrefix != "" && strings.HasPrefix(dirName, prWorktreePrefix) {
+func formatWorktreeName(displayName, dirName, prLiteralPrefix string) string {
+	if prLiteralPrefix != "" && strings.HasPrefix(dirName, prLiteralPrefix) {
 		return "[PR] " + displayName
 	}
 	return displayName

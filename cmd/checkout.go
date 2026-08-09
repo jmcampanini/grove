@@ -158,16 +158,19 @@ func createWorktreeForBranch(stdout io.Writer, ctx *checkoutContext, branchName 
 		}
 	}
 
-	namer := naming.NewLocalBranchNamer(ctx.cfg.LocalBranch, ctx.cfg.Slugify)
+	namer, err := naming.NewLocalBranchNamer(ctx.cfg.LocalBranch, ctx.cfg.Naming)
+	if err != nil {
+		return fmt.Errorf("failed to initialize local branch namer: %w", err)
+	}
 
 	workspacePath, err := ctx.gitClient.GetWorkspacePath()
 	if err != nil {
 		return fmt.Errorf("failed to get workspace path: %w", err)
 	}
 
-	worktreeName := namer.GenerateWorktreeName(branchName)
-	if worktreeName == "" {
-		return fmt.Errorf("failed to generate worktree name for branch %q", branchName)
+	worktreeName, err := namer.GenerateWorktreeName(branchName)
+	if err != nil {
+		return fmt.Errorf("failed to generate worktree name for branch %q: %w", branchName, err)
 	}
 
 	worktreePath := filepath.Join(workspacePath, worktreeName)

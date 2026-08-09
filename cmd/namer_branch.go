@@ -23,10 +23,12 @@ func runNamerBranch(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	ctx := &namerContext{
-		namer: naming.NewLocalBranchNamer(cfg.LocalBranch, cfg.Slugify),
+	namer, err := naming.NewLocalBranchNamer(cfg.LocalBranch, cfg.Naming)
+	if err != nil {
+		return fmt.Errorf("failed to initialize local branch namer: %w", err)
 	}
 
+	ctx := &namerContext{namer: namer}
 	return executeNamerBranch(cmd.OutOrStdout(), ctx, args[0])
 }
 

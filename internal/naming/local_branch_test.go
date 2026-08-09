@@ -1,370 +1,295 @@
 package naming
 
 import (
+	"errors"
+	"strings"
 	"testing"
+	"text/template"
 
 	"github.com/jmcampanini/grove-cli/internal/config"
-	"github.com/stretchr/testify/assert"
 )
 
-func TestLocalBranchNamer_GenerateBranchName(t *testing.T) {
+func testNamingConfig() config.NamingConfig {
+	return config.NamingConfig{
+		Lowercase:     true,
+		StripPrefixes: []string{"feature/", "fix/", "issue/"},
+	}
+}
+
+func testLocalConfig() config.LocalBranchConfig {
+	return config.LocalBranchConfig{
+		BranchTemplate:   "feature/{{.PhraseSlug}}",
+		WorktreeTemplate: "wt-{{.BranchSlug}}",
+	}
+}
+
+func requireLocalNamer(t *testing.T, localCfg config.LocalBranchConfig, namingCfg config.NamingConfig) *LocalBranchNamer {
+	t.Helper()
+	namer, err := NewLocalBranchNamer(localCfg, namingCfg)
+	if err != nil {
+		t.Fatalf("NewLocalBranchNamer() error = %v", err)
+	}
+	return namer
+}
+
+func TestNewLocalBranchNamerValidatesTemplates(t *testing.T) {
 	tests := []struct {
-		name       string
-		branchCfg  config.LocalBranchConfig
-		slugifyCfg config.SlugifyConfig
-		phrase     string
-		want       string
+		name      string
+		branch    string
+		worktree  string
+		wantError string
+	}{
+		{name: "valid variables", branch: "feature/{{.PhraseSlug}}", worktree: "wt-{{.BranchSlug}}"},
+		{name: "worktree double dot within name", branch: "feature/{{.PhraseSlug}}", worktree: "wt..{{.BranchSlug}}"},
+		{name: "builtins remain available", branch: `{{printf "feature/%s" .PhraseSlug}}`, worktree: `{{printf "wt-%s" .BranchSlug}}`},
+		{name: "variables remain available", branch: `{{$slug := .PhraseSlug}}feature/{{$slug}}`, worktree: `{{$slug := .BranchSlug}}wt-{{$slug}}`},
+		{name: "root variable direct fields remain available", branch: `{{with .PhraseSlug}}feature/{{$.PhraseSlug}}{{end}}`, worktree: `{{with .BranchSlug}}wt-{{$.BranchSlug}}{{end}}`},
+		{name: "control structures remain available", branch: `{{if .PhraseSlug}}feature/{{with .PhraseSlug}}{{.}}{{end}}{{end}}`, worktree: `{{if .BranchSlug}}wt-{{.BranchSlug}}{{end}}`},
+		{name: "fields in definitions remain available", branch: `{{define "name"}}feature/{{.PhraseSlug}}{{end}}{{template "name" .}}`, worktree: `{{define "name"}}wt-{{.BranchSlug}}{{end}}{{template "name" .}}`},
+		{name: "branch parse error", branch: "{{.PhraseSlug", worktree: "wt-{{.BranchSlug}}", wantError: "branch_template"},
+		{name: "branch field unavailable", branch: "{{.BranchSlug}}", worktree: "wt-{{.BranchSlug}}", wantError: "BranchSlug"},
+		{name: "field unavailable in dormant if branch", branch: `{{if .PhraseSlug}}feature/{{.PhraseSlug}}{{else}}{{.BranchSlug}}{{end}}`, worktree: "wt-{{.BranchSlug}}", wantError: "BranchSlug"},
+		{name: "field unavailable in dormant range", branch: `{{if .PhraseSlug}}feature/{{.PhraseSlug}}{{else}}{{range .BranchSlug}}{{.}}{{end}}{{end}}`, worktree: "wt-{{.BranchSlug}}", wantError: "BranchSlug"},
+		{name: "field unavailable in dormant with", branch: `{{if .PhraseSlug}}feature/{{.PhraseSlug}}{{else}}{{with .BranchSlug}}{{.}}{{end}}{{end}}`, worktree: "wt-{{.BranchSlug}}", wantError: "BranchSlug"},
+		{name: "field unavailable in definition", branch: `{{define "hidden"}}{{.BranchSlug}}{{end}}feature/{{.PhraseSlug}}`, worktree: "wt-{{.BranchSlug}}", wantError: "BranchSlug"},
+		{name: "nested direct field rejected", branch: `{{if .PhraseSlug}}feature/{{.PhraseSlug}}{{else}}{{.PhraseSlug.Value}}{{end}}`, worktree: "wt-{{.BranchSlug}}", wantError: "nested field access"},
+		{name: "nested variable field rejected", branch: `{{$slug := .PhraseSlug}}{{if $slug}}feature/{{$slug}}{{else}}{{$slug.Value}}{{end}}`, worktree: "wt-{{.BranchSlug}}", wantError: "nested field access"},
+		{name: "unavailable root variable field rejected", branch: `{{if .PhraseSlug}}feature/{{.PhraseSlug}}{{else}}{{$.BranchSlug}}{{end}}`, worktree: "wt-{{.BranchSlug}}", wantError: "BranchSlug"},
+		{name: "nested root variable field rejected", branch: `{{if .PhraseSlug}}feature/{{.PhraseSlug}}{{else}}{{$.PhraseSlug.Value}}{{end}}`, worktree: "wt-{{.BranchSlug}}", wantError: "nested field access"},
+		{name: "parenthesized nested field rejected", branch: `{{if .PhraseSlug}}feature/{{.PhraseSlug}}{{else}}{{(.PhraseSlug).Value}}{{end}}`, worktree: "wt-{{.BranchSlug}}", wantError: "nested field access"},
+		{name: "empty branch", branch: "", worktree: "wt-{{.BranchSlug}}", wantError: "empty"},
+		{name: "branch leading dash", branch: "-{{.PhraseSlug}}", worktree: "wt-{{.BranchSlug}}", wantError: "starts with"},
+		{name: "branch double dot", branch: "bad..{{.PhraseSlug}}", worktree: "wt-{{.BranchSlug}}", wantError: "contains '..'"},
+		{name: "branch control", branch: "bad\t{{.PhraseSlug}}", worktree: "wt-{{.BranchSlug}}", wantError: "control character"},
+		{name: "worktree parse error", branch: "feature/{{.PhraseSlug}}", worktree: "{{.BranchSlug", wantError: "worktree_template"},
+		{name: "worktree field unavailable", branch: "feature/{{.PhraseSlug}}", worktree: "{{.PhraseSlug}}", wantError: "PhraseSlug"},
+		{name: "empty worktree", branch: "feature/{{.PhraseSlug}}", worktree: "", wantError: "worktree name is empty"},
+		{name: "worktree slash", branch: "feature/{{.PhraseSlug}}", worktree: "dir/{{.BranchSlug}}", wantError: "contains '/'"},
+		{name: "worktree leading dash", branch: "feature/{{.PhraseSlug}}", worktree: "-{{.BranchSlug}}", wantError: "starts with"},
+		{name: "worktree dot", branch: "feature/{{.PhraseSlug}}", worktree: ".", wantError: `is "."`},
+		{name: "worktree dot dot", branch: "feature/{{.PhraseSlug}}", worktree: "..", wantError: `is ".."`},
+		{name: "worktree control", branch: "feature/{{.PhraseSlug}}", worktree: "wt-\u0085{{.BranchSlug}}", wantError: "control character"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := NewLocalBranchNamer(
+				config.LocalBranchConfig{BranchTemplate: tt.branch, WorktreeTemplate: tt.worktree},
+				testNamingConfig(),
+			)
+			if tt.wantError == "" {
+				if err != nil {
+					t.Fatalf("NewLocalBranchNamer() error = %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantError) {
+				t.Fatalf("NewLocalBranchNamer() error = %v, want containing %q", err, tt.wantError)
+			}
+		})
+	}
+}
+
+func TestLocalBranchNamerGenerate(t *testing.T) {
+	tests := []struct {
+		name         string
+		localCfg     config.LocalBranchConfig
+		namingCfg    config.NamingConfig
+		phrase       string
+		wantBranch   string
+		wantWorktree string
 	}{
 		{
-			name:       "simple phrase with feature prefix",
-			branchCfg:  config.LocalBranchConfig{BranchPrefix: "feature/"},
-			slugifyCfg: defaultSlugifyConfig(),
-			phrase:     "add user auth",
-			want:       "feature/add-user-auth",
+			name:         "fixed slug pipeline",
+			localCfg:     testLocalConfig(),
+			namingCfg:    testNamingConfig(),
+			phrase:       "Add user!!! Auth",
+			wantBranch:   "feature/add-user-auth",
+			wantWorktree: "wt-add-user-auth",
 		},
 		{
-			name:       "phrase with fix prefix",
-			branchCfg:  config.LocalBranchConfig{BranchPrefix: "fix/"},
-			slugifyCfg: defaultSlugifyConfig(),
-			phrase:     "login bug",
-			want:       "fix/login-bug",
-		},
-		{
-			name:       "empty prefix",
-			branchCfg:  config.LocalBranchConfig{BranchPrefix: ""},
-			slugifyCfg: defaultSlugifyConfig(),
-			phrase:     "my feature",
-			want:       "my-feature",
-		},
-		{
-			name:       "phrase with special characters",
-			branchCfg:  config.LocalBranchConfig{BranchPrefix: "feature/"},
-			slugifyCfg: defaultSlugifyConfig(),
-			phrase:     "add @auth & login!",
-			want:       "feature/add-auth-login",
-		},
-		{
-			name:       "phrase with numbers",
-			branchCfg:  config.LocalBranchConfig{BranchPrefix: "feature/"},
-			slugifyCfg: defaultSlugifyConfig(),
-			phrase:     "fix issue 123",
-			want:       "feature/fix-issue-123",
-		},
-		{
-			name:       "phrase with uppercase",
-			branchCfg:  config.LocalBranchConfig{BranchPrefix: "feature/"},
-			slugifyCfg: defaultSlugifyConfig(),
-			phrase:     "Add User AUTH",
-			want:       "feature/add-user-auth",
-		},
-		{
-			name:       "empty phrase returns empty",
-			branchCfg:  config.LocalBranchConfig{BranchPrefix: "feature/"},
-			slugifyCfg: defaultSlugifyConfig(),
-			phrase:     "",
-			want:       "",
-		},
-		{
-			name:       "phrase with only special chars returns empty",
-			branchCfg:  config.LocalBranchConfig{BranchPrefix: "feature/"},
-			slugifyCfg: defaultSlugifyConfig(),
-			phrase:     "@#$%^&*()",
-			want:       "",
-		},
-		{
-			name:      "long phrase gets truncated with hash",
-			branchCfg: config.LocalBranchConfig{BranchPrefix: "feature/"},
-			slugifyCfg: config.SlugifyConfig{
-				CollapseDashes:     true,
-				HashLength:         4,
-				Lowercase:          true,
-				MaxLength:          20,
-				ReplaceNonAlphanum: true,
-				TrimDashes:         true,
+			name:     "preserve case",
+			localCfg: testLocalConfig(),
+			namingCfg: config.NamingConfig{
+				StripPrefixes: []string{"feature/"},
 			},
-			phrase: "this is a very long feature description that should be truncated",
-			want:   "feature/this-is-a-very-xolx", // prefix + truncated slug with hash
+			phrase:       "Add User",
+			wantBranch:   "feature/Add-User",
+			wantWorktree: "wt-Add-User",
 		},
 		{
-			name:       "phrase with unicode",
-			branchCfg:  config.LocalBranchConfig{BranchPrefix: "feature/"},
-			slugifyCfg: defaultSlugifyConfig(),
-			phrase:     "add emoji support",
-			want:       "feature/add-emoji-support",
+			name: "cap final rendered names",
+			localCfg: config.LocalBranchConfig{
+				BranchTemplate:   "feature/{{.PhraseSlug}}",
+				WorktreeTemplate: "worktree-{{.BranchSlug}}",
+			},
+			namingCfg: config.NamingConfig{
+				Lowercase:     true,
+				MaxLength:     10,
+				StripPrefixes: []string{"feature/"},
+			},
+			phrase:       "abcdefghijk",
+			wantBranch:   "feature/ab",
+			wantWorktree: "worktree-a",
 		},
 		{
-			name:       "phrase with dashes already",
-			branchCfg:  config.LocalBranchConfig{BranchPrefix: "feature/"},
-			slugifyCfg: defaultSlugifyConfig(),
-			phrase:     "my-feature-name",
-			want:       "feature/my-feature-name",
+			name: "rune safe template literal",
+			localCfg: config.LocalBranchConfig{
+				BranchTemplate:   "éé{{.PhraseSlug}}",
+				WorktreeTemplate: "éé{{.BranchSlug}}",
+			},
+			namingCfg:    config.NamingConfig{Lowercase: true, MaxLength: 3},
+			phrase:       "abc",
+			wantBranch:   "ééa",
+			wantWorktree: "ééa",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			namer := NewLocalBranchNamer(tt.branchCfg, tt.slugifyCfg)
-			got := namer.GenerateBranchName(tt.phrase)
-			assert.Equal(t, tt.want, got)
+			namer := requireLocalNamer(t, tt.localCfg, tt.namingCfg)
+			branch, err := namer.GenerateBranchName(tt.phrase)
+			if err != nil {
+				t.Fatalf("GenerateBranchName() error = %v", err)
+			}
+			if branch != tt.wantBranch {
+				t.Fatalf("GenerateBranchName() = %q, want %q", branch, tt.wantBranch)
+			}
+
+			worktree, err := namer.GenerateWorktreeName(branch)
+			if err != nil {
+				t.Fatalf("GenerateWorktreeName() error = %v", err)
+			}
+			if worktree != tt.wantWorktree {
+				t.Fatalf("GenerateWorktreeName() = %q, want %q", worktree, tt.wantWorktree)
+			}
 		})
 	}
 }
 
-func TestLocalBranchNamer_GenerateWorktreeName(t *testing.T) {
+func TestLocalBranchNamerStripsFirstMatchingPrefix(t *testing.T) {
 	tests := []struct {
-		name        string
-		worktreeCfg config.LocalBranchConfig
-		slugifyCfg  config.SlugifyConfig
-		branchName  string
-		want        string
+		name     string
+		prefixes []string
+		want     string
+	}{
+		{name: "short prefix first", prefixes: []string{"feature/", "feature/long/"}, want: "wt-long-topic"},
+		{name: "long prefix first", prefixes: []string{"feature/long/", "feature/"}, want: "wt-topic"},
+		{name: "first matching not first configured", prefixes: []string{"fix/", "feature/"}, want: "wt-long-topic"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			namingCfg := testNamingConfig()
+			namingCfg.StripPrefixes = tt.prefixes
+			namer := requireLocalNamer(t, testLocalConfig(), namingCfg)
+			got, err := namer.GenerateWorktreeName("feature/long/topic")
+			if err != nil {
+				t.Fatalf("GenerateWorktreeName() error = %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("GenerateWorktreeName() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestLocalBranchNamerEmptySlug(t *testing.T) {
+	namer := requireLocalNamer(t, testLocalConfig(), testNamingConfig())
+
+	if _, err := namer.GenerateBranchName("***"); !errors.Is(err, ErrEmptySlug) {
+		t.Fatalf("GenerateBranchName() error = %v, want ErrEmptySlug", err)
+	}
+	if _, err := namer.GenerateWorktreeName("---"); !errors.Is(err, ErrEmptySlug) {
+		t.Fatalf("GenerateWorktreeName() error = %v, want ErrEmptySlug", err)
+	}
+}
+
+func TestLocalBranchNamerValidatesActualFinalOutput(t *testing.T) {
+	tests := []struct {
+		name      string
+		localCfg  config.LocalBranchConfig
+		generate  func(*LocalBranchNamer) error
+		wantError string
 	}{
 		{
-			name: "strip feature prefix",
-			worktreeCfg: config.LocalBranchConfig{
-				WorktreePrefix:    "wt-",
-				StripBranchPrefix: []string{"feature/"},
+			name: "branch invalid after render and truncate",
+			localCfg: config.LocalBranchConfig{
+				BranchTemplate:   `{{if eq .PhraseSlug "bad"}}-x{{else}}ok-{{.PhraseSlug}}{{end}}`,
+				WorktreeTemplate: "wt-{{.BranchSlug}}",
 			},
-			slugifyCfg: defaultSlugifyConfig(),
-			branchName: "feature/add-user-auth",
-			want:       "wt-add-user-auth",
+			generate: func(n *LocalBranchNamer) error {
+				_, err := n.GenerateBranchName("bad")
+				return err
+			},
+			wantError: "empty",
 		},
 		{
-			name: "strip fix prefix",
-			worktreeCfg: config.LocalBranchConfig{
-				WorktreePrefix:    "wt-",
-				StripBranchPrefix: []string{"feature/", "fix/"},
+			name: "worktree invalid after render and truncate",
+			localCfg: config.LocalBranchConfig{
+				BranchTemplate:   "feature/{{.PhraseSlug}}",
+				WorktreeTemplate: `{{if eq .BranchSlug "bad"}}.x{{else}}ok-{{.BranchSlug}}{{end}}`,
 			},
-			slugifyCfg: defaultSlugifyConfig(),
-			branchName: "fix/login-bug",
-			want:       "wt-login-bug",
-		},
-		{
-			name: "first matching prefix stripped",
-			worktreeCfg: config.LocalBranchConfig{
-				WorktreePrefix:    "wt-",
-				StripBranchPrefix: []string{"fix/", "feature/"},
+			generate: func(n *LocalBranchNamer) error {
+				_, err := n.GenerateWorktreeName("bad")
+				return err
 			},
-			slugifyCfg: defaultSlugifyConfig(),
-			branchName: "feature/add-auth",
-			want:       "wt-add-auth",
-		},
-		{
-			name: "no matching prefix",
-			worktreeCfg: config.LocalBranchConfig{
-				WorktreePrefix:    "wt-",
-				StripBranchPrefix: []string{"feature/", "fix/"},
-			},
-			slugifyCfg: defaultSlugifyConfig(),
-			branchName: "chore/update-deps",
-			want:       "wt-chore-update-deps",
-		},
-		{
-			name: "empty strip prefix list",
-			worktreeCfg: config.LocalBranchConfig{
-				WorktreePrefix:    "wt-",
-				StripBranchPrefix: []string{},
-			},
-			slugifyCfg: defaultSlugifyConfig(),
-			branchName: "feature/add-auth",
-			want:       "wt-feature-add-auth",
-		},
-		{
-			name: "different worktree prefix",
-			worktreeCfg: config.LocalBranchConfig{
-				WorktreePrefix:    "work-",
-				StripBranchPrefix: []string{"feature/"},
-			},
-			slugifyCfg: defaultSlugifyConfig(),
-			branchName: "feature/my-feature",
-			want:       "work-my-feature",
-		},
-		{
-			name: "empty worktree prefix",
-			worktreeCfg: config.LocalBranchConfig{
-				WorktreePrefix:    "",
-				StripBranchPrefix: []string{"feature/"},
-			},
-			slugifyCfg: defaultSlugifyConfig(),
-			branchName: "feature/add-auth",
-			want:       "add-auth",
-		},
-		{
-			name: "empty branch name returns empty",
-			worktreeCfg: config.LocalBranchConfig{
-				WorktreePrefix:    "wt-",
-				StripBranchPrefix: []string{"feature/"},
-			},
-			slugifyCfg: defaultSlugifyConfig(),
-			branchName: "",
-			want:       "",
-		},
-		{
-			name: "branch name with uppercase gets lowercased",
-			worktreeCfg: config.LocalBranchConfig{
-				WorktreePrefix:    "wt-",
-				StripBranchPrefix: []string{"feature/"},
-			},
-			slugifyCfg: defaultSlugifyConfig(),
-			branchName: "feature/ADD-USER-AUTH",
-			want:       "wt-add-user-auth",
-		},
-		{
-			name: "branch name with special chars gets slugified",
-			worktreeCfg: config.LocalBranchConfig{
-				WorktreePrefix:    "wt-",
-				StripBranchPrefix: []string{"feature/"},
-			},
-			slugifyCfg: defaultSlugifyConfig(),
-			branchName: "feature/add@user#auth",
-			want:       "wt-add-user-auth",
-		},
-		{
-			name: "branch name only has prefix returns empty",
-			worktreeCfg: config.LocalBranchConfig{
-				WorktreePrefix:    "wt-",
-				StripBranchPrefix: []string{"feature/"},
-			},
-			slugifyCfg: defaultSlugifyConfig(),
-			branchName: "feature/",
-			want:       "",
-		},
-		{
-			name: "main branch without prefix",
-			worktreeCfg: config.LocalBranchConfig{
-				WorktreePrefix:    "wt-",
-				StripBranchPrefix: []string{"feature/"},
-			},
-			slugifyCfg: defaultSlugifyConfig(),
-			branchName: "main",
-			want:       "wt-main",
-		},
-		{
-			name: "nested prefix pattern",
-			worktreeCfg: config.LocalBranchConfig{
-				WorktreePrefix:    "wt-",
-				StripBranchPrefix: []string{"feature/jcamp/", "feature/"},
-			},
-			slugifyCfg: defaultSlugifyConfig(),
-			branchName: "feature/jcamp/add-auth",
-			want:       "wt-add-auth",
+			wantError: `worktree name is "."`,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			namer := NewLocalBranchNamer(tt.worktreeCfg, tt.slugifyCfg)
-			got := namer.GenerateWorktreeName(tt.branchName)
-			assert.Equal(t, tt.want, got)
+			namingCfg := testNamingConfig()
+			namingCfg.MaxLength = 1
+			namer := requireLocalNamer(t, tt.localCfg, namingCfg)
+			err := tt.generate(namer)
+			if err == nil || !strings.Contains(err.Error(), tt.wantError) {
+				t.Fatalf("generation error = %v, want containing %q", err, tt.wantError)
+			}
 		})
 	}
 }
 
-func TestNewLocalBranchNamer(t *testing.T) {
-	cfg := config.LocalBranchConfig{
-		BranchPrefix:      "feat/",
-		StripBranchPrefix: []string{"a/", "b/"},
-		WorktreePrefix:    "test-",
-	}
-	slugCfg := config.SlugifyConfig{
-		CollapseDashes:     false,
-		HashLength:         8,
-		Lowercase:          false,
-		MaxLength:          75,
-		ReplaceNonAlphanum: false,
-		TrimDashes:         false,
-	}
+func TestLocalBranchNamerLiteralPrefix(t *testing.T) {
+	localCfg := testLocalConfig()
+	localCfg.WorktreeTemplate = "subagent-{{if .BranchSlug}}{{.BranchSlug}}{{end}}"
+	namer := requireLocalNamer(t, localCfg, testNamingConfig())
 
-	namer := NewLocalBranchNamer(cfg, slugCfg)
-
-	assert.Equal(t, "feat/", namer.branchPrefix)
-	assert.Equal(t, "test-", namer.worktreePrefix)
-	assert.Equal(t, []string{"a/", "b/"}, namer.stripBranchPrefix)
-	assert.Equal(t, 8, namer.slugifyOpts.HashLength)
-	assert.False(t, namer.slugifyOpts.Lowercase)
-	assert.Equal(t, 75, namer.slugifyOpts.MaxLength)
+	if got := namer.WorktreeLiteralPrefix(); got != "subagent-" {
+		t.Fatalf("WorktreeLiteralPrefix() = %q, want %q", got, "subagent-")
+	}
+	if !namer.HasPrefix("subagent-topic") {
+		t.Fatal("HasPrefix() = false, want true")
+	}
+	if namer.HasPrefix("wt-topic") {
+		t.Fatal("HasPrefix() = true, want false")
+	}
+	if got := namer.ExtractFromAbsolutePath("/workspace/subagent-topic"); got != "topic" {
+		t.Fatalf("ExtractFromAbsolutePath() = %q, want %q", got, "topic")
+	}
 }
 
-func TestLocalBranchNamer_ExtractFromAbsolutePath(t *testing.T) {
+func TestLeadingLiteral(t *testing.T) {
 	tests := []struct {
-		name        string
-		worktreeCfg config.LocalBranchConfig
-		absPath     string
-		want        string
+		source string
+		want   string
 	}{
-		{
-			name: "standard prefix stripping",
-			worktreeCfg: config.LocalBranchConfig{
-				WorktreePrefix: "wt-",
-			},
-			absPath: "/workspace/wt-add-auth",
-			want:    "add-auth",
-		},
-		{
-			name: "no prefix match",
-			worktreeCfg: config.LocalBranchConfig{
-				WorktreePrefix: "wt-",
-			},
-			absPath: "/workspace/main",
-			want:    "main",
-		},
-		{
-			name: "empty prefix config",
-			worktreeCfg: config.LocalBranchConfig{
-				WorktreePrefix: "",
-			},
-			absPath: "/workspace/add-auth",
-			want:    "add-auth",
-		},
-		{
-			name: "empty input",
-			worktreeCfg: config.LocalBranchConfig{
-				WorktreePrefix: "wt-",
-			},
-			absPath: "",
-			want:    ".",
-		},
-		{
-			name: "deep nested path",
-			worktreeCfg: config.LocalBranchConfig{
-				WorktreePrefix: "wt-",
-			},
-			absPath: "/deep/nested/path/wt-feature",
-			want:    "feature",
-		},
-		{
-			name: "partial prefix match not at start",
-			worktreeCfg: config.LocalBranchConfig{
-				WorktreePrefix: "wt-",
-			},
-			absPath: "/workspace/foo-wt-bar",
-			want:    "foo-wt-bar",
-		},
-		{
-			name: "different prefix",
-			worktreeCfg: config.LocalBranchConfig{
-				WorktreePrefix: "work-",
-			},
-			absPath: "/workspace/work-feature",
-			want:    "feature",
-		},
+		{source: "prefix-{{.PhraseSlug}}-suffix", want: "prefix-"},
+		{source: "before-{{if .PhraseSlug}}inside{{end}}", want: "before-"},
+		{source: "{{.PhraseSlug}}-suffix", want: ""},
+		{source: "literal-only", want: "literal-only"},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			namer := NewLocalBranchNamer(tt.worktreeCfg, defaultSlugifyConfig())
-			got := namer.ExtractFromAbsolutePath(tt.absPath)
-			assert.Equal(t, tt.want, got)
+		t.Run(tt.source, func(t *testing.T) {
+			tmpl, err := template.New("test").Parse(tt.source)
+			if err != nil {
+				t.Fatalf("Parse() error = %v", err)
+			}
+			if got := leadingLiteral(tmpl); got != tt.want {
+				t.Fatalf("leadingLiteral() = %q, want %q", got, tt.want)
+			}
 		})
-	}
-}
-
-func defaultSlugifyConfig() config.SlugifyConfig {
-	return config.SlugifyConfig{
-		CollapseDashes:     true,
-		HashLength:         4,
-		Lowercase:          true,
-		MaxLength:          50,
-		ReplaceNonAlphanum: true,
-		TrimDashes:         true,
 	}
 }
