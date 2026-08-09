@@ -31,6 +31,12 @@ func parseNameTemplate(field, source string, testData any, maxLength int, valida
 	return tmpl, nil
 }
 
+type templateFieldValidator struct {
+	allowed      map[string]struct{}
+	names        []string
+	templateName string
+}
+
 func validateTemplateFields(tmpl *template.Template, testData any) error {
 	allowed, names, err := directTemplateFields(testData)
 	if err != nil {
@@ -45,7 +51,12 @@ func validateTemplateFields(tmpl *template.Template, testData any) error {
 		if associated.Tree == nil || associated.Root == nil {
 			continue
 		}
-		if err := validateTemplateNode(associated.Root, associated.Name(), allowed, names); err != nil {
+		validator := templateFieldValidator{
+			allowed:      allowed,
+			names:        names,
+			templateName: associated.Name(),
+		}
+		if err := validator.validate(associated.Root); err != nil {
 			return err
 		}
 	}
@@ -75,34 +86,34 @@ func directTemplateFields(data any) (map[string]struct{}, []string, error) {
 	return allowed, names, nil
 }
 
-func validateTemplateNode(node parse.Node, templateName string, allowed map[string]struct{}, names []string) error {
+func (v *templateFieldValidator) validate(node parse.Node) error {
 	if isNilParseNode(node) {
 		return nil
 	}
 
 	switch node := node.(type) {
 	case *parse.ListNode:
-		return validateTemplateNodes(node.Nodes, templateName, allowed, names)
+		return v.validateNodes(node.Nodes)
 	case *parse.ActionNode:
-		return validateTemplateNode(node.Pipe, templateName, allowed, names)
+		return v.validate(node.Pipe)
 	case *parse.IfNode:
-		return validateTemplateBranch(&node.BranchNode, templateName, allowed, names)
+		return v.validateBranch(&node.BranchNode)
 	case *parse.RangeNode:
-		return validateTemplateBranch(&node.BranchNode, templateName, allowed, names)
+		return v.validateBranch(&node.BranchNode)
 	case *parse.WithNode:
-		return validateTemplateBranch(&node.BranchNode, templateName, allowed, names)
+		return v.validateBranch(&node.BranchNode)
 	case *parse.TemplateNode:
-		return validateTemplateNode(node.Pipe, templateName, allowed, names)
+		return v.validate(node.Pipe)
 	case *parse.PipeNode:
-		return validateTemplatePipe(node, templateName, allowed, names)
+		return v.validatePipe(node)
 	case *parse.CommandNode:
-		return validateTemplateNodes(node.Args, templateName, allowed, names)
+		return v.validateNodes(node.Args)
 	case *parse.FieldNode:
-		return validateTemplateField(node, templateName, allowed, names)
+		return v.validateField(node)
 	case *parse.ChainNode:
-		return validateTemplateChain(node, templateName, allowed, names)
+		return v.validateChain(node)
 	case *parse.VariableNode:
-		return validateTemplateVariable(node, templateName, allowed, names)
+		return v.validateVariable(node)
 	}
 	return nil
 }
@@ -114,64 +125,64 @@ func isNilParseNode(node parse.Node) bool {
 	return reflect.ValueOf(node).IsNil()
 }
 
-func validateTemplateNodes(nodes []parse.Node, templateName string, allowed map[string]struct{}, names []string) error {
+func (v *templateFieldValidator) validateNodes(nodes []parse.Node) error {
 	for _, node := range nodes {
-		if err := validateTemplateNode(node, templateName, allowed, names); err != nil {
+		if err := v.validate(node); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func validateTemplatePipe(pipe *parse.PipeNode, templateName string, allowed map[string]struct{}, names []string) error {
+func (v *templateFieldValidator) validatePipe(pipe *parse.PipeNode) error {
 	for _, declaration := range pipe.Decl {
-		if err := validateTemplateNode(declaration, templateName, allowed, names); err != nil {
+		if err := v.validate(declaration); err != nil {
 			return err
 		}
 	}
 	for _, command := range pipe.Cmds {
-		if err := validateTemplateNode(command, templateName, allowed, names); err != nil {
+		if err := v.validate(command); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func validateTemplateField(field *parse.FieldNode, templateName string, allowed map[string]struct{}, names []string) error {
+func (v *templateFieldValidator) validateField(field *parse.FieldNode) error {
 	if len(field.Ident) == 0 {
-		return nestedFieldError(templateName, field.String())
+		return nestedFieldError(v.templateName, field.String())
 	}
-	if _, ok := allowed[field.Ident[0]]; !ok {
-		return unavailableFieldError(templateName, "."+field.Ident[0], names)
+	if _, ok := v.allowed[field.Ident[0]]; !ok {
+		return unavailableFieldError(v.templateName, "."+field.Ident[0], v.names)
 	}
 	if len(field.Ident) > 1 {
-		return nestedFieldError(templateName, field.String())
+		return nestedFieldError(v.templateName, field.String())
 	}
 	return nil
 }
 
-func validateTemplateChain(chain *parse.ChainNode, templateName string, allowed map[string]struct{}, names []string) error {
-	if err := validateTemplateNode(chain.Node, templateName, allowed, names); err != nil {
+func (v *templateFieldValidator) validateChain(chain *parse.ChainNode) error {
+	if err := v.validate(chain.Node); err != nil {
 		return err
 	}
 	if len(chain.Field) > 0 {
-		return nestedFieldError(templateName, chain.String())
+		return nestedFieldError(v.templateName, chain.String())
 	}
 	return nil
 }
 
-func validateTemplateVariable(variable *parse.VariableNode, templateName string, allowed map[string]struct{}, names []string) error {
+func (v *templateFieldValidator) validateVariable(variable *parse.VariableNode) error {
 	if len(variable.Ident) <= 1 {
 		return nil
 	}
 	if variable.Ident[0] != "$" {
-		return nestedFieldError(templateName, variable.String())
+		return nestedFieldError(v.templateName, variable.String())
 	}
-	if _, ok := allowed[variable.Ident[1]]; !ok {
-		return unavailableFieldError(templateName, "."+variable.Ident[1], names)
+	if _, ok := v.allowed[variable.Ident[1]]; !ok {
+		return unavailableFieldError(v.templateName, "."+variable.Ident[1], v.names)
 	}
 	if len(variable.Ident) > 2 {
-		return nestedFieldError(templateName, variable.String())
+		return nestedFieldError(v.templateName, variable.String())
 	}
 	return nil
 }
@@ -184,14 +195,14 @@ func nestedFieldError(templateName, field string) error {
 	return fmt.Errorf("template %q uses nested field access %s; template fields are scalar", templateName, field)
 }
 
-func validateTemplateBranch(branch *parse.BranchNode, templateName string, allowed map[string]struct{}, names []string) error {
-	if err := validateTemplateNode(branch.Pipe, templateName, allowed, names); err != nil {
+func (v *templateFieldValidator) validateBranch(branch *parse.BranchNode) error {
+	if err := v.validate(branch.Pipe); err != nil {
 		return err
 	}
-	if err := validateTemplateNode(branch.List, templateName, allowed, names); err != nil {
+	if err := v.validate(branch.List); err != nil {
 		return err
 	}
-	return validateTemplateNode(branch.ElseList, templateName, allowed, names)
+	return v.validate(branch.ElseList)
 }
 
 func renderName(tmpl *template.Template, data any, maxLength int, validate nameValidator) (string, error) {

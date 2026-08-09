@@ -257,7 +257,7 @@ func numberAnchorPrefix(tmpl *template.Template) (prefix, boundary string, ok bo
 			}
 			if i+1 < len(tmpl.Root.Nodes) {
 				if text, isText := tmpl.Root.Nodes[i+1].(*parse.TextNode); isText && len(text.Text) > 0 {
-					boundary = string([]rune(string(text.Text))[:1])
+					boundary = string([]rune(string(text.Text))[0])
 				}
 			}
 			return prefixBuilder.String(), boundary, true
