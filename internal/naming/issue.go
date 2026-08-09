@@ -85,31 +85,23 @@ func (n *IssueNamer) TitleSlug(title string) string {
 
 // GenerateBranchName renders and validates the issue branch name.
 func (n *IssueNamer) GenerateBranchName(number int, title string) (string, error) {
-	name, err := n.renderBranchName(number, title)
+	data := IssueBranchTemplateData{Number: number, TitleSlug: n.TitleSlug(title)}
+	name, err := renderName(n.branchTemplate, data, n.maxLength, isValidBranchName)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate branch name: %w", err)
 	}
-	if !n.preservesIssueNumber(name, number, title) {
+	if !n.preservesIssueNumber(name, data) {
 		return "", fmt.Errorf("failed to generate branch name: final name %q does not preserve complete issue number %d; increase naming.max_length or place {{.Number}} earlier", name, number)
 	}
 	return name, nil
 }
 
-func (n *IssueNamer) renderBranchName(number int, title string) (string, error) {
-	return renderName(
-		n.branchTemplate,
-		IssueBranchTemplateData{Number: number, TitleSlug: n.TitleSlug(title)},
-		n.maxLength,
-		isValidBranchName,
-	)
-}
-
-func (n *IssueNamer) preservesIssueNumber(name string, number int, title string) bool {
-	if n.numberAnchorOK && !n.matchesNumberAnchor(name, number) {
+func (n *IssueNamer) preservesIssueNumber(name string, data IssueBranchTemplateData) bool {
+	if n.numberAnchorOK && !n.matchesNumberAnchor(name, data.Number) {
 		return false
 	}
 
-	marker, ok := issueNumberMarker(name, len(strconv.Itoa(number)))
+	marker, ok := issueNumberMarker(name, len(strconv.Itoa(data.Number)))
 	if !ok {
 		return false
 	}
@@ -117,12 +109,7 @@ func (n *IssueNamer) preservesIssueNumber(name string, number int, title string)
 	if !ok {
 		return false
 	}
-	probeName, err := renderName(
-		probe,
-		IssueBranchTemplateData{Number: number, TitleSlug: n.TitleSlug(title)},
-		n.maxLength,
-		isValidBranchName,
-	)
+	probeName, err := renderName(probe, data, n.maxLength, isValidBranchName)
 	return err == nil && strings.Contains(probeName, marker)
 }
 

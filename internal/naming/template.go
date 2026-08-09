@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"text/template"
@@ -32,13 +33,12 @@ func parseNameTemplate(field, source string, testData any, maxLength int, valida
 }
 
 type templateFieldValidator struct {
-	allowed      map[string]struct{}
 	names        []string
 	templateName string
 }
 
 func validateTemplateFields(tmpl *template.Template, testData any) error {
-	allowed, names, err := directTemplateFields(testData)
+	names, err := directTemplateFields(testData)
 	if err != nil {
 		return err
 	}
@@ -52,7 +52,6 @@ func validateTemplateFields(tmpl *template.Template, testData any) error {
 			continue
 		}
 		validator := templateFieldValidator{
-			allowed:      allowed,
 			names:        names,
 			templateName: associated.Name(),
 		}
@@ -63,27 +62,24 @@ func validateTemplateFields(tmpl *template.Template, testData any) error {
 	return nil
 }
 
-func directTemplateFields(data any) (map[string]struct{}, []string, error) {
+func directTemplateFields(data any) ([]string, error) {
 	dataType := reflect.TypeOf(data)
 	for dataType != nil && dataType.Kind() == reflect.Pointer {
 		dataType = dataType.Elem()
 	}
 	if dataType == nil || dataType.Kind() != reflect.Struct {
-		return nil, nil, fmt.Errorf("template test data must be a struct, got %T", data)
+		return nil, fmt.Errorf("template test data must be a struct, got %T", data)
 	}
 
-	allowed := make(map[string]struct{}, dataType.NumField())
 	names := make([]string, 0, dataType.NumField())
 	for i := 0; i < dataType.NumField(); i++ {
 		field := dataType.Field(i)
-		if field.PkgPath != "" {
-			continue
+		if field.PkgPath == "" {
+			names = append(names, field.Name)
 		}
-		allowed[field.Name] = struct{}{}
-		names = append(names, field.Name)
 	}
 	sort.Strings(names)
-	return allowed, names, nil
+	return names, nil
 }
 
 func (v *templateFieldValidator) validate(node parse.Node) error {
@@ -152,7 +148,7 @@ func (v *templateFieldValidator) validateField(field *parse.FieldNode) error {
 	if len(field.Ident) == 0 {
 		return nestedFieldError(v.templateName, field.String())
 	}
-	if _, ok := v.allowed[field.Ident[0]]; !ok {
+	if !slices.Contains(v.names, field.Ident[0]) {
 		return unavailableFieldError(v.templateName, "."+field.Ident[0], v.names)
 	}
 	if len(field.Ident) > 1 {
@@ -178,7 +174,7 @@ func (v *templateFieldValidator) validateVariable(variable *parse.VariableNode) 
 	if variable.Ident[0] != "$" {
 		return nestedFieldError(v.templateName, variable.String())
 	}
-	if _, ok := v.allowed[variable.Ident[1]]; !ok {
+	if !slices.Contains(v.names, variable.Ident[1]) {
 		return unavailableFieldError(v.templateName, "."+variable.Ident[1], v.names)
 	}
 	if len(variable.Ident) > 2 {
