@@ -349,6 +349,17 @@ func TestBootstrapConfigPaths(t *testing.T) {
 				"/Users/jim/.config/grove/grove.toml",
 			},
 		},
+		{
+			name:      "relative XDG_CONFIG_HOME ignored in favor of default",
+			cwd:       "/Users/jim/project",
+			homeDir:   "/Users/jim",
+			xdgConfig: "relative/xdg",
+			want: []string{
+				"/Users/jim/.config/grove/grove.toml",
+				"/Users/jim/grove.toml",
+				"/Users/jim/project/grove.toml",
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -362,7 +373,7 @@ func TestBootstrapConfigPaths(t *testing.T) {
 }
 
 func TestLoad_MissingFile(t *testing.T) {
-	cfg, report, err := LoadFiles([]string{"/nonexistent/grove.toml"})
+	cfg, report, err := Load([]string{"/nonexistent/grove.toml"}, nil)
 	require.NoError(t, err)
 	assert.Equal(t, DefaultConfig(), cfg)
 	assert.Empty(t, report.LoadedFiles)
@@ -441,7 +452,7 @@ primary_branches = ["trunk", "main"]
 			configPath := filepath.Join(t.TempDir(), "grove.toml")
 			require.NoError(t, os.WriteFile(configPath, []byte(tt.content), 0644))
 
-			cfg, report, err := LoadFiles([]string{configPath})
+			cfg, report, err := Load([]string{configPath}, nil)
 			require.NoError(t, err)
 			tt.check(t, cfg)
 			assert.Equal(t, []string{configPath}, report.LoadedFiles)
@@ -458,7 +469,7 @@ strip_prefixes = ["topic/", "bug/"]
 `
 	require.NoError(t, os.WriteFile(configPath, []byte(content), 0644))
 
-	cfg, report, err := LoadFiles([]string{configPath})
+	cfg, report, err := Load([]string{configPath}, nil)
 	require.NoError(t, err)
 	assert.Equal(t, NamingConfig{
 		Lowercase:     false,
@@ -486,7 +497,7 @@ strip_prefixes = ["high/"]
 branch_template = "high/{{.PhraseSlug}}"
 `), 0644))
 
-	cfg, report, err := LoadFiles([]string{lowPath, highPath})
+	cfg, report, err := Load([]string{lowPath, highPath}, nil)
 	require.NoError(t, err)
 	assert.Equal(t, 80, cfg.Naming.MaxLength)
 	assert.Equal(t, []string{"high/"}, cfg.Naming.StripPrefixes)
@@ -513,7 +524,7 @@ max_length = 0
 strip_prefixes = []
 `), 0644))
 
-	cfg, _, err := LoadFiles([]string{firstPath, secondPath})
+	cfg, _, err := Load([]string{firstPath, secondPath}, nil)
 	require.NoError(t, err)
 	assert.False(t, cfg.Naming.Lowercase)
 	assert.Zero(t, cfg.Naming.MaxLength)
@@ -524,7 +535,7 @@ func TestLoad_InvalidTOML(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "grove.toml")
 	require.NoError(t, os.WriteFile(configPath, []byte("[naming\nmax_length = 10"), 0644))
 
-	_, _, err := LoadFiles([]string{configPath})
+	_, _, err := Load([]string{configPath}, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), configPath)
 }
@@ -533,7 +544,7 @@ func TestLoad_UnknownKeys(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "grove.toml")
 	require.NoError(t, os.WriteFile(configPath, []byte("[git]\nunknown = true\n"), 0644))
 
-	_, _, err := LoadFiles([]string{configPath})
+	_, _, err := Load([]string{configPath}, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown keys")
 	assert.Contains(t, err.Error(), "git.unknown")
@@ -579,7 +590,7 @@ branch_template = ""
 		t.Run(tt.name, func(t *testing.T) {
 			configPath := filepath.Join(t.TempDir(), "grove.toml")
 			require.NoError(t, os.WriteFile(configPath, []byte(tt.content), 0644))
-			_, _, err := LoadFiles([]string{configPath})
+			_, _, err := Load([]string{configPath}, nil)
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantErr)
 		})
@@ -594,7 +605,7 @@ func TestLoad_ReturnsLoadedFiles(t *testing.T) {
 	require.NoError(t, os.WriteFile(path1, []byte("[naming]\nmax_length = 40\n"), 0644))
 	require.NoError(t, os.WriteFile(path2, []byte("[naming]\nmax_length = 50\n"), 0644))
 
-	_, report, err := LoadFiles([]string{path1, missingPath, path2})
+	_, report, err := Load([]string{path1, missingPath, path2}, nil)
 	require.NoError(t, err)
 	assert.Equal(t, []string{path1, path2}, report.LoadedFiles)
 }
@@ -603,13 +614,13 @@ func TestLoad_PathIsDirectory(t *testing.T) {
 	dirPath := filepath.Join(t.TempDir(), "grove.toml")
 	require.NoError(t, os.Mkdir(dirPath, 0755))
 
-	cfg, report, err := LoadFiles([]string{dirPath})
+	cfg, report, err := Load([]string{dirPath}, nil)
 	require.NoError(t, err)
 	assert.Equal(t, DefaultConfig(), cfg)
 	assert.Empty(t, report.LoadedFiles)
 }
 
-func TestLoadFilesWithFlags_Precedence(t *testing.T) {
+func TestLoad_FlagPrecedence(t *testing.T) {
 	tests := []struct {
 		name       string
 		fileValue  *string
@@ -661,7 +672,7 @@ func TestLoadFilesWithFlags_Precedence(t *testing.T) {
 			flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
 			require.NoError(t, RegisterFlags(flags))
 			require.NoError(t, flags.Parse(tt.args))
-			cfg, report, err := LoadFilesWithFlags(paths, flags)
+			cfg, report, err := Load(paths, flags)
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, cfg.LocalBranch.WorktreeTemplate)
 			if tt.wantSource != nil {
@@ -671,25 +682,14 @@ func TestLoadFilesWithFlags_Precedence(t *testing.T) {
 	}
 }
 
-func TestLoadFilesWithFlags_ExplicitEmptyIsInvalid(t *testing.T) {
+func TestLoad_FlagExplicitEmptyIsInvalid(t *testing.T) {
 	flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	require.NoError(t, RegisterFlags(flags))
 	require.NoError(t, flags.Parse([]string{"--worktree-template", ""}))
 
-	_, _, err := LoadFilesWithFlags(nil, flags)
+	_, _, err := Load(nil, flags)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "local_branch.worktree_template cannot be empty")
-}
-
-func TestLoadFilesWithFlags_NilFlagSetMatchesLoadFiles(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "grove.toml")
-	require.NoError(t, os.WriteFile(configPath, []byte("[local_branch]\nworktree_template = \"tree-{{.BranchSlug}}\"\n"), 0644))
-
-	fromFiles, _, err := LoadFiles([]string{configPath})
-	require.NoError(t, err)
-	fromNilFlags, _, err := LoadFilesWithFlags([]string{configPath}, nil)
-	require.NoError(t, err)
-	assert.Equal(t, fromFiles, fromNilFlags)
 }
 
 func stringPtr(value string) *string {
