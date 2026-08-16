@@ -16,7 +16,7 @@ import (
 	"charm.land/glamour/v2"
 	"charm.land/glamour/v2/styles"
 	"charm.land/lipgloss/v2"
-	"github.com/jmcampanini/grove-cli/internal/github"
+	"github.com/jmcampanini/grove/internal/github"
 	"github.com/muesli/termenv"
 )
 

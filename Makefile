@@ -3,7 +3,7 @@ BINARY := $(BUILD_DIR)/grove
 GOFMT_FILES := $(shell git ls-files '*.go')
 
 VERSION := $(shell git describe --tags --dirty --always 2>/dev/null || date -u '+%Y-%m-%dT%H:%M:%SZ')
-LDFLAGS := -ldflags "-X github.com/jmcampanini/grove-cli/cmd.Version=$(VERSION)"
+LDFLAGS := -ldflags "-X github.com/jmcampanini/grove/cmd.Version=$(VERSION)"
 
 .DEFAULT_GOAL := help
 .PHONY: help build test lint lint-fix fmt fmt-check tidy tidy-check vuln check clean

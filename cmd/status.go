@@ -8,8 +8,8 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
-	"github.com/jmcampanini/grove-cli/internal/git"
-	"github.com/jmcampanini/grove-cli/internal/github"
+	"github.com/jmcampanini/grove/internal/git"
+	"github.com/jmcampanini/grove/internal/github"
 	"github.com/spf13/cobra"
 )
 

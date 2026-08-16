@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/jmcampanini/grove-cli/internal/config"
+	"github.com/jmcampanini/grove/internal/config"
 )
 
 // SlugifyOptions configures Slugify.

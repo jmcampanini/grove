@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/jmcampanini/grove-cli/internal/cache"
+	"github.com/jmcampanini/grove/internal/cache"
 	"github.com/spf13/cobra"
 )
 

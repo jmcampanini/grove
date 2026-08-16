@@ -8,9 +8,9 @@ import (
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
 	"github.com/dustin/go-humanize"
-	"github.com/jmcampanini/grove-cli/internal/github"
-	"github.com/jmcampanini/grove-cli/internal/naming"
-	"github.com/jmcampanini/grove-cli/internal/pr"
+	"github.com/jmcampanini/grove/internal/github"
+	"github.com/jmcampanini/grove/internal/naming"
+	"github.com/jmcampanini/grove/internal/pr"
 	"github.com/spf13/cobra"
 )
 

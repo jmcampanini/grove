@@ -11,8 +11,8 @@ import (
 	"time"
 
 	clog "charm.land/log/v2"
-	"github.com/jmcampanini/grove-cli/internal/cache"
-	"github.com/jmcampanini/grove-cli/internal/process"
+	"github.com/jmcampanini/grove/internal/cache"
+	"github.com/jmcampanini/grove/internal/process"
 )
 
 // DefaultIssueLimit is the maximum number of issues returned by ListIssues.

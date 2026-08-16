@@ -6,7 +6,7 @@ import (
 	"testing"
 	"text/template"
 
-	"github.com/jmcampanini/grove-cli/internal/config"
+	"github.com/jmcampanini/grove/internal/config"
 )
 
 func testNamingConfig() config.NamingConfig {

@@ -10,8 +10,8 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"charm.land/log/v2"
-	"github.com/jmcampanini/grove-cli/internal/config"
-	"github.com/jmcampanini/grove-cli/internal/logging"
+	"github.com/jmcampanini/grove/internal/config"
+	"github.com/jmcampanini/grove/internal/logging"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )

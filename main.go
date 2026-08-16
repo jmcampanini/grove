@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/jmcampanini/grove-cli/cmd"
+	"github.com/jmcampanini/grove/cmd"
 )
 
 func main() {

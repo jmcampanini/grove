@@ -8,7 +8,7 @@ import (
 	"text/template"
 	"text/template/parse"
 
-	"github.com/jmcampanini/grove-cli/internal/config"
+	"github.com/jmcampanini/grove/internal/config"
 )
 
 // IssueBranchTemplateData contains the values available to an issue branch template.

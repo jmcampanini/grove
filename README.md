@@ -7,8 +7,8 @@ Manage git worktrees as a workspace: one directory per branch, all siblings.
 ### Homebrew (macOS)
 
 ```sh
-brew tap jmcampanini/grove-cli https://github.com/jmcampanini/grove-cli
-brew install --HEAD jmcampanini/grove-cli/grove
+brew tap jmcampanini/grove https://github.com/jmcampanini/grove
+brew install --HEAD jmcampanini/grove/grove
 ```
 
 Upgrade to the latest commit:

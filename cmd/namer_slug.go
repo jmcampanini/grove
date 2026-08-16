@@ -6,7 +6,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/jmcampanini/grove-cli/internal/naming"
+	"github.com/jmcampanini/grove/internal/naming"
 	"github.com/spf13/cobra"
 )
 

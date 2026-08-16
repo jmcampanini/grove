@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmcampanini/grove-cli/internal/git"
+	"github.com/jmcampanini/grove/internal/git"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -11,7 +11,7 @@ import (
 	"time"
 
 	clog "charm.land/log/v2"
-	"github.com/jmcampanini/grove-cli/internal/process"
+	"github.com/jmcampanini/grove/internal/process"
 )
 
 // GitCli provides high-level git operations by executing real git commands via the git CLI.
