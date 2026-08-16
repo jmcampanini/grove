@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/jmcampanini/go-config-loader/configreporter"
@@ -17,6 +18,9 @@ func newConfigCmd() *cobra.Command {
 		Long: `Print the current effective configuration in TOML format.
 
 This outputs the merged configuration (defaults with any user overrides applied).
+The command works outside a repository or workspace too; it then reports
+defaults plus the XDG, home, and ancestor config files.
+
 The output can be redirected to a file to create a new configuration:
 
   grove config > grove.toml
@@ -34,12 +38,17 @@ Use --provenance to print the source that supplied each configuration value.`,
 }
 
 func runConfig(cmd *cobra.Command, provenance bool) error {
-	rt, err := loadCommandRuntime(cmd)
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get current directory: %w", err)
+	}
+
+	cfg, report, err := loadReportingConfig(cmd, cwd)
 	if err != nil {
 		return err
 	}
 
-	reporter := configreporter.New(rt.cfg, rt.configReport)
+	reporter := configreporter.New(cfg, report)
 	if provenance {
 		return writeConfigProvenance(cmd.OutOrStdout(), reporter.ProvenanceHeaders(), reporter.ProvenanceRows())
 	}

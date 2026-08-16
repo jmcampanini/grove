@@ -35,7 +35,9 @@ func ConfigPaths(cwd, worktreeRoot, gitRoot, homeDir string) []string {
 		}
 	}
 
-	if xdgConfigDir := os.Getenv("XDG_CONFIG_HOME"); xdgConfigDir != "" {
+	// A relative XDG_CONFIG_HOME is invalid per the XDG spec: ignore it and
+	// use the default config home instead of resolving it against cwd.
+	if xdgConfigDir := os.Getenv("XDG_CONFIG_HOME"); xdgConfigDir != "" && filepath.IsAbs(xdgConfigDir) {
 		addPath(filepath.Join(xdgConfigDir, "grove"))
 	} else if homeDir != "" {
 		addPath(filepath.Join(homeDir, ".config", "grove"))
