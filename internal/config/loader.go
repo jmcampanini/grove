@@ -9,22 +9,18 @@ import (
 )
 
 // RegisterFlags registers CLI flags for config fields tagged `config:"..."`.
-// Values set via these flags override file config in LoadFilesWithFlags.
+// Values set via these flags override file config in Load.
 func RegisterFlags(flags *pflag.FlagSet) error {
 	return pflagloader.Register[Config](flags)
 }
 
-// LoadFiles loads and merges TOML config files in low-to-high priority order.
-// Missing files and directory paths are ignored by go-config-loader. The
-// returned report is the library's native provenance/load report.
-func LoadFiles(paths []string) (Config, configloader.LoadReport, error) {
-	return LoadFilesWithFlags(paths, nil)
-}
-
-// LoadFilesWithFlags loads files like LoadFiles, then overlays values from
-// CLI flags that were explicitly set (flags > files > defaults). The flag set
-// must have been through RegisterFlags; nil skips the flag layer.
-func LoadFilesWithFlags(paths []string, flags *pflag.FlagSet) (Config, configloader.LoadReport, error) {
+// Load merges TOML config files in low-to-high priority order, then overlays
+// values from CLI flags that were explicitly set, so precedence is
+// defaults < files < flags. Missing files and directory paths are skipped by
+// go-config-loader; candidates that exist but cannot be read or parsed fail.
+// The flag set must have been through RegisterFlags; nil skips the flag
+// layer. The returned report is the library's native provenance/load report.
+func Load(paths []string, flags *pflag.FlagSet) (Config, configloader.LoadReport, error) {
 	fileLoader, err := configloader.NewMergeAllFilesLoader[Config](paths)
 	if err != nil {
 		return Config{}, configloader.LoadReport{}, err

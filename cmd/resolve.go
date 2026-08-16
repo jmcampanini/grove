@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"charm.land/log/v2"
-	"github.com/jmcampanini/grove/internal/config"
 	"github.com/jmcampanini/grove/internal/git"
 	"github.com/spf13/cobra"
 )
@@ -43,15 +42,9 @@ func runResolve(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	homeDir, err := os.UserHomeDir()
+	cfg, _, err := loadReportingConfig(cmd, targetPath)
 	if err != nil {
-		return fmt.Errorf("failed to get user home directory: %w", err)
-	}
-
-	paths := config.BootstrapConfigPaths(targetPath, homeDir)
-	cfg, _, err := config.LoadFilesWithFlags(paths, cmd.Root().PersistentFlags())
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+		return err
 	}
 
 	ctx := &resolveContext{

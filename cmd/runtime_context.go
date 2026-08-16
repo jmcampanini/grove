@@ -44,68 +44,26 @@ func (rt *commandRuntime) newCachedGitHubClient() (github.GitHub, error) {
 }
 
 func loadCommandRuntime(cmd *cobra.Command) (*commandRuntime, error) {
-	ctx := cmd.Context()
 	logger := commandLogger(cmd)
 	originalCwd, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current directory: %w", err)
 	}
 
-	homeDir, err := os.UserHomeDir()
+	loaded, err := loadConfigAt(cmd, logger, originalCwd, requireRuntime)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get user home directory: %w", err)
+		return nil, err
 	}
 
-	defaultTimeout := config.DefaultConfig().Git.Timeout
-	gitDir := originalCwd
-	initGit := git.New(ctx, false, gitDir, defaultTimeout, logger)
-
-	worktreeRoot, err := initGit.GetWorktreeRoot()
-	if err != nil {
-		return nil, fmt.Errorf("git error: %w", err)
-	}
-
-	if worktreeRoot == "" {
-		logger.Debug("not in a git repository, attempting workspace root detection", "cwd", originalCwd)
-
-		bootstrapPaths := config.BootstrapConfigPaths(originalCwd, homeDir)
-		bootstrapCfg, bootstrapReport, err := config.LoadFiles(bootstrapPaths)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load bootstrap config: %w", err)
-		}
-		logger.Debug("bootstrap config loaded", "paths", bootstrapPaths, "sources", bootstrapReport.LoadedFiles)
-
-		worktreeRoot, err = resolveWorkspaceRoot(ctx, logger, originalCwd, bootstrapCfg.Workspace.PrimaryBranches, defaultTimeout)
-		if err != nil {
-			logger.Debug("workspace root detection failed", "err", err)
-			return nil, errNotGitRepo
-		}
-
-		gitDir = worktreeRoot
-		initGit = git.New(ctx, false, gitDir, defaultTimeout, logger)
-		logger.Debug("anchored to worktree from workspace root", "anchor", gitDir, "originalCwd", originalCwd)
-	}
-
-	mainWorktreePath, err := initGit.GetMainWorktreePath()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get main worktree path: %w", err)
-	}
-
-	configPaths := config.ConfigPaths(originalCwd, worktreeRoot, mainWorktreePath, homeDir)
-	cfg, report, err := config.LoadFilesWithFlags(configPaths, cmd.Root().PersistentFlags())
-	if err != nil {
-		return nil, fmt.Errorf("failed to load config: %w", err)
-	}
-	logger.Debug("config loaded", "paths", configPaths, "sources", report.LoadedFiles)
-
+	ctx := cmd.Context()
 	return &commandRuntime{
-		cfg:              cfg,
-		configReport:     report,
+		cfg:              loaded.cfg,
+		configReport:     loaded.report,
 		ctx:              ctx,
-		cwd:              gitDir,
-		gitClient:        git.New(ctx, false, gitDir, cfg.Git.Timeout, logger),
+		cwd:              loaded.gitDir,
+		gitClient:        git.New(ctx, false, loaded.gitDir, loaded.cfg.Git.Timeout, logger),
 		logger:           logger,
-		mainWorktreePath: mainWorktreePath,
+		mainWorktreePath: loaded.mainWorktreePath,
 	}, nil
 }
 

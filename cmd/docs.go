@@ -50,6 +50,19 @@ Grove loads TOML config files from lowest to highest priority. Later files overr
 4. The current worktree grove.toml when it differs from the main worktree.
 5. The current directory grove.toml when it differs from the worktree root.
 
+XDG_CONFIG_HOME must be an absolute path. A relative value is ignored and the
+default ~/.config location is used; it is never resolved against the current
+directory.
+
+Every discovered path is optional: a missing file or a directory at a
+candidate path is skipped, and symbolic links are followed. A candidate that
+exists but cannot be read or parsed fails with an error.
+
+Outside a repository or workspace, grove config, grove namer, and grove
+resolve fall back to defaults plus the XDG, home, and ancestor files. Inside a
+repository, every command resolves the same effective configuration from the
+same files.
+
 Run grove config to inspect the merged effective configuration. Run grove config --provenance to see which file supplied each value.
 
 Some values can also be set with global CLI flags, which take priority over all config files:
