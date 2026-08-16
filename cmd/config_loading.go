@@ -34,7 +34,6 @@ type loadedConfig struct {
 	gitDir           string // anchor for later git operations
 	mainWorktreePath string // empty when no repository context was found
 	report           configloader.LoadReport
-	worktreeRoot     string // empty when no repository context was found
 }
 
 // loadConfigAt is the single config orchestration path. It resolves git
@@ -125,7 +124,6 @@ func finishConfigLoad(logger *log.Logger, flags *pflag.FlagSet, anchor, gitDir, 
 		gitDir:           gitDir,
 		mainWorktreePath: mainWorktreePath,
 		report:           report,
-		worktreeRoot:     worktreeRoot,
 	}, nil
 }
 

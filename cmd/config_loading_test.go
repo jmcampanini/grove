@@ -18,18 +18,18 @@ import (
 
 // isolatedConfigHome creates a fake HOME containing an XDG-default grove
 // config file and points the process environment at it.
-func isolatedConfigHome(t *testing.T, content string) (homeDir, configPath string) {
+func isolatedConfigHome(t *testing.T, content string) string {
 	t.Helper()
 
-	homeDir = tempDirResolved(t)
+	homeDir := tempDirResolved(t)
 	configDir := filepath.Join(homeDir, ".config", "grove")
 	require.NoError(t, os.MkdirAll(configDir, 0o755))
-	configPath = filepath.Join(configDir, "grove.toml")
+	configPath := filepath.Join(configDir, "grove.toml")
 	require.NoError(t, os.WriteFile(configPath, []byte(content), 0o644))
 
 	t.Setenv("HOME", homeDir)
 	t.Setenv("XDG_CONFIG_HOME", "")
-	return homeDir, configPath
+	return configPath
 }
 
 // tempDirResolved returns a temp dir with symlinks resolved so paths compare
@@ -49,7 +49,7 @@ func newTestRoot() *cobra.Command {
 }
 
 func TestLoadReportingConfigOutsideRepo(t *testing.T) {
-	_, configPath := isolatedConfigHome(t, "[naming]\nmax_length = 42\n")
+	configPath := isolatedConfigHome(t, "[naming]\nmax_length = 42\n")
 	workDir := tempDirResolved(t)
 
 	cfg, report, err := loadReportingConfig(newTestRoot(), workDir)
@@ -108,7 +108,7 @@ func TestConfigCommandOutsideRepoRoundTrips(t *testing.T) {
 }
 
 func TestConfigCommandProvenanceNamesSourceFile(t *testing.T) {
-	_, configPath := isolatedConfigHome(t, "[naming]\nmax_length = 42\n")
+	configPath := isolatedConfigHome(t, "[naming]\nmax_length = 42\n")
 	workDir := tempDirResolved(t)
 	t.Chdir(workDir)
 
