@@ -8,7 +8,6 @@ import (
 	"charm.land/log/v2"
 	"github.com/jmcampanini/go-config-loader/configloader"
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 
 	"github.com/jmcampanini/grove-cli/internal/config"
 	"github.com/jmcampanini/grove-cli/internal/git"
@@ -53,6 +52,22 @@ func loadConfigAt(cmd *cobra.Command, logger *log.Logger, anchor string, mode co
 		logger.Debug("ignoring relative XDG_CONFIG_HOME, using default config home", "value", xdgConfigDir)
 	}
 
+	loadForWorktree := func(gitDir, worktreeRoot, mainWorktreePath string) (*loadedConfig, error) {
+		paths := config.ConfigPaths(anchor, worktreeRoot, mainWorktreePath, homeDir)
+		cfg, report, err := config.Load(paths, flags)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load config: %w", err)
+		}
+		logger.Debug("config loaded", "paths", paths, "sources", report.LoadedFiles)
+
+		return &loadedConfig{
+			cfg:              cfg,
+			gitDir:           gitDir,
+			mainWorktreePath: mainWorktreePath,
+			report:           report,
+		}, nil
+	}
+
 	defaultTimeout := config.DefaultConfig().Git.Timeout
 	anchorGit := git.New(ctx, false, anchor, defaultTimeout, logger)
 
@@ -74,7 +89,7 @@ func loadConfigAt(cmd *cobra.Command, logger *log.Logger, anchor string, mode co
 			logger.Debug("failed to get main worktree path, using worktree root only", "err", err)
 			mainWorktreePath = worktreeRoot
 		}
-		return finishConfigLoad(logger, flags, anchor, anchor, worktreeRoot, mainWorktreePath, homeDir)
+		return loadForWorktree(anchor, worktreeRoot, mainWorktreePath)
 	}
 
 	logger.Debug("not in a git repository, attempting workspace root detection", "cwd", anchor)
@@ -108,23 +123,7 @@ func loadConfigAt(cmd *cobra.Command, logger *log.Logger, anchor string, mode co
 	}
 
 	logger.Debug("anchored to worktree from workspace root", "anchor", workspaceRoot, "originalCwd", anchor)
-	return finishConfigLoad(logger, flags, anchor, workspaceRoot, workspaceRoot, mainWorktreePath, homeDir)
-}
-
-func finishConfigLoad(logger *log.Logger, flags *pflag.FlagSet, anchor, gitDir, worktreeRoot, mainWorktreePath, homeDir string) (*loadedConfig, error) {
-	paths := config.ConfigPaths(anchor, worktreeRoot, mainWorktreePath, homeDir)
-	cfg, report, err := config.Load(paths, flags)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load config: %w", err)
-	}
-	logger.Debug("config loaded", "paths", paths, "sources", report.LoadedFiles)
-
-	return &loadedConfig{
-		cfg:              cfg,
-		gitDir:           gitDir,
-		mainWorktreePath: mainWorktreePath,
-		report:           report,
-	}, nil
+	return loadForWorktree(workspaceRoot, workspaceRoot, mainWorktreePath)
 }
 
 // loadReportingConfig resolves effective configuration for reporting and
