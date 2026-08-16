@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
-	"github.com/jmcampanini/grove-cli/internal/github"
+	"github.com/jmcampanini/grove/internal/github"
 )
 
 // maxPreviewComments is how many of the most recent comments the preview renders.

@@ -6,7 +6,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/jmcampanini/grove-cli/internal/git"
+	"github.com/jmcampanini/grove/internal/git"
 	"github.com/spf13/cobra"
 )
 

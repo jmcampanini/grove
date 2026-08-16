@@ -2,9 +2,9 @@ package issue
 
 import (
 	clog "charm.land/log/v2"
-	"github.com/jmcampanini/grove-cli/internal/git"
-	"github.com/jmcampanini/grove-cli/internal/github"
-	"github.com/jmcampanini/grove-cli/internal/naming"
+	"github.com/jmcampanini/grove/internal/git"
+	"github.com/jmcampanini/grove/internal/github"
+	"github.com/jmcampanini/grove/internal/naming"
 )
 
 // Match represents an issue with its worktree matching status.

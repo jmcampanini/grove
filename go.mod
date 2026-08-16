@@ -1,4 +1,4 @@
-module github.com/jmcampanini/grove-cli
+module github.com/jmcampanini/grove
 
 go 1.26.6
 

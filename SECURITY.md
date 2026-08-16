@@ -6,7 +6,7 @@ Grove is supported only at the latest commit on the `main` branch. There are no 
 
 ## Reporting a vulnerability
 
-Report suspected vulnerabilities through [GitHub private vulnerability reporting](https://github.com/jmcampanini/grove-cli/security/advisories/new).
+Report suspected vulnerabilities through [GitHub private vulnerability reporting](https://github.com/jmcampanini/grove/security/advisories/new).
 
 Do not open a public issue for an undisclosed vulnerability. If the private reporting form is unavailable, open a public issue asking for a private contact channel and include no vulnerability details in it.
 

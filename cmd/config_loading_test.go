@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/jmcampanini/grove-cli/internal/config"
+	"github.com/jmcampanini/grove/internal/config"
 )
 
 // isolatedConfigHome creates a fake HOME containing an XDG-default grove

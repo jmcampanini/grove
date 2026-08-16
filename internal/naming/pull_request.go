@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"text/template"
 
-	"github.com/jmcampanini/grove-cli/internal/config"
+	"github.com/jmcampanini/grove/internal/config"
 )
 
 // PullRequestTemplateData contains the values available to the PR branch template.

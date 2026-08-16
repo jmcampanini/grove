@@ -11,10 +11,10 @@ import (
 	"charm.land/log/v2"
 	"github.com/jmcampanini/go-config-loader/configloader"
 
-	"github.com/jmcampanini/grove-cli/internal/cache"
-	"github.com/jmcampanini/grove-cli/internal/config"
-	"github.com/jmcampanini/grove-cli/internal/git"
-	"github.com/jmcampanini/grove-cli/internal/github"
+	"github.com/jmcampanini/grove/internal/cache"
+	"github.com/jmcampanini/grove/internal/config"
+	"github.com/jmcampanini/grove/internal/git"
+	"github.com/jmcampanini/grove/internal/github"
 	"github.com/spf13/cobra"
 )
 

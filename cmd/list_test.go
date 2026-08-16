@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmcampanini/grove-cli/internal/config"
-	"github.com/jmcampanini/grove-cli/internal/git"
-	"github.com/jmcampanini/grove-cli/internal/naming"
+	"github.com/jmcampanini/grove/internal/config"
+	"github.com/jmcampanini/grove/internal/git"
+	"github.com/jmcampanini/grove/internal/naming"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

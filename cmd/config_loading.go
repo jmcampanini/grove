@@ -9,8 +9,8 @@ import (
 	"github.com/jmcampanini/go-config-loader/configloader"
 	"github.com/spf13/cobra"
 
-	"github.com/jmcampanini/grove-cli/internal/config"
-	"github.com/jmcampanini/grove-cli/internal/git"
+	"github.com/jmcampanini/grove/internal/config"
+	"github.com/jmcampanini/grove/internal/git"
 )
 
 // configLoadMode selects how config orchestration treats missing or broken

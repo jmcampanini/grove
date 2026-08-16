@@ -1,15 +1,15 @@
 class Grove < Formula
   desc "Git worktree workspace manager"
-  homepage "https://github.com/jmcampanini/grove-cli"
+  homepage "https://github.com/jmcampanini/grove"
   license "MIT"
-  head "https://github.com/jmcampanini/grove-cli.git", branch: "main"
+  head "https://github.com/jmcampanini/grove.git", branch: "main"
 
   depends_on "go" => :build
 
   def install
     ldflags = %W[
       -s -w
-      -X github.com/jmcampanini/grove-cli/cmd.Version=#{version}
+      -X github.com/jmcampanini/grove/cmd.Version=#{version}
     ]
     system "go", "build", "-buildvcs=false", *std_go_args(ldflags:)
     generate_completions_from_executable(bin/"grove", "completion")
