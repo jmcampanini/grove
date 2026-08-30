@@ -249,7 +249,7 @@ func TestConfigPaths(t *testing.T) {
 				"/Users/jim/grove.toml",              // home (lowest ancestor)
 				"/Users/jim/project/grove.toml",      // ancestor
 				"/Users/jim/project/main/grove.toml", // gitRoot = worktreeRoot
-				// cwd == homeDir, so deduped — does NOT appear again at highest
+				// cwd == homeDir, so deduped - does NOT appear again at highest
 			},
 		},
 		{

@@ -20,7 +20,7 @@ type envelope struct {
 }
 
 // Cache is a file-based cache with a TTL.
-// A nil *Cache is safe to use — Get always misses and Set is a no-op.
+// A nil *Cache is safe to use - Get always misses and Set is a no-op.
 type Cache struct {
 	dir string
 	log *clog.Logger
