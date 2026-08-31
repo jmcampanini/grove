@@ -21,7 +21,8 @@ func newResolveCmd() *cobra.Command {
 
 The path argument can be:
   - A worktree directory (returns the primary worktree for that workspace)
-  - A workspace directory (parent of worktrees; discovers the primary among children)
+  - A workspace directory (parent of worktrees; discovers the primary among
+    children)
   - Omitted (defaults to the current directory)`,
 		Args:    cobra.MaximumNArgs(1),
 		RunE:    runResolve,
