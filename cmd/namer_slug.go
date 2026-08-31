@@ -14,7 +14,8 @@ func newNamerSlugCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "slug <phrase>",
 		Short: "Slugify a phrase using the configured naming settings",
-		Long: `Slugify a phrase using canonical normalization and the configured naming settings.
+		Long: `Slugify a phrase using canonical normalization and the configured naming
+settings.
 
 The raw slug is not capped by naming.max_length; the cap applies only when
 generating complete branch and worktree names.`,

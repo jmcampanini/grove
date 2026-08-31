@@ -8,9 +8,11 @@ import (
 
 func newDocsCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:     "docs",
-		Short:   "Print Grove reference documentation",
-		Long:    "Print a Markdown reference for Grove commands, configuration loading, and the TOML config schema.",
+		Use:   "docs",
+		Short: "Print Grove reference documentation",
+		Long: `Print a Markdown reference for Grove commands, configuration loading, and
+the TOML config schema. Command help is the canonical contract for every
+command; this reference supplements it.`,
 		Args:    cobra.NoArgs,
 		GroupID: "utility",
 		RunE:    runDocs,

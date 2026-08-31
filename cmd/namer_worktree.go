@@ -12,8 +12,14 @@ func newNamerWorktreeCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "worktree <phrase>",
 		Short: "Generate a worktree directory name from a phrase",
-		Args:  cobra.ExactArgs(1),
-		RunE:  runNamerWorktree,
+		Long: `Print the worktree directory name grove create would use for the phrase.
+The branch name is generated first (see grove namer branch); its slug, with
+the first matching naming.strip_prefixes entry removed, is then rendered
+through local_branch.worktree_template as {{.BranchSlug}} and capped at
+naming.max_length. The global --worktree-template flag replaces the
+template for one invocation.`,
+		Args: cobra.ExactArgs(1),
+		RunE: runNamerWorktree,
 	}
 }
 

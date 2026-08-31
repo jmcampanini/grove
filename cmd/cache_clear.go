@@ -11,8 +11,12 @@ func newCacheClearCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "clear",
 		Short: "Remove all cached data",
-		Args:  cobra.NoArgs,
-		RunE:  runCacheClear,
+		Long: `Remove every entry in the grove cache directory and print "Cache cleared."
+on stdout. A missing cache directory is not an error. When an entry cannot
+be removed, the remaining entries are still tried and the command fails
+with exit status 1.`,
+		Args: cobra.NoArgs,
+		RunE: runCacheClear,
 	}
 }
 

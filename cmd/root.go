@@ -42,6 +42,9 @@ Common workflows:
   Work on an issue:     grove issue start 17
   See all worktrees:    grove status
 
+Configuration comes from grove.toml files and the --worktree-template flag;
+run grove config --help for the file locations and precedence.
+
 Logs are appended to $XDG_STATE_HOME/grove/grove.log
 (~/.local/state/grove/grove.log when XDG_STATE_HOME is unset).
 Diagnostic logging defaults to info. Pass --debug for debug logging or --quiet

@@ -24,7 +24,8 @@ func newCreateCmd() *cobra.Command {
 By default, the new branch is created from the current HEAD. Use --from to
 specify a different starting point (any git ref: branch, tag, or commit SHA).
 Use --from-remote-primary to fetch and start from the latest remote primary
-branch without updating the primary worktree; this is recommended for automation.
+branch without updating the primary worktree; this is recommended for
+automation.
 Use --reuse to attach to an existing branch/worktree for the phrase instead of
 failing when it already exists.
 

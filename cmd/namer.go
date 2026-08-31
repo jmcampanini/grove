@@ -16,6 +16,15 @@ func newNamerCmd() *cobra.Command {
 		Use:     "namer",
 		Short:   "Generate branch and worktree names from a phrase",
 		GroupID: "utility",
+		Long: `Generate branch and worktree names from a phrase with the configured
+local_branch templates and naming settings. Each subcommand prints one name
+on stdout and creates nothing; git is only queried to locate configuration
+files, so the commands also work outside a repository.
+
+Subcommands:
+  branch    Generate a branch name from a phrase
+  slug      Slugify a phrase using the configured naming settings
+  worktree  Generate a worktree directory name from a phrase`,
 	}
 
 	cmd.AddCommand(
