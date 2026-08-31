@@ -1,2 +1,3 @@
 - Run `make check` to validate that changes work correctly
 - Use `make build` to build the binary (outputs to `build/grove`); never use `go build` directly
+- Keep command help the canonical user-facing documentation and the README a landing page; keep both consistent with observable behavior.
