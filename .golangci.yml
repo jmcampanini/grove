@@ -1,5 +1,8 @@
 version: "2"
 
+run:
+  timeout: 5m
+
 linters:
   default: standard
   enable:
@@ -16,6 +19,8 @@ linters:
           - funlen
           - gocyclo
   settings:
+    misspell:
+      locale: US
     gocyclo:
       min-complexity: 15
     revive:
@@ -25,7 +30,9 @@ linters:
 
 formatters:
   enable:
+    - gofmt
     - goimports
 
 issues:
-  max-same-issues: 10
+  max-issues-per-linter: 0
+  max-same-issues: 0
