@@ -37,7 +37,7 @@ tidy-check: ## Check go.mod/go.sum without modifying files.
 
 version-check: build ## Verify the built binary reports the injected version.
 	@case "$(VERSION)" in unknown|n/a|"") echo "degenerate version identity: '$(VERSION)'"; exit 1;; esac
-	@out="$$($(BINARY) --version)"; \
+	@out="$$($(BINARY) --version)" || exit $$?; \
 	if [ "$$out" != "grove version $(VERSION)" ]; then \
 		echo "version mismatch: got '$$out', want 'grove version $(VERSION)'"; \
 		exit 1; \
