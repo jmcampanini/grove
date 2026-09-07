@@ -185,7 +185,7 @@ func TestCheckIcon(t *testing.T) {
 	}{
 		{name: "success", conclusion: github.CheckConclusionSuccess, wantChar: iconCheck},
 		{name: "failure", conclusion: github.CheckConclusionFailure, wantChar: iconCross},
-		{name: "cancelled", conclusion: github.CheckConclusionCancelled, wantChar: iconCross},
+		{name: "canceled", conclusion: github.CheckConclusionCancelled, wantChar: iconCross},
 		{name: "pending empty", conclusion: "", wantChar: iconPending},
 		{name: "timed_out", conclusion: github.CheckConclusionTimedOut, wantChar: iconCross},
 		{name: "skipped", conclusion: github.CheckConclusionSkipped, wantChar: iconCross},

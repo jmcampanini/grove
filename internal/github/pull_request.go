@@ -101,7 +101,7 @@ type CheckConclusion string
 
 const (
 	CheckConclusionActionRequired CheckConclusion = "action_required"
-	CheckConclusionCancelled      CheckConclusion = "cancelled"
+	CheckConclusionCancelled      CheckConclusion = "cancelled" //nolint:misspell // Match GitHub's check conclusion value.
 	CheckConclusionFailure        CheckConclusion = "failure"
 	CheckConclusionNeutral        CheckConclusion = "neutral"
 	CheckConclusionSkipped        CheckConclusion = "skipped"
