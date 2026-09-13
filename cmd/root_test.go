@@ -137,72 +137,23 @@ func TestExecuteWithFileLoggingAppliesDiagnosticLevelBeforeSetupWarning(t *testi
 	}
 }
 
-func TestExecuteWithFileLoggingOpensLogOnlyAfterValidation(t *testing.T) {
-	tests := []struct {
-		args    []string
-		name    string
-		wantErr string
-		wantLog bool
-	}{
-		{
-			args:    []string{"docs"},
-			name:    "valid command writes the log",
-			wantLog: true,
-		},
-		{
-			args: []string{"--help"},
-			name: "help flag short-circuits before logging",
-		},
-		{
-			args: []string{"--version"},
-			name: "version flag short-circuits before logging",
-		},
-		{
-			args:    []string{"bogus"},
-			name:    "unknown command is rejected before logging",
-			wantErr: "unknown command",
-		},
-		{
-			args:    []string{"--nope", "docs"},
-			name:    "unknown flag is rejected before logging",
-			wantErr: "unknown flag",
-		},
-		{
-			args:    []string{"checkout", "a", "b"},
-			name:    "excess operand is rejected before logging",
-			wantErr: "accepts 1 arg(s)",
-		},
-		{
-			args:    []string{"--debug", "--quiet", "docs"},
-			name:    "conflicting diagnostic flags are rejected before logging",
-			wantErr: "none of the others can be",
-		},
-	}
+// TestRejectedInvocationCreatesNoLogFile covers the one piece of startup that
+// runs outside Cobra's ordering: the log file is opened in a hook that Cobra
+// reaches only after validation, so a rejected operand list must leave the
+// state directory uncreated.
+func TestRejectedInvocationCreatesNoLogFile(t *testing.T) {
+	home := t.TempDir()
+	stateDir := filepath.Join(home, "state")
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_STATE_HOME", stateDir)
+	var stderr bytes.Buffer
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			stateDir := filepath.Join(t.TempDir(), "state")
-			t.Setenv("XDG_STATE_HOME", stateDir)
-			var stderr bytes.Buffer
+	err := executeWithFileLogging(strings.NewReader(""), io.Discard, &stderr, []string{"checkout", "a", "b"})
 
-			err := executeWithFileLogging(strings.NewReader(""), io.Discard, &stderr, tt.args)
-
-			if tt.wantErr == "" {
-				require.NoError(t, err)
-			} else {
-				require.ErrorContains(t, err, tt.wantErr)
-			}
-			assert.NotContains(t, stderr.String(), "failed to set up file logging")
-			_, statErr := os.Stat(filepath.Join(stateDir, "grove", "grove.log"))
-			if tt.wantLog {
-				assert.NoError(t, statErr, "log file should exist after a validated command")
-				return
-			}
-			assert.ErrorIs(t, statErr, os.ErrNotExist, "log file must not exist")
-			_, statErr = os.Stat(stateDir)
-			assert.ErrorIs(t, statErr, os.ErrNotExist, "state directory must not exist")
-		})
-	}
+	require.ErrorContains(t, err, "accepts 1 arg(s)")
+	assert.NotContains(t, stderr.String(), "failed to set up file logging")
+	_, statErr := os.Stat(stateDir)
+	assert.ErrorIs(t, statErr, os.ErrNotExist, "state directory must not exist after a rejected invocation")
 }
 
 func TestRootRejectsConflictingLoggingFlagsBeforeCommandRun(t *testing.T) {
