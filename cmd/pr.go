@@ -7,6 +7,9 @@ func newPRCmd() *cobra.Command {
 		Use:     "pr",
 		Short:   "Browse and check out GitHub pull requests",
 		GroupID: "pr",
+		// Args and RunE make the group a grammar boundary; see runHelpTopic.
+		Args: cobra.NoArgs,
+		RunE: runHelpTopic,
 		Long: `Browse and check out GitHub pull requests into local worktrees.
 
 Subcommands:

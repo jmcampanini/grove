@@ -7,6 +7,9 @@ func newIssueCmd() *cobra.Command {
 		Use:     "issue",
 		Short:   "Browse GitHub issues and start work on them",
 		GroupID: "issue",
+		// Args and RunE make the group a grammar boundary; see runHelpTopic.
+		Args: cobra.NoArgs,
+		RunE: runHelpTopic,
 		Long: `Browse GitHub issues and start work on them in local worktrees.
 
 Subcommands:

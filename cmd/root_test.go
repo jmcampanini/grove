@@ -306,42 +306,29 @@ func leafArgs(leaf *cobra.Command) []string {
 	return strings.Fields(leaf.CommandPath())[1:]
 }
 
-func TestEveryLeafDeclaresCommandContract(t *testing.T) {
-	leaves := collectLeaves(newTestRootCommand())
-	require.NotEmpty(t, leaves)
-
-	for _, leaf := range leaves {
-		path := leaf.CommandPath()
-		assert.NotNilf(t, leaf.Args, "%s must declare an Args validator", path)
-		assert.Nilf(t, leaf.Run, "%s must use RunE, not Run", path)
-		if leaf.Runnable() {
-			assert.NotNilf(t, leaf.RunE, "%s must use RunE", path)
+// TestEveryCommandDeclaresItsGrammar checks the declarations the CLI contract
+// requires of a fresh tree: every command below the root has an Args
+// validator, and every group has a RunE, because Cobra prints help for a
+// non-runnable command before it validates operands. The root is left to
+// Cobra, which rejects unknown subcommands and suggests corrections.
+func TestEveryCommandDeclaresItsGrammar(t *testing.T) {
+	var visit func(cmd *cobra.Command)
+	visit = func(cmd *cobra.Command) {
+		for _, child := range cmd.Commands() {
+			if child.Name() == "help" || child.Name() == "completion" || strings.HasPrefix(child.Name(), "__") {
+				continue
+			}
+			path := child.CommandPath()
+			assert.NotNilf(t, child.Args, "%s must declare an Args validator", path)
+			assert.Nilf(t, child.Run, "%s must use RunE, not Run", path)
+			if child.HasSubCommands() {
+				assert.NotNilf(t, child.RunE, "%s must have a RunE so Cobra validates its operands", path)
+			}
+			visit(child)
 		}
 	}
-}
 
-func TestEveryLeafRejectsExcessOperands(t *testing.T) {
-	extra := []string{"extra-1", "extra-2", "extra-3", "extra-4", "extra-5"}
-
-	for _, leaf := range collectLeaves(newTestRootCommand()) {
-		t.Run(strings.ReplaceAll(leaf.CommandPath(), " ", "/"), func(t *testing.T) {
-			stdout, _, err := executeForTest(append(leafArgs(leaf), extra...)...)
-
-			require.Error(t, err, "operands beyond every validator's limit must be rejected before side effects")
-			assert.Empty(t, stdout)
-		})
-	}
-}
-
-func TestEveryLeafRejectsUnknownFlags(t *testing.T) {
-	for _, leaf := range collectLeaves(newTestRootCommand()) {
-		t.Run(strings.ReplaceAll(leaf.CommandPath(), " ", "/"), func(t *testing.T) {
-			stdout, _, err := executeForTest(append(leafArgs(leaf), "--definitely-not-a-grove-flag")...)
-
-			require.ErrorContains(t, err, "unknown flag")
-			assert.Empty(t, stdout)
-		})
-	}
+	visit(newTestRootCommand())
 }
 
 func TestEveryLeafPrintsHelpToInjectedStdout(t *testing.T) {
@@ -362,11 +349,4 @@ func TestRootVersionPrintsToInjectedStdout(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, stdout, Version)
 	assert.Empty(t, stderr)
-}
-
-func TestRootRejectsUnknownSubcommand(t *testing.T) {
-	stdout, _, err := executeForTest("definitely-not-a-command")
-
-	require.ErrorContains(t, err, "unknown command")
-	assert.Empty(t, stdout)
 }

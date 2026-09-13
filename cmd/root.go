@@ -62,6 +62,13 @@ do not change stdout.`,
 	if err := config.RegisterFlags(root.PersistentFlags()); err != nil {
 		panic(err)
 	}
+	// Cobra's Find strips flags before Execute registers --help and
+	// --version, so without these a value flag after either one is read as
+	// an operand and "grove --help --worktree-template x" fails with unknown
+	// command "x". Registering them here keeps that ordering correct on a
+	// root that has no Args validator.
+	root.InitDefaultHelpFlag()
+	root.InitDefaultVersionFlag()
 
 	root.AddGroup(
 		&cobra.Group{ID: "worktree", Title: "Worktree Commands:"},
