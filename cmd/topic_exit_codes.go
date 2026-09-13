@@ -17,7 +17,12 @@ func newExitCodesTopicCmd() *cobra.Command {
 
 Error detail is reported on stderr. When an error is not self-explanatory,
 inspect the log file at $XDG_STATE_HOME/grove/grove.log
-(~/.local/state/grove/grove.log when XDG_STATE_HOME is unset).`,
+(~/.local/state/grove/grove.log when XDG_STATE_HOME is unset).
+
+An unknown command or an operand on a command group fails with status 1 and
+'unknown command "x" for "grove ..."' on stderr. 'grove help <unknown>' is
+not an error: it prints 'Unknown help topic' and the root usage on stdout
+and exits 0.`,
 	}
 }
 

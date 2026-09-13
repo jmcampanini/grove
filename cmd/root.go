@@ -29,10 +29,13 @@ const (
 // constructions.
 func NewRootCommand(in io.Reader, out, errOut io.Writer) *cobra.Command {
 	root := &cobra.Command{
-		Use:           "grove",
-		Short:         "Git worktree workspace manager",
-		SilenceErrors: true,
-		SilenceUsage:  true,
+		Use:   "grove",
+		Short: "Git worktree workspace manager",
+		// Groups never suggest corrections for an unknown subcommand, so the
+		// root does not either; an unknown command reports only its name.
+		DisableSuggestions: true,
+		SilenceErrors:      true,
+		SilenceUsage:       true,
 		Long: `Grove manages git worktrees in a workspace structure.
 
 Common workflows:
