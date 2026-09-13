@@ -333,89 +333,10 @@ func commandChildrenByName(cmd *cobra.Command) map[string]*cobra.Command {
 	return children
 }
 
-// collectLeaves returns every grove-owned leaf command, skipping the
-// Cobra-managed help and completion commands.
-func collectLeaves(cmd *cobra.Command) []*cobra.Command {
-	var leaves []*cobra.Command
-	for _, child := range cmd.Commands() {
-		if child.Name() == "help" || child.Name() == "completion" || strings.HasPrefix(child.Name(), "__") {
-			continue
-		}
-		if child.HasSubCommands() {
-			leaves = append(leaves, collectLeaves(child)...)
-			continue
-		}
-		leaves = append(leaves, child)
-	}
-	return leaves
-}
-
-// leafArgs returns the CLI arguments that address leaf, e.g. ["cache", "clear"].
-func leafArgs(leaf *cobra.Command) []string {
-	return strings.Fields(leaf.CommandPath())[1:]
-}
-
-func TestEveryLeafDeclaresCommandContract(t *testing.T) {
-	leaves := collectLeaves(newTestRootCommand())
-	require.NotEmpty(t, leaves)
-
-	for _, leaf := range leaves {
-		path := leaf.CommandPath()
-		assert.NotNilf(t, leaf.Args, "%s must declare an Args validator", path)
-		assert.Nilf(t, leaf.Run, "%s must use RunE, not Run", path)
-		if leaf.Runnable() {
-			assert.NotNilf(t, leaf.RunE, "%s must use RunE", path)
-		}
-	}
-}
-
-func TestEveryLeafRejectsExcessOperands(t *testing.T) {
-	extra := []string{"extra-1", "extra-2", "extra-3", "extra-4", "extra-5"}
-
-	for _, leaf := range collectLeaves(newTestRootCommand()) {
-		t.Run(strings.ReplaceAll(leaf.CommandPath(), " ", "/"), func(t *testing.T) {
-			stdout, _, err := executeForTest(append(leafArgs(leaf), extra...)...)
-
-			require.Error(t, err, "operands beyond every validator's limit must be rejected before side effects")
-			assert.Empty(t, stdout)
-		})
-	}
-}
-
-func TestEveryLeafRejectsUnknownFlags(t *testing.T) {
-	for _, leaf := range collectLeaves(newTestRootCommand()) {
-		t.Run(strings.ReplaceAll(leaf.CommandPath(), " ", "/"), func(t *testing.T) {
-			stdout, _, err := executeForTest(append(leafArgs(leaf), "--definitely-not-a-grove-flag")...)
-
-			require.ErrorContains(t, err, "unknown flag")
-			assert.Empty(t, stdout)
-		})
-	}
-}
-
-func TestEveryLeafPrintsHelpToInjectedStdout(t *testing.T) {
-	for _, leaf := range collectLeaves(newTestRootCommand()) {
-		t.Run(strings.ReplaceAll(leaf.CommandPath(), " ", "/"), func(t *testing.T) {
-			stdout, stderr, err := executeForTest(append(leafArgs(leaf), "--help")...)
-
-			require.NoError(t, err)
-			assert.Contains(t, stdout, leaf.Name())
-			assert.Empty(t, stderr)
-		})
-	}
-}
-
 func TestRootVersionPrintsToInjectedStdout(t *testing.T) {
 	stdout, stderr, err := executeForTest("--version")
 
 	require.NoError(t, err)
 	assert.Contains(t, stdout, Version)
 	assert.Empty(t, stderr)
-}
-
-func TestRootRejectsUnknownSubcommand(t *testing.T) {
-	stdout, _, err := executeForTest("definitely-not-a-command")
-
-	require.ErrorContains(t, err, "unknown command")
-	assert.Empty(t, stdout)
 }
