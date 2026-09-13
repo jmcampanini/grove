@@ -284,6 +284,65 @@ func commandChildrenByName(cmd *cobra.Command) map[string]*cobra.Command {
 	return children
 }
 
+// collectLeaves returns every grove-owned leaf command, skipping the
+// Cobra-managed help and completion commands.
+func collectLeaves(cmd *cobra.Command) []*cobra.Command {
+	var leaves []*cobra.Command
+	for _, child := range cmd.Commands() {
+		if child.Name() == "help" || child.Name() == "completion" || strings.HasPrefix(child.Name(), "__") {
+			continue
+		}
+		if child.HasSubCommands() {
+			leaves = append(leaves, collectLeaves(child)...)
+			continue
+		}
+		leaves = append(leaves, child)
+	}
+	return leaves
+}
+
+// leafArgs returns the CLI arguments that address leaf, e.g. ["cache", "clear"].
+func leafArgs(leaf *cobra.Command) []string {
+	return strings.Fields(leaf.CommandPath())[1:]
+}
+
+// TestEveryCommandDeclaresItsGrammar checks the declarations the CLI contract
+// requires of a fresh tree: every command below the root has an Args
+// validator, and every group has a RunE, because Cobra prints help for a
+// non-runnable command before it validates operands. The root is left to
+// Cobra, which rejects unknown subcommands and suggests corrections.
+func TestEveryCommandDeclaresItsGrammar(t *testing.T) {
+	var visit func(cmd *cobra.Command)
+	visit = func(cmd *cobra.Command) {
+		for _, child := range cmd.Commands() {
+			if child.Name() == "help" || child.Name() == "completion" || strings.HasPrefix(child.Name(), "__") {
+				continue
+			}
+			path := child.CommandPath()
+			assert.NotNilf(t, child.Args, "%s must declare an Args validator", path)
+			assert.Nilf(t, child.Run, "%s must use RunE, not Run", path)
+			if child.HasSubCommands() {
+				assert.NotNilf(t, child.RunE, "%s must have a RunE so Cobra validates its operands", path)
+			}
+			visit(child)
+		}
+	}
+
+	visit(newTestRootCommand())
+}
+
+func TestEveryLeafPrintsHelpToInjectedStdout(t *testing.T) {
+	for _, leaf := range collectLeaves(newTestRootCommand()) {
+		t.Run(strings.ReplaceAll(leaf.CommandPath(), " ", "/"), func(t *testing.T) {
+			stdout, stderr, err := executeForTest(append(leafArgs(leaf), "--help")...)
+
+			require.NoError(t, err)
+			assert.Contains(t, stdout, leaf.Name())
+			assert.Empty(t, stderr)
+		})
+	}
+}
+
 func TestRootVersionPrintsToInjectedStdout(t *testing.T) {
 	stdout, stderr, err := executeForTest("--version")
 
