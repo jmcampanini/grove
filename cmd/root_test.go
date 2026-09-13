@@ -107,7 +107,6 @@ func TestExecuteWithFileLoggingAppliesDiagnosticLevelBeforeSetupWarning(t *testi
 	tests := []struct {
 		args        []string
 		name        string
-		wantErr     string
 		wantWarning bool
 	}{
 		{
@@ -124,39 +123,6 @@ func TestExecuteWithFileLoggingAppliesDiagnosticLevelBeforeSetupWarning(t *testi
 			args: []string{"--quiet", "docs"},
 			name: "quiet suppresses setup warning",
 		},
-		{
-			args:        []string{"--help"},
-			name:        "help reports setup warning",
-			wantWarning: true,
-		},
-		{
-			args: []string{"--quiet", "--help"},
-			name: "quiet before help suppresses setup warning",
-		},
-		{
-			args: []string{"--help", "--quiet"},
-			name: "quiet after help suppresses setup warning",
-		},
-		{
-			args: []string{"-h", "--quiet"},
-			name: "quiet after shorthand help suppresses setup warning",
-		},
-		{
-			args:    []string{"bogus", "--quiet"},
-			name:    "quiet invalid command suppresses setup warning",
-			wantErr: "unknown command",
-		},
-		{
-			args:    []string{"--nope", "--quiet", "docs"},
-			name:    "quiet after unknown flag suppresses setup warning",
-			wantErr: "unknown flag",
-		},
-		{
-			args:        []string{"--debug", "--quiet", "docs"},
-			name:        "conflict reports setup warning at default level",
-			wantErr:     "none of the others can be",
-			wantWarning: true,
-		},
 	}
 
 	for _, tt := range tests {
@@ -164,14 +130,30 @@ func TestExecuteWithFileLoggingAppliesDiagnosticLevelBeforeSetupWarning(t *testi
 			var stderr bytes.Buffer
 
 			err := executeWithFileLogging(strings.NewReader(""), io.Discard, &stderr, tt.args)
-			if tt.wantErr == "" {
-				require.NoError(t, err)
-			} else {
-				require.ErrorContains(t, err, tt.wantErr)
-			}
+
+			require.NoError(t, err)
 			assert.Equal(t, tt.wantWarning, bytes.Contains(stderr.Bytes(), []byte("failed to set up file logging")))
 		})
 	}
+}
+
+// TestRejectedInvocationCreatesNoLogFile covers the one piece of startup that
+// runs outside Cobra's ordering: the log file is opened in a hook that Cobra
+// reaches only after validation, so a rejected operand list must leave the
+// state directory uncreated.
+func TestRejectedInvocationCreatesNoLogFile(t *testing.T) {
+	home := t.TempDir()
+	stateDir := filepath.Join(home, "state")
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_STATE_HOME", stateDir)
+	var stderr bytes.Buffer
+
+	err := executeWithFileLogging(strings.NewReader(""), io.Discard, &stderr, []string{"checkout", "a", "b"})
+
+	require.ErrorContains(t, err, "accepts 1 arg(s)")
+	assert.NotContains(t, stderr.String(), "failed to set up file logging")
+	_, statErr := os.Stat(stateDir)
+	assert.ErrorIs(t, statErr, os.ErrNotExist, "state directory must not exist after a rejected invocation")
 }
 
 func TestRootRejectsConflictingLoggingFlagsBeforeCommandRun(t *testing.T) {

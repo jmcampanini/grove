@@ -46,9 +46,11 @@ Configuration comes from grove.toml files and the --worktree-template flag;
 run grove config --help for the file locations and precedence.
 
 Logs are appended to $XDG_STATE_HOME/grove/grove.log
-(~/.local/state/grove/grove.log when XDG_STATE_HOME is unset).
-Diagnostic logging defaults to info. Pass --debug for debug logging or --quiet
-to show only errors. The flags are mutually exclusive and do not change stdout.`,
+(~/.local/state/grove/grove.log when XDG_STATE_HOME is unset). Logging starts
+after argument validation: --help, --version, and rejected input do not create
+the log file. Diagnostic logging defaults to info. Pass --debug for debug
+logging or --quiet to show only errors. The flags are mutually exclusive and
+do not change stdout.`,
 		Version: Version,
 	}
 	root.SetIn(in)
@@ -123,20 +125,6 @@ func resolveDiagnosticLevel(flags *pflag.FlagSet) (log.Level, error) {
 	}
 }
 
-func preparseDiagnosticLevel(args []string) log.Level {
-	flags := pflag.NewFlagSet("diagnostic", pflag.ContinueOnError)
-	flags.ParseErrorsAllowlist.UnknownFlags = true
-	flags.Usage = func() {}
-	registerDiagnosticFlags(flags)
-	flags.BoolP("help", "h", false, "")
-	_ = flags.Parse(args)
-	level, err := resolveDiagnosticLevel(flags)
-	if err != nil {
-		return log.InfoLevel
-	}
-	return level
-}
-
 // commandLogger builds the diagnostic logger for one command execution,
 // writing to the command's stderr at the level selected by the diagnostic
 // flags.
@@ -196,22 +184,40 @@ func executeRoot(root *cobra.Command, args []string) error {
 	return root.ExecuteContext(ctx)
 }
 
-// executeWithFileLogging builds a fresh tree on the given streams, teeing
-// diagnostics (and everything else written to stderr) into the grove log
-// file, and runs it. When the log file cannot be opened, a warning is logged
-// and execution proceeds with stderr alone.
+// executeWithFileLogging builds a fresh tree on the given streams and runs
+// it, teeing diagnostics (and everything else written to stderr) into the
+// grove log file. The log file is opened in the root's persistent pre-run,
+// after Cobra has parsed flags, handled --help and --version, and validated
+// operands, so rejected input never creates the state directory or the log.
+// When the log file cannot be opened, a warning is logged and execution
+// proceeds with stderr alone.
 func executeWithFileLogging(in io.Reader, out, stderr io.Writer, args []string) error {
-	errOut := stderr
-	tee, err := logging.NewTee(stderr)
-	if err != nil {
-		newDiagnosticLogger(stderr, preparseDiagnosticLevel(args)).
-			Warn("failed to set up file logging", "error", err)
-	} else {
-		errOut = tee
-		defer func() { _ = tee.Close() }()
-	}
+	root := NewRootCommand(in, out, stderr)
 
-	return executeRoot(NewRootCommand(in, out, errOut), args)
+	var tee *logging.Tee
+	root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
+		// Cobra checks flag groups after the persistent pre-run; check them
+		// first so conflicting --debug/--quiet never opens the log file.
+		if err := cmd.ValidateFlagGroups(); err != nil {
+			return err
+		}
+
+		opened, err := logging.NewTee(stderr)
+		if err != nil {
+			commandLogger(cmd).Warn("failed to set up file logging", "error", err)
+			return nil
+		}
+		tee = opened
+		cmd.Root().SetErr(tee)
+		return nil
+	}
+	defer func() {
+		if tee != nil {
+			_ = tee.Close()
+		}
+	}()
+
+	return executeRoot(root, args)
 }
 
 // Execute runs the root command on the process streams.
