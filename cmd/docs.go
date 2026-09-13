@@ -139,7 +139,8 @@ The grove namer slug command performs safety normalization only. It does not app
 
 ## Logging
 
-Grove appends ANSI-free logs for every invocation to a fixed path:
+Grove appends ANSI-free logs to a fixed path once the command line has been
+validated; --help, --version, and rejected input do not create the file:
 
     $XDG_STATE_HOME/grove/grove.log
     ~/.local/state/grove/grove.log   (fallback when XDG_STATE_HOME is unset)

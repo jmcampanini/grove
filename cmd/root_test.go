@@ -107,7 +107,6 @@ func TestExecuteWithFileLoggingAppliesDiagnosticLevelBeforeSetupWarning(t *testi
 	tests := []struct {
 		args        []string
 		name        string
-		wantErr     string
 		wantWarning bool
 	}{
 		{
@@ -124,39 +123,6 @@ func TestExecuteWithFileLoggingAppliesDiagnosticLevelBeforeSetupWarning(t *testi
 			args: []string{"--quiet", "docs"},
 			name: "quiet suppresses setup warning",
 		},
-		{
-			args:        []string{"--help"},
-			name:        "help reports setup warning",
-			wantWarning: true,
-		},
-		{
-			args: []string{"--quiet", "--help"},
-			name: "quiet before help suppresses setup warning",
-		},
-		{
-			args: []string{"--help", "--quiet"},
-			name: "quiet after help suppresses setup warning",
-		},
-		{
-			args: []string{"-h", "--quiet"},
-			name: "quiet after shorthand help suppresses setup warning",
-		},
-		{
-			args:    []string{"bogus", "--quiet"},
-			name:    "quiet invalid command suppresses setup warning",
-			wantErr: "unknown command",
-		},
-		{
-			args:    []string{"--nope", "--quiet", "docs"},
-			name:    "quiet after unknown flag suppresses setup warning",
-			wantErr: "unknown flag",
-		},
-		{
-			args:        []string{"--debug", "--quiet", "docs"},
-			name:        "conflict reports setup warning at default level",
-			wantErr:     "none of the others can be",
-			wantWarning: true,
-		},
 	}
 
 	for _, tt := range tests {
@@ -164,12 +130,77 @@ func TestExecuteWithFileLoggingAppliesDiagnosticLevelBeforeSetupWarning(t *testi
 			var stderr bytes.Buffer
 
 			err := executeWithFileLogging(strings.NewReader(""), io.Discard, &stderr, tt.args)
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantWarning, bytes.Contains(stderr.Bytes(), []byte("failed to set up file logging")))
+		})
+	}
+}
+
+func TestExecuteWithFileLoggingOpensLogOnlyAfterValidation(t *testing.T) {
+	tests := []struct {
+		args    []string
+		name    string
+		wantErr string
+		wantLog bool
+	}{
+		{
+			args:    []string{"docs"},
+			name:    "valid command writes the log",
+			wantLog: true,
+		},
+		{
+			args: []string{"--help"},
+			name: "help flag short-circuits before logging",
+		},
+		{
+			args: []string{"--version"},
+			name: "version flag short-circuits before logging",
+		},
+		{
+			args:    []string{"bogus"},
+			name:    "unknown command is rejected before logging",
+			wantErr: "unknown command",
+		},
+		{
+			args:    []string{"--nope", "docs"},
+			name:    "unknown flag is rejected before logging",
+			wantErr: "unknown flag",
+		},
+		{
+			args:    []string{"checkout", "a", "b"},
+			name:    "excess operand is rejected before logging",
+			wantErr: "accepts 1 arg(s)",
+		},
+		{
+			args:    []string{"--debug", "--quiet", "docs"},
+			name:    "conflicting diagnostic flags are rejected before logging",
+			wantErr: "none of the others can be",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stateDir := filepath.Join(t.TempDir(), "state")
+			t.Setenv("XDG_STATE_HOME", stateDir)
+			var stderr bytes.Buffer
+
+			err := executeWithFileLogging(strings.NewReader(""), io.Discard, &stderr, tt.args)
+
 			if tt.wantErr == "" {
 				require.NoError(t, err)
 			} else {
 				require.ErrorContains(t, err, tt.wantErr)
 			}
-			assert.Equal(t, tt.wantWarning, bytes.Contains(stderr.Bytes(), []byte("failed to set up file logging")))
+			assert.NotContains(t, stderr.String(), "failed to set up file logging")
+			_, statErr := os.Stat(filepath.Join(stateDir, "grove", "grove.log"))
+			if tt.wantLog {
+				assert.NoError(t, statErr, "log file should exist after a validated command")
+				return
+			}
+			assert.ErrorIs(t, statErr, os.ErrNotExist, "log file must not exist")
+			_, statErr = os.Stat(stateDir)
+			assert.ErrorIs(t, statErr, os.ErrNotExist, "state directory must not exist")
 		})
 	}
 }
