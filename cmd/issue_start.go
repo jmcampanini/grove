@@ -19,7 +19,7 @@ import (
 
 func newIssueStartCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "start [number]",
+		Use:   "start <number>",
 		Short: "Create a branch and worktree to work on an issue",
 		Long: `Create a new branch and worktree to start work on a GitHub issue.
 

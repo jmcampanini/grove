@@ -12,7 +12,7 @@ func newIssuePreviewCmd() *cobra.Command {
 	var fzf bool
 
 	cmd := &cobra.Command{
-		Use:   "preview [number]",
+		Use:   "preview <number>",
 		Short: "Show issue details",
 		Long: `Show detailed information about an issue.
 

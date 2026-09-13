@@ -16,6 +16,9 @@ func newNamerCmd() *cobra.Command {
 		Use:     "namer",
 		Short:   "Generate branch and worktree names from a phrase",
 		GroupID: "utility",
+		// Args and RunE make the group a grammar boundary; see runHelpTopic.
+		Args: cobra.NoArgs,
+		RunE: runHelpTopic,
 		Long: `Generate branch and worktree names from a phrase with the configured
 local_branch templates and naming settings. Each subcommand prints one name
 on stdout and creates nothing; git is only queried to locate configuration

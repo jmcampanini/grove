@@ -19,7 +19,7 @@ import (
 
 func newPRCheckoutCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "checkout [number]",
+		Use:   "checkout <number>",
 		Short: "Check out a pull request into a local worktree",
 		Long: `Check out a pull request into a local worktree.
 

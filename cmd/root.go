@@ -33,6 +33,9 @@ func NewRootCommand(in io.Reader, out, errOut io.Writer) *cobra.Command {
 		Short:         "Git worktree workspace manager",
 		SilenceErrors: true,
 		SilenceUsage:  true,
+		// Args and RunE make the root a grammar boundary; see runHelpTopic.
+		Args: cobra.NoArgs,
+		RunE: runHelpTopic,
 		Long: `Grove manages git worktrees in a workspace structure.
 
 Common workflows:
@@ -95,6 +98,13 @@ do not change stdout.`,
 	)
 
 	return root
+}
+
+// runHelpTopic prints the command's help. It is the RunE for the root, every
+// command group, and every help topic: a bare invocation shows help and exits
+// 0, while any operand fails Args validation.
+func runHelpTopic(cmd *cobra.Command, _ []string) error {
+	return cmd.Help()
 }
 
 func registerDiagnosticFlags(flags *pflag.FlagSet) {

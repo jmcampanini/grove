@@ -37,7 +37,7 @@ func newPRPreviewCmd() *cobra.Command {
 	var fzf bool
 
 	cmd := &cobra.Command{
-		Use:   "preview [number]",
+		Use:   "preview <number>",
 		Short: "Show pull request details",
 		Long: `Show detailed information about a pull request.
 

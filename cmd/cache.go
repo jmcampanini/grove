@@ -7,6 +7,9 @@ func newCacheCmd() *cobra.Command {
 		Use:     "cache",
 		Short:   "Manage the grove cache",
 		GroupID: "config",
+		// Args and RunE make the group a grammar boundary; see runHelpTopic.
+		Args: cobra.NoArgs,
+		RunE: runHelpTopic,
 		Long: `Manage the on-disk cache of gh command output that grove pr list, grove pr
 preview, grove issue list, grove issue preview, and grove status read.
 
