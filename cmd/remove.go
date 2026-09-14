@@ -20,7 +20,8 @@ func newRemoveCmd() *cobra.Command {
 
 The target can be:
   - An absolute path to a worktree
-  - A directory name within the workspace (e.g., "wt-my-feature")
+  - A worktree directory name (e.g., "wt-my-feature"); when several
+    worktrees share that name, pass the path instead
   - A branch name (e.g., "feature/my-feature")
 
 By default, removes both the worktree and its local branch.
@@ -65,12 +66,7 @@ func executeRemove(w io.Writer, ctx *removeContext, target string, force, keepBr
 		return fmt.Errorf("failed to list worktrees: %w", err)
 	}
 
-	workspacePath, err := ctx.gitClient.GetWorkspacePath()
-	if err != nil {
-		return fmt.Errorf("failed to get workspace path: %w", err)
-	}
-
-	wt, err := resolveTarget(target, worktrees, workspacePath)
+	wt, err := resolveTarget(target, worktrees)
 	if err != nil {
 		return err
 	}
@@ -113,18 +109,28 @@ func executeRemove(w io.Writer, ctx *removeContext, target string, force, keepBr
 	return err
 }
 
-func resolveTarget(target string, worktrees []git.Worktree, workspacePath string) (*git.Worktree, error) {
+func resolveTarget(target string, worktrees []git.Worktree) (*git.Worktree, error) {
 	for i := range worktrees {
 		if worktrees[i].AbsolutePath == target {
 			return &worktrees[i], nil
 		}
 	}
 
-	absTarget := filepath.Join(workspacePath, target)
+	var byName []*git.Worktree
 	for i := range worktrees {
-		if worktrees[i].AbsolutePath == absTarget {
-			return &worktrees[i], nil
+		if filepath.Base(worktrees[i].AbsolutePath) == target {
+			byName = append(byName, &worktrees[i])
 		}
+	}
+	if len(byName) == 1 {
+		return byName[0], nil
+	}
+	if len(byName) > 1 {
+		paths := make([]string, 0, len(byName))
+		for _, wt := range byName {
+			paths = append(paths, wt.AbsolutePath)
+		}
+		return nil, fmt.Errorf("worktree name %q is ambiguous; pass one of these paths instead:\n  %s", target, strings.Join(paths, "\n  "))
 	}
 
 	for i := range worktrees {

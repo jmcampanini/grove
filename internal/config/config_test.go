@@ -35,7 +35,11 @@ func TestDefaultConfig(t *testing.T) {
 		BranchTemplate:   "{{.Branch}}",
 		WorktreeTemplate: "pr-{{.Number}}-{{.TitleSlug}}",
 	}, cfg.PullRequest)
-	assert.Equal(t, []string{"main", "develop", "master"}, cfg.Workspace.PrimaryBranches)
+	assert.Equal(t, WorktreeConfig{
+		Layout: "{{.Space}}/{{.Host}}/{{.Owner}}/{{.Repo}}/{{.Name}}",
+		Root:   "$CODE_DIR/.worktrees",
+		Space:  "grove",
+	}, cfg.Worktree)
 	assert.NoError(t, cfg.Validate())
 }
 
@@ -122,11 +126,39 @@ func TestConfig_Validate(t *testing.T) {
 			wantErr: "pull_request.worktree_template cannot be empty",
 		},
 		{
-			name: "empty workspace primary branches",
+			name: "empty worktree layout",
 			modify: func(cfg *Config) {
-				cfg.Workspace.PrimaryBranches = nil
+				cfg.Worktree.Layout = ""
 			},
-			wantErr: "workspace.primary_branches cannot be empty",
+			wantErr: "worktree.layout cannot be empty",
+		},
+		{
+			name: "empty worktree root",
+			modify: func(cfg *Config) {
+				cfg.Worktree.Root = ""
+			},
+			wantErr: "worktree.root cannot be empty",
+		},
+		{
+			name: "empty worktree space",
+			modify: func(cfg *Config) {
+				cfg.Worktree.Space = ""
+			},
+			wantErr: "worktree.space cannot be empty",
+		},
+		{
+			name: "worktree space with slash",
+			modify: func(cfg *Config) {
+				cfg.Worktree.Space = "claude/sub"
+			},
+			wantErr: "worktree.space cannot contain '/'",
+		},
+		{
+			name: "worktree space dot-dot",
+			modify: func(cfg *Config) {
+				cfg.Worktree.Space = ".."
+			},
+			wantErr: `worktree.space cannot be ".."`,
 		},
 	}
 
@@ -222,7 +254,7 @@ func TestConfigPaths(t *testing.T) {
 			},
 		},
 		{
-			name:         "cwd is workspace root (parent of gitRoot)",
+			name:         "cwd is the parent of gitRoot",
 			cwd:          "/Users/jim/code/org/project",
 			worktreeRoot: "/Users/jim/code/org/project/main",
 			gitRoot:      "/Users/jim/code/org/project/main",
@@ -430,12 +462,18 @@ worktree_template = "review-{{.Number}}-{{.TitleSlug}}"
 			},
 		},
 		{
-			name: "workspace primary branches",
-			content: `[workspace]
-primary_branches = ["trunk", "main"]
+			name: "worktree placement",
+			content: `[worktree]
+root = "~/src/.worktrees"
+layout = "{{.Space}}/{{.Repo}}/{{.Name}}"
+space = "codex"
 `,
 			check: func(t *testing.T, cfg Config) {
-				assert.Equal(t, []string{"trunk", "main"}, cfg.Workspace.PrimaryBranches)
+				assert.Equal(t, WorktreeConfig{
+					Layout: "{{.Space}}/{{.Repo}}/{{.Name}}",
+					Root:   "~/src/.worktrees",
+					Space:  "codex",
+				}, cfg.Worktree)
 			},
 		},
 		{

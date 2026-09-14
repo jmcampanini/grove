@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 
@@ -163,17 +162,15 @@ func createWorktreeForBranch(stdout io.Writer, ctx *checkoutContext, branchName 
 		return fmt.Errorf("failed to initialize local branch namer: %w", err)
 	}
 
-	workspacePath, err := ctx.gitClient.GetWorkspacePath()
-	if err != nil {
-		return fmt.Errorf("failed to get workspace path: %w", err)
-	}
-
 	worktreeName, err := namer.GenerateWorktreeName(branchName)
 	if err != nil {
 		return fmt.Errorf("failed to generate worktree name for branch %q: %w", branchName, err)
 	}
 
-	worktreePath := filepath.Join(workspacePath, worktreeName)
+	worktreePath, err := resolveWorktreePath(ctx.cfg, ctx.gitClient, worktreeName)
+	if err != nil {
+		return err
+	}
 
 	if _, err := os.Stat(worktreePath); err == nil {
 		return fmt.Errorf("worktree path %q already exists on disk", worktreePath)

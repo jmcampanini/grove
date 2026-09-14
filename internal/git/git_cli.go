@@ -128,12 +128,15 @@ func (g *GitCli) GetMainWorktreePath() (string, error) {
 	return mainWorktree, nil
 }
 
-func (g *GitCli) GetWorkspacePath() (string, error) {
-	mainWorktreePath, err := g.GetMainWorktreePath()
+func (g *GitCli) GetRemoteURL(remoteName string) (string, error) {
+	output, err := g.executeGitCommand("remote", "get-url", remoteName)
 	if err != nil {
-		return "", fmt.Errorf("failed to get main worktree path: %w", err)
+		if strings.Contains(err.Error(), "No such remote") {
+			return "", fmt.Errorf("remote '%s' does not exist", remoteName)
+		}
+		return "", fmt.Errorf("failed to get URL of remote '%s': %w", remoteName, err)
 	}
-	return filepath.Dir(mainWorktreePath), nil
+	return output, nil
 }
 
 func (g *GitCli) GetWorktreeRoot() (string, error) {

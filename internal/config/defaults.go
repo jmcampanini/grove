@@ -28,8 +28,10 @@ func DefaultConfig() Config {
 			BranchTemplate:   "{{.Branch}}",
 			WorktreeTemplate: "pr-{{.Number}}-{{.TitleSlug}}",
 		},
-		Workspace: WorkspaceConfig{
-			PrimaryBranches: []string{"main", "develop", "master"},
+		Worktree: WorktreeConfig{
+			Layout: "{{.Space}}/{{.Host}}/{{.Owner}}/{{.Repo}}/{{.Name}}",
+			Root:   "$CODE_DIR/.worktrees",
+			Space:  "grove",
 		},
 	}
 }

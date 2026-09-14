@@ -152,15 +152,13 @@ type Git interface {
 	// This is the worktree associated with the .git directory, not a linked worktree.
 	GetMainWorktreePath() (string, error)
 
-	// GetWorkspacePath returns the parent directory of the main worktree.
-	// This is typically the directory containing all worktrees for a repository.
-	// Returns an error if the main worktree path cannot be determined.
-	GetWorkspacePath() (string, error)
+	// GetRemoteURL returns the fetch URL configured for the named remote.
+	// Returns an error if the remote does not exist or git fails.
+	GetRemoteURL(remoteName string) (string, error)
 
 	// GetWorktreeRoot returns the absolute path to the root of the git tree.
 	// If not in a git repository, returns ("", nil).
 	// Returns an error only if the git command itself fails (e.g., git not installed).
-	// TODO: consolidate the naming scheme to use path and workspace and worktree consistently
 	GetWorktreeRoot() (string, error)
 
 	// GetCommitSubject returns the first line of the commit message for HEAD.

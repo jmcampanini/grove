@@ -21,25 +21,26 @@ command; this reference supplements it.`,
 
 const docsMarkdown = `# grove reference
 
-Grove manages git worktrees as a workspace: one directory per branch, all siblings.
-Generated command help remains the canonical reference for flags and examples.
+Grove manages git worktrees: one directory per branch, placed under a
+configurable root. Generated command help remains the canonical reference for
+flags and examples.
 
 ## Command reference
 
 Common commands:
 
-- grove create PHRASE: create a branch and sibling worktree from a phrase.
+- grove create PHRASE: create a branch and worktree from a phrase.
 - grove checkout BRANCH: switch to an existing branch worktree or create it.
 - grove pr checkout NUMBER: check out a pull request as a worktree.
 - grove issue start NUMBER: create a branch and worktree to work on an issue.
-- grove status: list workspace worktrees and branch state.
+- grove status: list the repository's worktrees and branch state.
 - grove sync: fetch and hard-reset the current branch to its upstream, discarding local changes after confirmation.
 - grove config: print the effective TOML configuration.
 - grove config --provenance: print field-level configuration sources.
 
 Topic help pages:
 
-- grove help workspace: workspace layout and requirements.
+- grove help layout: where worktrees are placed and how to change it.
 - grove help exit-codes: exit code and error conventions.
 
 ## Configuration loading
@@ -47,7 +48,7 @@ Topic help pages:
 Grove loads TOML config files from lowest to highest priority. Later files override earlier values.
 
 1. XDG config: ${XDG_CONFIG_HOME}/grove/grove.toml, or ~/.config/grove/grove.toml.
-2. Ancestor grove.toml files from the home directory toward the repository or workspace.
+2. Ancestor grove.toml files from the home directory toward the main worktree.
 3. The main worktree grove.toml.
 4. The current worktree grove.toml when it differs from the main worktree.
 5. The current directory grove.toml when it differs from the worktree root.
@@ -60,15 +61,17 @@ Every discovered path is optional: a missing file or a directory at a
 candidate path is skipped, and symbolic links are followed. A candidate that
 exists but cannot be read or parsed fails with an error.
 
-Outside a repository or workspace, grove config, grove namer, and grove
-resolve fall back to defaults plus the XDG, home, and ancestor files. Inside a
-repository, every command resolves the same effective configuration from the
-same files.
+Outside a repository, grove config and grove namer fall back to defaults plus
+the XDG, home, and ancestor files. Inside a repository, every command resolves
+the same effective configuration from the same files. Steps 2 and 3 follow the
+main worktree, so a worktree placed under worktree.root reads the same
+repository files as the main worktree.
 
 Run grove config to inspect the merged effective configuration. Run grove config --provenance to see which file supplied each value.
 
 Some values can also be set with global CLI flags, which take priority over all config files:
 
+- --space: overrides worktree.space.
 - --worktree-template: overrides local_branch.worktree_template.
 
 ## TOML schema
@@ -96,8 +99,42 @@ Some values can also be set with global CLI flags, which take priority over all 
     branch_template = "{{.Branch}}"
     worktree_template = "pr-{{.Number}}-{{.TitleSlug}}"
 
-    [workspace]
-    primary_branches = ["main", "develop", "master"]
+    [worktree]
+    layout = "{{.Space}}/{{.Host}}/{{.Owner}}/{{.Repo}}/{{.Name}}"
+    root = "$CODE_DIR/.worktrees"
+    space = "grove"
+
+## Worktree placement
+
+New worktrees are created at worktree.root joined with worktree.layout. Grove
+runs from the primary worktree or any linked worktree; the primary worktree
+can live anywhere. Run grove help layout for the full description.
+
+worktree.root is a plain path. $VAR and ${VAR} expand from the environment and
+a leading ~ expands to the home directory. A referenced variable that is unset
+or empty fails the command that needs the path. The expanded root must be
+absolute.
+
+worktree.layout is a Go template rendered relative to the root:
+
+| Variable | Value |
+|---|---|
+| {{.Space}} | worktree.space, or the --space flag |
+| {{.Host}} | default remote host, e.g. github.com |
+| {{.Owner}} | default remote owner; nested groups keep their slashes |
+| {{.Repo}} | default remote repository name without .git |
+| {{.Name}} | the rendered worktree_template name |
+
+Host, owner, and repository come from the URL of the default remote
+(remote.pushDefault, otherwise origin). A layout that uses none of them works
+in a repository without remotes. The rendered layout must be relative and must
+not contain "..".
+
+worktree.space is one directory segment, default "grove". Launchers pass
+--space claude, --space codex, or --space pi to keep their worktrees apart.
+Space only decides where a new worktree goes; every command operates on all
+worktrees of the repository. Worktrees created under an earlier layout stay
+where they are and remain managed.
 
 ## Naming templates
 
@@ -135,7 +172,8 @@ The grove namer slug command performs safety normalization only. It does not app
 - After rendering and truncation, Grove rejects empty branch names, leading dashes, double dots, and control characters. Git reports additional invalid-ref edge cases during branch creation.
 - Final worktree names must be non-empty, contain no slash or control character, not begin with a dash, and not equal to **.** or **..**.
 - naming.max_length must be zero or positive.
-- workspace.primary_branches must include at least one branch name.
+- worktree.root and worktree.layout must be non-empty. The root is expanded and the layout is parsed when a command places a worktree.
+- worktree.space must be one path segment: non-empty, no slash, not "." or "..", not starting with a dash, no control characters.
 
 ## Logging
 

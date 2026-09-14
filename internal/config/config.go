@@ -2,7 +2,10 @@ package config
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 	"time"
+	"unicode"
 )
 
 // Config represents the complete grove configuration.
@@ -13,7 +16,7 @@ type Config struct {
 	LocalBranch LocalBranchConfig `toml:"local_branch"`
 	Naming      NamingConfig      `toml:"naming"`
 	PullRequest PullRequestConfig `toml:"pull_request"`
-	Workspace   WorkspaceConfig   `toml:"workspace"`
+	Worktree    WorktreeConfig    `toml:"worktree"`
 }
 
 // Validate checks that all config values are valid.
@@ -46,8 +49,36 @@ func (c Config) Validate() error {
 	if c.PullRequest.WorktreeTemplate == "" {
 		return errors.New("pull_request.worktree_template cannot be empty")
 	}
-	if len(c.Workspace.PrimaryBranches) == 0 {
-		return errors.New("workspace.primary_branches cannot be empty")
+	if c.Worktree.Layout == "" {
+		return errors.New("worktree.layout cannot be empty")
+	}
+	if c.Worktree.Root == "" {
+		return errors.New("worktree.root cannot be empty")
+	}
+	if err := ValidateSpace(c.Worktree.Space); err != nil {
+		return fmt.Errorf("worktree.space %w", err)
+	}
+	return nil
+}
+
+// ValidateSpace checks that a space is a single path segment: non-empty, no
+// slash, not "." or "..", not starting with "-", and free of control
+// characters. The same rules apply to worktree names.
+func ValidateSpace(space string) error {
+	switch {
+	case space == "":
+		return errors.New("cannot be empty")
+	case strings.ContainsRune(space, '/'):
+		return errors.New("cannot contain '/'")
+	case strings.HasPrefix(space, "-"):
+		return errors.New("cannot start with '-'")
+	case space == "." || space == "..":
+		return fmt.Errorf("cannot be %q", space)
+	}
+	for _, r := range space {
+		if unicode.IsControl(r) {
+			return errors.New("cannot contain control characters")
+		}
 	}
 	return nil
 }
@@ -87,7 +118,9 @@ type PullRequestConfig struct {
 	WorktreeTemplate string `toml:"worktree_template"`
 }
 
-// WorkspaceConfig configures workspace root detection.
-type WorkspaceConfig struct {
-	PrimaryBranches []string `toml:"primary_branches"`
+// WorktreeConfig configures where new worktrees are placed.
+type WorktreeConfig struct {
+	Layout string `toml:"layout"` // Go template rendered under Root; see the layout help topic
+	Root   string `toml:"root"`   // Base directory; $VAR, ${VAR}, and a leading ~ are expanded
+	Space  string `toml:"space" config:"space" help:"Override the space segment of new worktree paths (worktree.space)"`
 }

@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
-	"time"
 
 	"charm.land/log/v2"
 	"github.com/jmcampanini/go-config-loader/configloader"
@@ -65,43 +63,4 @@ func loadCommandRuntime(cmd *cobra.Command) (*commandRuntime, error) {
 		logger:           logger,
 		mainWorktreePath: loaded.mainWorktreePath,
 	}, nil
-}
-
-// resolveWorkspaceRoot probes immediate children of cwd for a valid git worktree.
-// Returns the worktree root of the first child directory that has a .git marker and is a valid git repo.
-func resolveWorkspaceRoot(ctx context.Context, logger *log.Logger, cwd string, primaryBranches []string, timeout time.Duration) (string, error) {
-	if len(primaryBranches) == 0 {
-		return "", errors.New("no primary branches configured")
-	}
-
-	logger.Debug("probing for primary worktree", "candidates", primaryBranches)
-
-	for _, name := range primaryBranches {
-		candidate := filepath.Join(cwd, name)
-		if !hasGitMarker(candidate) {
-			continue
-		}
-
-		testGit := git.New(ctx, false, candidate, timeout, logger)
-		testRoot, err := testGit.GetWorktreeRoot()
-		if err != nil {
-			logger.Debug("candidate git error", "dir", candidate, "err", err)
-			continue
-		}
-		if testRoot == "" {
-			logger.Debug("candidate has .git marker but is not a valid repo", "dir", candidate)
-			continue
-		}
-
-		logger.Debug("found valid worktree", "dir", candidate)
-		return testRoot, nil
-	}
-
-	return "", errors.New("no valid worktree found in workspace root")
-}
-
-// hasGitMarker checks if a directory contains a .git file or directory.
-func hasGitMarker(dir string) bool {
-	_, err := os.Stat(filepath.Join(dir, ".git"))
-	return err == nil
 }

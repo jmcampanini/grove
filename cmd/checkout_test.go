@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"bytes"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,6 +21,7 @@ func TestExecuteCheckout(t *testing.T) {
 		wantErr          bool
 		wantErrContain   string
 		wantOutput       string
+		worktreeRoot     string
 		worktreeTemplate string
 	}{
 		{
@@ -29,7 +29,6 @@ func TestExecuteCheckout(t *testing.T) {
 			ref:  "feature/add-user-authentication",
 			gitMock: func(workspaceDir string) *mockGit {
 				return &mockGit{
-					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
 					branchExistsFn: func(branchName string, _ bool) (bool, error) {
 						return branchName == "feature/add-user-authentication", nil
 					},
@@ -42,7 +41,6 @@ func TestExecuteCheckout(t *testing.T) {
 			ref:  "my-experiment",
 			gitMock: func(workspaceDir string) *mockGit {
 				return &mockGit{
-					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
 					branchExistsFn: func(branchName string, _ bool) (bool, error) {
 						return branchName == "my-experiment", nil
 					},
@@ -54,9 +52,7 @@ func TestExecuteCheckout(t *testing.T) {
 			name: "local branch not found suggests remote",
 			ref:  "nonexistent-branch",
 			gitMock: func(workspaceDir string) *mockGit {
-				return &mockGit{
-					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
-				}
+				return &mockGit{}
 			},
 			wantErr:        true,
 			wantErrContain: `did you mean "origin/nonexistent-branch"`,
@@ -66,7 +62,6 @@ func TestExecuteCheckout(t *testing.T) {
 			ref:  "feature/nonexistent",
 			gitMock: func(workspaceDir string) *mockGit {
 				return &mockGit{
-					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
 					listRemotesFn: func() ([]string, error) {
 						return []string{"origin"}, nil
 					},
@@ -80,7 +75,6 @@ func TestExecuteCheckout(t *testing.T) {
 			ref:  "origin/feature/fix-login",
 			gitMock: func(workspaceDir string) *mockGit {
 				return &mockGit{
-					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
 					listRemotesFn: func() ([]string, error) {
 						return []string{"origin"}, nil
 					},
@@ -99,7 +93,6 @@ func TestExecuteCheckout(t *testing.T) {
 			ref:  "origin/feature/fix-login",
 			gitMock: func(workspaceDir string) *mockGit {
 				return &mockGit{
-					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
 					listRemotesFn: func() ([]string, error) {
 						return []string{"origin"}, nil
 					},
@@ -119,7 +112,6 @@ func TestExecuteCheckout(t *testing.T) {
 			ref:  "feature/fix-login",
 			gitMock: func(workspaceDir string) *mockGit {
 				return &mockGit{
-					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
 					branchExistsFn: func(_ string, _ bool) (bool, error) {
 						return true, nil
 					},
@@ -141,7 +133,6 @@ func TestExecuteCheckout(t *testing.T) {
 			ref:  "feature/fix-login",
 			gitMock: func(workspaceDir string) *mockGit {
 				return &mockGit{
-					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
 					listRemotesFn: func() ([]string, error) {
 						return []string{"origin", "upstream"}, nil
 					},
@@ -157,7 +148,6 @@ func TestExecuteCheckout(t *testing.T) {
 			ref:  "feature/fix-login",
 			gitMock: func(workspaceDir string) *mockGit {
 				return &mockGit{
-					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
 					branchExistsFn: func(_ string, _ bool) (bool, error) {
 						return true, nil
 					},
@@ -194,27 +184,24 @@ func TestExecuteCheckout(t *testing.T) {
 			wantErrContain: "failed to initialize local branch namer",
 		},
 		{
-			name: "workspace path error",
-			ref:  "feature/fix-login",
+			name:         "worktree root references unset variable",
+			ref:          "feature/fix-login",
+			worktreeRoot: "$GROVE_TEST_UNSET_ROOT/.worktrees",
 			gitMock: func(_ string) *mockGit {
 				return &mockGit{
 					branchExistsFn: func(_ string, _ bool) (bool, error) {
 						return true, nil
 					},
-					getWorkspacePathFn: func() (string, error) {
-						return "", fmt.Errorf("git error")
-					},
 				}
 			},
 			wantErr:        true,
-			wantErrContain: "failed to get workspace path",
+			wantErrContain: "unset environment variable GROVE_TEST_UNSET_ROOT",
 		},
 		{
 			name: "create worktree error",
 			ref:  "feature/fix-login",
 			gitMock: func(workspaceDir string) *mockGit {
 				return &mockGit{
-					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
 					branchExistsFn: func(_ string, _ bool) (bool, error) {
 						return true, nil
 					},
@@ -260,7 +247,6 @@ func TestExecuteCheckout(t *testing.T) {
 			ref:  "upstream/hotfix-123",
 			gitMock: func(workspaceDir string) *mockGit {
 				return &mockGit{
-					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
 					listRemotesFn: func() ([]string, error) {
 						return []string{"origin", "upstream"}, nil
 					},
@@ -357,6 +343,10 @@ func TestExecuteCheckout(t *testing.T) {
 
 			var stdout bytes.Buffer
 			cfg := defaultTestConfig()
+			cfg.Worktree.Root = workspaceDir
+			if tt.worktreeRoot != "" {
+				cfg.Worktree.Root = tt.worktreeRoot
+			}
 			if tt.worktreeTemplate != "" {
 				cfg.LocalBranch.WorktreeTemplate = tt.worktreeTemplate
 			}
@@ -391,7 +381,6 @@ func TestExecuteCheckout_VerifiesGitArgs(t *testing.T) {
 
 	var gotBranch, gotPath string
 	gitMock := &mockGit{
-		getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
 		branchExistsFn: func(_ string, _ bool) (bool, error) {
 			return true, nil
 		},
@@ -404,7 +393,7 @@ func TestExecuteCheckout_VerifiesGitArgs(t *testing.T) {
 
 	var stdout bytes.Buffer
 	ctx := &checkoutContext{
-		cfg:       defaultTestConfig(),
+		cfg:       testConfigRootedAt(workspaceDir),
 		gitClient: gitMock,
 		logger:    testLogger(),
 	}

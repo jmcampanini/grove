@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"charm.land/log/v2"
@@ -36,7 +35,9 @@ Creation mode flags are mutually exclusive; choose at most one:
 
 The phrase is converted to branch and worktree names using the configured
 local branch templates. Use the global --worktree-template flag to override
-local_branch.worktree_template for a single invocation.
+local_branch.worktree_template for a single invocation. The worktree is
+placed under worktree.root by worktree.layout; the global --space flag
+selects the space segment for one invocation (see grove help layout).
 
 Example:
   grove create "add user authentication"
@@ -46,6 +47,7 @@ Example:
   grove create "experiment" --from origin/develop
   grove create "add user authentication" --from-remote-primary
   grove create "add user authentication" --reuse
+  grove create "run tests" --space claude
   grove create "run tests" --worktree-template "subagent-{{.BranchSlug}}"
 
 Note: The create command takes a single quoted string argument.
@@ -116,11 +118,6 @@ func executeCreate(stdout io.Writer, ctx *createContext, phrase string) error {
 		return fmt.Errorf("failed to initialize local branch namer: %w", err)
 	}
 
-	workspacePath, err := ctx.gitClient.GetWorkspacePath()
-	if err != nil {
-		return fmt.Errorf("failed to get workspace path: %w", err)
-	}
-
 	branchName, err := namer.GenerateBranchName(phrase)
 	if errors.Is(err, naming.ErrEmptySlug) {
 		return fmt.Errorf(`phrase %q produces an empty branch name after slugification
@@ -142,14 +139,17 @@ Examples:
 		if !ctx.reuse {
 			return fmt.Errorf("branch %q already exists; to use it: git worktree add <path> %s", branchName, branchName)
 		}
-		return reuseExistingBranch(stdout, ctx, namer, branchName, workspacePath)
+		return reuseExistingBranch(stdout, ctx, namer, branchName)
 	}
 
 	worktreeName, err := namer.GenerateWorktreeName(branchName)
 	if err != nil {
 		return fmt.Errorf("failed to generate worktree name for branch %q: %w", branchName, err)
 	}
-	worktreePath := filepath.Join(workspacePath, worktreeName)
+	worktreePath, err := resolveWorktreePath(ctx.cfg, ctx.gitClient, worktreeName)
+	if err != nil {
+		return err
+	}
 
 	if _, err := os.Stat(worktreePath); err == nil {
 		return fmt.Errorf("worktree path %q already exists; to remove it: git worktree remove %s", worktreePath, worktreeName)
@@ -203,7 +203,7 @@ func resolveRemotePrimaryBaseRef(gitClient git.Git) (string, error) {
 	return remoteName + "/" + branchName, nil
 }
 
-func reuseExistingBranch(stdout io.Writer, ctx *createContext, namer *naming.LocalBranchNamer, branchName, workspacePath string) error {
+func reuseExistingBranch(stdout io.Writer, ctx *createContext, namer *naming.LocalBranchNamer, branchName string) error {
 	worktrees, err := ctx.gitClient.ListWorktrees()
 	if err != nil {
 		return fmt.Errorf("failed to list worktrees: %w", err)
@@ -236,7 +236,10 @@ func reuseExistingBranch(stdout io.Writer, ctx *createContext, namer *naming.Loc
 	if err != nil {
 		return fmt.Errorf("failed to generate worktree name for branch %q: %w", branchName, err)
 	}
-	worktreePath := filepath.Join(workspacePath, worktreeName)
+	worktreePath, err := resolveWorktreePath(ctx.cfg, ctx.gitClient, worktreeName)
+	if err != nil {
+		return err
+	}
 
 	if _, err := os.Stat(worktreePath); err == nil {
 		return fmt.Errorf("worktree path %q already exists; to remove it: git worktree remove %s", worktreePath, worktreeName)

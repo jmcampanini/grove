@@ -30,13 +30,16 @@ const (
 func NewRootCommand(in io.Reader, out, errOut io.Writer) *cobra.Command {
 	root := &cobra.Command{
 		Use:   "grove",
-		Short: "Git worktree workspace manager",
+		Short: "Git worktree manager",
 		// Groups never suggest corrections for an unknown subcommand, so the
 		// root does not either; an unknown command reports only its name.
 		DisableSuggestions: true,
 		SilenceErrors:      true,
 		SilenceUsage:       true,
-		Long: `Grove manages git worktrees in a workspace structure.
+		Long: `Grove manages git worktrees. It creates a branch and worktree from a
+phrase, a pull request, or an issue, and places each new worktree under
+worktree.root by rendering worktree.layout; run grove help layout for the
+directory structure.
 
 Common workflows:
   Start new work:       grove create "add user auth"
@@ -45,8 +48,9 @@ Common workflows:
   Work on an issue:     grove issue start 17
   See all worktrees:    grove status
 
-Configuration comes from grove.toml files and the --worktree-template flag;
-run grove config --help for the file locations and precedence.
+Configuration comes from grove.toml files and the --space and
+--worktree-template flags; run grove config --help for the file locations
+and precedence.
 
 Logs are appended to $XDG_STATE_HOME/grove/grove.log
 (~/.local/state/grove/grove.log when XDG_STATE_HOME is unset). Logging starts
@@ -101,7 +105,7 @@ do not change stdout.`,
 		newResolveCmd(),
 		newStatusCmd(),
 		newSyncCmd(),
-		newWorkspaceTopicCmd(),
+		newLayoutTopicCmd(),
 	)
 
 	return root

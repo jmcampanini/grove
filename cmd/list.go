@@ -18,7 +18,7 @@ func newListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List all worktrees",
-		Long: `List all git worktrees in the workspace.
+		Long: `List every worktree of the current repository, wherever it is on disk.
 
 By default, outputs one absolute path per line to stdout.
 

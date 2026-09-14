@@ -41,7 +41,6 @@ func TestExecuteRemove(t *testing.T) {
 			keepBranch:   false,
 			mainWorktree: "/workspace/main",
 			gitMock: &mockGit{
-				getWorkspacePathFn: func() (string, error) { return "/workspace", nil },
 				listWorktreesFn: func() ([]git.Worktree, error) {
 					return []git.Worktree{
 						testWorktreeWithBranch("/workspace/main", "main"),
@@ -62,7 +61,6 @@ func TestExecuteRemove(t *testing.T) {
 			keepBranch:   false,
 			mainWorktree: "/workspace/main",
 			gitMock: &mockGit{
-				getWorkspacePathFn: func() (string, error) { return "/workspace", nil },
 				listWorktreesFn: func() ([]git.Worktree, error) {
 					return []git.Worktree{
 						testWorktreeWithBranch("/workspace/main", "main"),
@@ -81,7 +79,6 @@ func TestExecuteRemove(t *testing.T) {
 			keepBranch:   false,
 			mainWorktree: "/workspace/main",
 			gitMock: &mockGit{
-				getWorkspacePathFn: func() (string, error) { return "/workspace", nil },
 				listWorktreesFn: func() ([]git.Worktree, error) {
 					return []git.Worktree{
 						testWorktreeWithBranch("/workspace/main", "main"),
@@ -101,7 +98,6 @@ func TestExecuteRemove(t *testing.T) {
 			keepBranch:   false,
 			mainWorktree: "/workspace/main",
 			gitMock: &mockGit{
-				getWorkspacePathFn: func() (string, error) { return "/workspace", nil },
 				listWorktreesFn: func() ([]git.Worktree, error) {
 					return []git.Worktree{
 						testWorktreeWithBranch("/workspace/main", "main"),
@@ -118,7 +114,6 @@ func TestExecuteRemove(t *testing.T) {
 			keepBranch:   true,
 			mainWorktree: "/workspace/main",
 			gitMock: &mockGit{
-				getWorkspacePathFn: func() (string, error) { return "/workspace", nil },
 				listWorktreesFn: func() ([]git.Worktree, error) {
 					return []git.Worktree{
 						testWorktreeWithBranch("/workspace/main", "main"),
@@ -138,7 +133,6 @@ func TestExecuteRemove(t *testing.T) {
 			keepBranch:   false,
 			mainWorktree: "/workspace/main",
 			gitMock: &mockGit{
-				getWorkspacePathFn: func() (string, error) { return "/workspace", nil },
 				listWorktreesFn: func() ([]git.Worktree, error) {
 					return []git.Worktree{
 						testWorktreeWithBranch("/workspace/main", "main"),
@@ -155,7 +149,6 @@ func TestExecuteRemove(t *testing.T) {
 			keepBranch:   false,
 			mainWorktree: "/workspace/main",
 			gitMock: &mockGit{
-				getWorkspacePathFn: func() (string, error) { return "/workspace", nil },
 				listWorktreesFn: func() ([]git.Worktree, error) {
 					return []git.Worktree{
 						testWorktreeWithBranch("/workspace/main", "main"),
@@ -175,7 +168,6 @@ func TestExecuteRemove(t *testing.T) {
 			keepBranch:   false,
 			mainWorktree: "/workspace/main",
 			gitMock: &mockGit{
-				getWorkspacePathFn: func() (string, error) { return "/workspace", nil },
 				listWorktreesFn: func() ([]git.Worktree, error) {
 					return []git.Worktree{
 						testWorktreeWithBranch("/workspace/main", "main"),
@@ -196,7 +188,6 @@ func TestExecuteRemove(t *testing.T) {
 			keepBranch:   false,
 			mainWorktree: "/workspace/main",
 			gitMock: &mockGit{
-				getWorkspacePathFn: func() (string, error) { return "/workspace", nil },
 				listWorktreesFn: func() ([]git.Worktree, error) {
 					return []git.Worktree{
 						testWorktreeWithBranch("/workspace/main", "main"),
@@ -244,6 +235,8 @@ func TestResolveTarget(t *testing.T) {
 		testWorktreeWithBranch("/workspace/main", "main"),
 		testWorktreeWithBranch("/workspace/wt-feature", "feature/add-auth"),
 		testWorktreeDetached("/workspace/wt-detached"),
+		testWorktreeWithBranch("/root/grove/github.com/acme/app/wt-shared", "feature/shared"),
+		testWorktreeWithBranch("/root/claude/github.com/acme/app/wt-shared", "feature/shared-agent"),
 	}
 
 	tests := []struct {
@@ -269,6 +262,17 @@ func TestResolveTarget(t *testing.T) {
 			wantPath: "/workspace/wt-feature",
 		},
 		{
+			name:     "directory name in a nested layout",
+			target:   "wt-detached",
+			wantPath: "/workspace/wt-detached",
+		},
+		{
+			name:           "ambiguous directory name lists candidate paths",
+			target:         "wt-shared",
+			wantErr:        true,
+			wantErrContain: "/root/claude/github.com/acme/app/wt-shared",
+		},
+		{
 			name:           "not found",
 			target:         "nonexistent",
 			wantErr:        true,
@@ -278,7 +282,7 @@ func TestResolveTarget(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			wt, err := resolveTarget(tt.target, worktrees, "/workspace")
+			wt, err := resolveTarget(tt.target, worktrees)
 
 			if tt.wantErr {
 				require.Error(t, err)

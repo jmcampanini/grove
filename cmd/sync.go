@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"sort"
 	"strings"
 
@@ -40,18 +39,9 @@ type syncContext struct {
 }
 
 func runSync(cmd *cobra.Command, force bool) error {
-	originalCwd, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("failed to get working directory: %w", err)
-	}
-
 	rt, err := loadCommandRuntime(cmd)
 	if err != nil {
 		return err
-	}
-
-	if rt.cwd != originalCwd {
-		return errors.New("sync must be run from inside a worktree, not from the workspace root")
 	}
 
 	ctx := &syncContext{

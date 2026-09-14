@@ -105,7 +105,7 @@ func TestStartIssueWorktree(t *testing.T) {
 				},
 			},
 			cfg: func() config.Config {
-				cfg := config.DefaultConfig()
+				cfg := defaultTestConfig()
 				cfg.Issue.WorktreeTemplate = "case-{{.Number}}-{{.TitleSlug}}-{{.BranchSlug}}"
 				cfg.Naming.MaxLength = 0
 				return cfg
@@ -195,7 +195,7 @@ func TestStartIssueWorktree(t *testing.T) {
 				},
 			},
 			cfg: func() config.Config {
-				cfg := config.DefaultConfig()
+				cfg := defaultTestConfig()
 				cfg.Issue.BranchTemplate = "issue/{{.Number}}"
 				return cfg
 			}(),
@@ -219,7 +219,7 @@ func TestStartIssueWorktree(t *testing.T) {
 				},
 			},
 			cfg: func() config.Config {
-				cfg := config.DefaultConfig()
+				cfg := defaultTestConfig()
 				cfg.Issue.WorktreeTemplate = `{{if eq .Number 123}}{{index "" 1}}{{else}}ok{{end}}`
 				return cfg
 			}(),
@@ -390,17 +390,16 @@ func TestStartIssueWorktree_WorktreePathCollision(t *testing.T) {
 		listWorktreesFn: func() ([]git.Worktree, error) {
 			return []git.Worktree{}, nil
 		},
-		getWorkspacePathFn: func() (string, error) {
-			return workspace, nil
-		},
 		createWorktreeForNewBranchFromRefFn: func(newBranchName, worktreeAbsPath, baseRef string) error {
 			t.Error("CreateWorktreeForNewBranchFromRef should not be called on path collision")
 			return nil
 		},
 	}
 
+	cfg := defaultTestConfig()
+	cfg.Worktree.Root = workspace
 	var stdout bytes.Buffer
-	ctx := &issueStartContext{cfg: defaultTestConfig(), ghClient: &mockGitHub{}, gitClient: gitMock, logger: testLogger()}
+	ctx := &issueStartContext{cfg: cfg, ghClient: &mockGitHub{}, gitClient: gitMock, logger: testLogger()}
 
 	err := startIssueWorktree(&stdout, ctx, github.Issue{Number: 123, State: github.IssueStateOpen, Title: "Add auth"})
 
