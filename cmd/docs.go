@@ -127,8 +127,9 @@ worktree.layout is a Go template rendered relative to the root:
 
 Host, owner, and repository come from the URL of the default remote
 (remote.pushDefault, otherwise origin). A layout that uses none of them works
-in a repository without remotes. The rendered layout must be relative and must
-not contain "..".
+in a repository without remotes. The layout must use {{.Name}} so each worktree
+has its own path, and the rendered layout must be relative and must not
+contain "..".
 
 worktree.space is one directory segment, default "grove". Launchers pass
 --space claude, --space codex, or --space pi to keep their worktrees apart.

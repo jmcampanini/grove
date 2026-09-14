@@ -43,6 +43,7 @@ Layout: a Go template rendered relative to the root. Variables:
 Host, owner, and repository come from the URL of the default remote
 (remote.pushDefault, otherwise origin) and require a network remote. A
 layout that uses none of them works in a repository without remotes. The
+layout must use {{.Name}} so each worktree has its own path, and the
 rendered layout must be relative and must not contain "..".
 
 Space: one directory segment that partitions worktrees by who created them.

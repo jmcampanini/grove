@@ -42,7 +42,8 @@ type Resolver struct {
 // New expands cfg.Root and parses cfg.Layout. Root expansion replaces a leading
 // "~" with homeDir and $VAR or ${VAR} with the environment; a referenced
 // variable that is unset or empty fails. The expanded root must be absolute.
-// The layout must be a valid template over TemplateData fields.
+// The layout must be a valid template over TemplateData fields and must
+// reference Name.
 func New(cfg config.WorktreeConfig, lookupEnv LookupEnv, homeDir string) (*Resolver, error) {
 	root, err := expandRoot(cfg.Root, lookupEnv, homeDir)
 	if err != nil {
@@ -55,6 +56,12 @@ func New(cfg config.WorktreeConfig, lookupEnv LookupEnv, homeDir string) (*Resol
 	}
 	if err := naming.ValidateTemplateFields(tmpl, TemplateData{}); err != nil {
 		return nil, fmt.Errorf("invalid worktree.layout: %w", err)
+	}
+	// Without the name every worktree of a repository renders the same
+	// path, so a bare-name lookup could select a worktree that does not
+	// carry that name.
+	if !usesAnyField(tmpl, []string{"Name"}) {
+		return nil, errors.New("invalid worktree.layout: must use {{.Name}} so each worktree has its own path")
 	}
 	if _, err := renderLayout(tmpl, TemplateData{Host: "host", Name: "name", Owner: "owner", Repo: "repo", Space: "space"}); err != nil {
 		return nil, fmt.Errorf("invalid worktree.layout: %w", err)

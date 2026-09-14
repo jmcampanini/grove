@@ -87,7 +87,8 @@ func TestNew_LayoutValidation(t *testing.T) {
 		{name: "unknown field", layout: "{{.Space}}/{{.Branch}}", wantErr: "unavailable field .Branch"},
 		{name: "nested field", layout: "{{.Space.X}}", wantErr: "nested field access"},
 		{name: "parse error", layout: "{{.Space", wantErr: "invalid worktree.layout"},
-		{name: "empty render", layout: "{{if false}}x{{end}}", wantErr: "rendered an empty path"},
+		{name: "missing name", layout: "{{.Space}}/{{.Repo}}", wantErr: "must use {{.Name}}"},
+		{name: "empty render", layout: "{{if false}}{{.Name}}{{end}}", wantErr: "rendered an empty path"},
 		{name: "absolute render", layout: "/{{.Name}}", wantErr: "rendered an absolute path"},
 		{name: "escapes root", layout: "../{{.Name}}", wantErr: "escapes worktree.root"},
 	}
