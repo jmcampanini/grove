@@ -42,9 +42,9 @@ Layout: a Go template rendered relative to the root. Variables:
 
 Host, owner, and repository come from the URL of the remote named origin
 and require it to be a network remote. A layout that uses none of them
-works in a repository without an origin. The
-layout must use {{.Name}} so each worktree has its own path, and the
-rendered layout must be relative and must not contain "..".
+works in a repository without an origin. The layout must use {{.Name}} so
+each worktree has its own path, and the rendered layout must be relative
+and must not contain "..".
 
 Space: one directory segment that partitions worktrees by who created them.
 It defaults to "grove"; launchers pass --space claude, --space codex, or

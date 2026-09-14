@@ -27,8 +27,6 @@ type TemplateData struct {
 	Space string // partition segment, e.g. grove or claude
 }
 
-var remoteFields = []string{"Host", "Owner", "Repo"}
-
 // LookupEnv reports the value of an environment variable and whether it is set.
 type LookupEnv func(string) (string, bool)
 
@@ -69,7 +67,7 @@ func New(cfg config.WorktreeConfig, lookupEnv LookupEnv, homeDir string) (*Resol
 
 	return &Resolver{
 		layout:      tmpl,
-		needsRemote: usesAnyField(tmpl, remoteFields),
+		needsRemote: usesAnyField(tmpl, []string{"Host", "Owner", "Repo"}),
 		root:        root,
 	}, nil
 }
@@ -117,17 +115,17 @@ func renderLayout(tmpl *template.Template, data TemplateData) (string, error) {
 		return "", fmt.Errorf("template execution failed: %w", err)
 	}
 
-	rendered := strings.Trim(buf.String(), "/")
+	output := buf.String()
+
+	rendered := strings.Trim(output, "/")
 	if rendered == "" {
 		return "", errors.New("rendered an empty path")
 	}
-	if strings.HasPrefix(buf.String(), "/") {
-		return "", fmt.Errorf("rendered an absolute path %q; the layout is joined under worktree.root", buf.String())
+	if strings.HasPrefix(output, "/") {
+		return "", fmt.Errorf("rendered an absolute path %q; the layout is joined under worktree.root", output)
 	}
-	for _, segment := range strings.Split(rendered, "/") {
-		if segment == ".." {
-			return "", fmt.Errorf("rendered %q, which escapes worktree.root", buf.String())
-		}
+	if slices.Contains(strings.Split(rendered, "/"), "..") {
+		return "", fmt.Errorf("rendered %q, which escapes worktree.root", output)
 	}
 	return filepath.Clean(rendered), nil
 }
