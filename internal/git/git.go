@@ -152,7 +152,8 @@ type Git interface {
 	// This is the worktree associated with the .git directory, not a linked worktree.
 	GetMainWorktreePath() (string, error)
 
-	// GetRemoteURL returns the fetch URL configured for the named remote.
+	// GetRemoteURL returns the URL configured for the named remote
+	// (remote.<name>.url) as written, without url.*.insteadOf rewriting.
 	// Returns an error if the remote does not exist or git fails.
 	GetRemoteURL(remoteName string) (string, error)
 

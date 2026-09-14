@@ -129,10 +129,12 @@ func (g *GitCli) GetMainWorktreePath() (string, error) {
 }
 
 func (g *GitCli) GetRemoteURL(remoteName string) (string, error) {
-	output, err := g.executeGitCommand("remote", "get-url", remoteName)
-	if err != nil {
-		if strings.Contains(err.Error(), "No such remote") {
-			return "", fmt.Errorf("remote '%s' does not exist", remoteName)
+	// git remote get-url applies url.*.insteadOf rewrites, which are a
+	// transport detail; read the configured value instead.
+	output, err := g.executeGitCommand("config", "--get", "remote."+remoteName+".url")
+	if err != nil || output == "" {
+		if err := g.ensureRemoteExists(remoteName); err != nil {
+			return "", err
 		}
 		return "", fmt.Errorf("failed to get URL of remote '%s': %w", remoteName, err)
 	}

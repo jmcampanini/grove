@@ -210,6 +210,22 @@ func TestGetRemoteURL_Integration(t *testing.T) {
 	assert.Equal(t, "git@github.com:acme/app.git", url)
 }
 
+func TestGetRemoteURL_Integration_IgnoresInsteadOf(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	repo := newTestRepo(t)
+	repo.commit("initial commit")
+	runGit(t, repo.path(), "remote", "add", "origin", "git@github.com:acme/app.git")
+	runGit(t, repo.path(), "config", "url./srv/mirror/app.git.insteadOf", "git@github.com:acme/app.git")
+
+	url, err := repo.Git.GetRemoteURL("origin")
+
+	require.NoError(t, err)
+	assert.Equal(t, "git@github.com:acme/app.git", url)
+}
+
 func TestGetRemoteURL_Integration_MissingRemote(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
