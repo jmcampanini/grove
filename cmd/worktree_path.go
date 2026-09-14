@@ -12,7 +12,7 @@ import (
 // resolveWorktreePath renders the absolute path for a new worktree named
 // name: worktree.root joined with worktree.layout rendered from the
 // configured space and, when the layout uses them, the host, owner, and
-// repository of the default remote.
+// repository of the origin remote.
 func resolveWorktreePath(cfg config.Config, gitClient git.Git, name string) (string, error) {
 	// An unknown home directory is "" here; layout.New reports it only when
 	// worktree.root starts with "~".
@@ -24,17 +24,13 @@ func resolveWorktreePath(cfg config.Config, gitClient git.Git, name string) (str
 
 	var remote layout.Remote
 	if resolver.NeedsRemote() {
-		remoteName, err := gitClient.GetDefaultRemote("origin")
+		remoteURL, err := gitClient.GetRemoteURL("origin")
 		if err != nil {
-			return "", fmt.Errorf("failed to determine remote: %w", err)
-		}
-		remoteURL, err := gitClient.GetRemoteURL(remoteName)
-		if err != nil {
-			return "", fmt.Errorf("worktree.layout needs the remote's host, owner, and repository: %w", err)
+			return "", fmt.Errorf("worktree.layout needs the host, owner, and repository of origin: %w", err)
 		}
 		remote, err = layout.ParseRemoteURL(remoteURL)
 		if err != nil {
-			return "", fmt.Errorf("worktree.layout needs the remote's host, owner, and repository: %w", err)
+			return "", fmt.Errorf("worktree.layout needs the host, owner, and repository of origin: %w", err)
 		}
 	}
 

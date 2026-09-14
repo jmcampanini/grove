@@ -22,13 +22,10 @@ func newRemoveCmd() *cobra.Command {
 
 The target can be:
   - An absolute path to a worktree
-  - A worktree directory name (e.g., "wt-my-feature"), looked up first at
-    the path the active space would give it (see grove help layout), then
-    anywhere in the repository when exactly one worktree has that name
+  - A worktree directory name (e.g., "wt-my-feature"), which is the
+    worktree at the path the active space gives that name (see grove help
+    layout); a worktree elsewhere needs its path or branch
   - A branch name (e.g., "feature/my-feature")
-
-A name that only exists outside the active space and is shared by several
-worktrees is ambiguous; pass the path instead.
 
 By default, removes both the worktree and its local branch.
 Use --keep-branch to preserve the branch after removing the worktree.
@@ -126,16 +123,15 @@ func executeRemove(w io.Writer, ctx *removeContext, target string, force, keepBr
 func spaceWorktreePath(ctx *removeContext, target string) string {
 	path, err := resolveWorktreePath(ctx.cfg, ctx.gitClient, target)
 	if err != nil {
-		ctx.logger.Debug("cannot render the active space path; matching names across all worktrees", "target", target, "err", err)
+		ctx.logger.Debug("cannot render the active space path; a bare name will not match", "target", target, "err", err)
 		return ""
 	}
 	return path
 }
 
-// resolveTarget finds the worktree for target: an absolute path, the name of
-// the worktree at spacePath (the active space's path for that name), a name
-// held by exactly one worktree anywhere, or a branch name. A name shared by
-// several worktrees outside the active space is ambiguous.
+// resolveTarget finds the worktree for target: an absolute path, the worktree
+// at spacePath (where the active space places a worktree named target), or a
+// branch name. A name is never matched outside the active space.
 func resolveTarget(target string, worktrees []git.Worktree, spacePath string) (*git.Worktree, error) {
 	if wt := worktreeAtPath(worktrees, target); wt != nil {
 		return wt, nil
@@ -144,28 +140,10 @@ func resolveTarget(target string, worktrees []git.Worktree, spacePath string) (*
 		return wt, nil
 	}
 
-	var byName []*git.Worktree
-	for i := range worktrees {
-		if filepath.Base(worktrees[i].AbsolutePath) == target {
-			byName = append(byName, &worktrees[i])
-		}
-	}
-	if len(byName) == 1 {
-		return byName[0], nil
-	}
-
 	for i := range worktrees {
 		if name := extractBranchName(&worktrees[i]); name == target {
 			return &worktrees[i], nil
 		}
-	}
-
-	if len(byName) > 1 {
-		paths := make([]string, 0, len(byName))
-		for _, wt := range byName {
-			paths = append(paths, wt.AbsolutePath)
-		}
-		return nil, fmt.Errorf("worktree name %q is ambiguous; pass one of these paths instead:\n  %s", target, strings.Join(paths, "\n  "))
 	}
 
 	return nil, fmt.Errorf("no worktree found matching %q", target)

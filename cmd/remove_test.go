@@ -266,7 +266,7 @@ func TestExecuteRemove_BareNameUsesActiveSpace(t *testing.T) {
 	assert.Equal(t, "Removed worktree wt-shared and branch feature/shared-agent\n", buf.String())
 }
 
-func TestExecuteRemove_LayoutFailureStillRemovesByPath(t *testing.T) {
+func TestExecuteRemove_LayoutFailureStillRemovesByBranch(t *testing.T) {
 	var removed string
 	gitMock := &mockGit{
 		listWorktreesFn: func() ([]git.Worktree, error) {
@@ -289,8 +289,12 @@ func TestExecuteRemove_LayoutFailureStillRemovesByPath(t *testing.T) {
 
 	var buf bytes.Buffer
 	ctx := &removeContext{cfg: cfg, gitClient: gitMock, logger: testLogger(), mainWorktreePath: "/repo"}
-	require.NoError(t, executeRemove(&buf, ctx, "wt-legacy", false, false))
 
+	err := executeRemove(&buf, ctx, "wt-legacy", false, false)
+	require.Error(t, err, "a bare name never matches outside the active space")
+	assert.Contains(t, err.Error(), "no worktree found")
+
+	require.NoError(t, executeRemove(&buf, ctx, "feature/legacy", false, false))
 	assert.Equal(t, "/old/wt-legacy", removed)
 }
 
@@ -320,10 +324,10 @@ func TestResolveTarget_ComparesResolvedPaths(t *testing.T) {
 		assert.Equal(t, filepath.Join(resolvedReal, "wt-feature"), wt.AbsolutePath)
 	})
 
-	t.Run("missing space path falls through", func(t *testing.T) {
-		wt, err := resolveTarget("wt-other", worktrees, filepath.Join(link, "wt-missing"))
-		require.NoError(t, err)
-		assert.Equal(t, filepath.Join(resolvedReal, "wt-other"), wt.AbsolutePath)
+	t.Run("missing space path does not match by name", func(t *testing.T) {
+		_, err := resolveTarget("wt-other", worktrees, filepath.Join(link, "wt-missing"))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "no worktree found")
 	})
 }
 
@@ -352,19 +356,15 @@ func TestResolveTarget(t *testing.T) {
 			wantPath: "/workspace/wt-feature",
 		},
 		{
-			name:     "directory name",
-			target:   "wt-feature",
-			wantPath: "/workspace/wt-feature",
+			name:      "directory name in the active space",
+			target:    "wt-feature",
+			spacePath: "/workspace/wt-feature",
+			wantPath:  "/workspace/wt-feature",
 		},
 		{
 			name:     "branch name",
 			target:   "feature/add-auth",
 			wantPath: "/workspace/wt-feature",
-		},
-		{
-			name:     "directory name in a nested layout",
-			target:   "wt-detached",
-			wantPath: "/workspace/wt-detached",
 		},
 		{
 			name:      "shared name resolves in the active space",
@@ -373,34 +373,28 @@ func TestResolveTarget(t *testing.T) {
 			wantPath:  "/root/claude/github.com/acme/app/wt-shared",
 		},
 		{
-			name:      "space path takes precedence over a unique name elsewhere",
-			target:    "wt-feature",
-			spacePath: "/workspace/wt-feature",
-			wantPath:  "/workspace/wt-feature",
+			name:           "directory name outside the active space is not found",
+			target:         "wt-feature",
+			spacePath:      "/root/grove/github.com/acme/app/wt-feature",
+			wantErr:        true,
+			wantErrContain: "no worktree found",
 		},
 		{
-			name:      "space path with no worktree falls back to a unique name",
-			target:    "wt-feature",
-			spacePath: "/root/grove/github.com/acme/app/wt-feature",
-			wantPath:  "/workspace/wt-feature",
+			name:           "directory name without a space path is not found",
+			target:         "wt-detached",
+			wantErr:        true,
+			wantErrContain: "no worktree found",
 		},
 		{
-			name:     "shared name matching a branch wins over ambiguity",
+			name:      "name that equals a branch elsewhere still prefers the active space",
+			target:    "wt-branchy",
+			spacePath: "/root/claude/github.com/acme/app/wt-branchy",
+			wantPath:  "/root/claude/github.com/acme/app/wt-branchy",
+		},
+		{
+			name:     "name that equals a branch resolves by branch when not in the space",
 			target:   "wt-branchy",
 			wantPath: "/root/grove/github.com/acme/app/wt-branchy",
-		},
-		{
-			name:           "shared name outside the active space is ambiguous",
-			target:         "wt-shared",
-			spacePath:      "/root/pi/github.com/acme/app/wt-shared",
-			wantErr:        true,
-			wantErrContain: "/root/claude/github.com/acme/app/wt-shared",
-		},
-		{
-			name:           "shared name without a space path is ambiguous",
-			target:         "wt-shared",
-			wantErr:        true,
-			wantErrContain: "/root/grove/github.com/acme/app/wt-shared",
 		},
 		{
 			name:           "not found",

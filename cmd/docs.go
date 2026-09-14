@@ -120,14 +120,13 @@ worktree.layout is a Go template rendered relative to the root:
 | Variable | Value |
 |---|---|
 | {{.Space}} | worktree.space, or the --space flag |
-| {{.Host}} | default remote host, e.g. github.com |
-| {{.Owner}} | default remote owner; nested groups keep their slashes |
-| {{.Repo}} | default remote repository name without .git |
+| {{.Host}} | origin remote host, e.g. github.com |
+| {{.Owner}} | origin remote owner; nested groups keep their slashes |
+| {{.Repo}} | origin remote repository name without .git |
 | {{.Name}} | the rendered worktree_template name |
 
-Host, owner, and repository come from the URL of the default remote
-(remote.pushDefault, otherwise origin). A layout that uses none of them works
-in a repository without remotes. The layout must use {{.Name}} so each worktree
+Host, owner, and repository come from the URL of the remote named origin. A
+layout that uses none of them works in a repository without an origin. The layout must use {{.Name}} so each worktree
 has its own path, and the rendered layout must be relative and must not
 contain "..".
 

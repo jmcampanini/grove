@@ -130,14 +130,14 @@ func TestExecuteCreate(t *testing.T) {
 			wantErrContain: "remote 'origin' does not exist",
 		},
 		{
-			name:   "layout renders the default remote",
+			name:   "layout renders origin even when pushDefault names another remote",
 			phrase: "add logging support",
 			layout: "{{.Space}}/{{.Host}}/{{.Owner}}/{{.Repo}}/{{.Name}}",
 			gitMock: func(_ string) *mockGit {
 				return &mockGit{
-					getDefaultRemoteFn: func(fallback string) (string, error) { return "upstream", nil },
+					getDefaultRemoteFn: func(fallback string) (string, error) { return "fork", nil },
 					getRemoteURLFn: func(remoteName string) (string, error) {
-						if remoteName != "upstream" {
+						if remoteName != "origin" {
 							return "", fmt.Errorf("unexpected remote %q", remoteName)
 						}
 						return "https://gitlab.example.com/group/sub/app.git", nil

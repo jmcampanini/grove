@@ -34,15 +34,15 @@ use it. The expanded root must be absolute.
 Layout: a Go template rendered relative to the root. Variables:
 
   {{.Space}}  the space: worktree.space, or the --space flag
-  {{.Host}}   the default remote's host, e.g. github.com
-  {{.Owner}}  the default remote's owner; nested groups keep their slashes
-  {{.Repo}}   the default remote's repository name without .git
+  {{.Host}}   the origin remote's host, e.g. github.com
+  {{.Owner}}  the origin remote's owner; nested groups keep their slashes
+  {{.Repo}}   the origin remote's repository name without .git
   {{.Name}}   the worktree name from the branch, issue, or pull request
               worktree_template
 
-Host, owner, and repository come from the URL of the default remote
-(remote.pushDefault, otherwise origin) and require a network remote. A
-layout that uses none of them works in a repository without remotes. The
+Host, owner, and repository come from the URL of the remote named origin
+and require it to be a network remote. A layout that uses none of them
+works in a repository without an origin. The
 layout must use {{.Name}} so each worktree has its own path, and the
 rendered layout must be relative and must not contain "..".
 
