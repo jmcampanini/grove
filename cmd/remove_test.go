@@ -3,6 +3,8 @@ package cmd
 import (
 	"bytes"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -290,6 +292,39 @@ func TestExecuteRemove_LayoutFailureStillRemovesByPath(t *testing.T) {
 	require.NoError(t, executeRemove(&buf, ctx, "wt-legacy", false, false))
 
 	assert.Equal(t, "/old/wt-legacy", removed)
+}
+
+func TestResolveTarget_ComparesResolvedPaths(t *testing.T) {
+	base := t.TempDir()
+	real := filepath.Join(base, "real")
+	require.NoError(t, os.MkdirAll(filepath.Join(real, "wt-feature"), 0o755))
+	link := filepath.Join(base, "link")
+	require.NoError(t, os.Symlink(real, link))
+
+	resolvedReal, err := filepath.EvalSymlinks(real)
+	require.NoError(t, err)
+	worktrees := []git.Worktree{
+		testWorktreeWithBranch(filepath.Join(resolvedReal, "wt-feature"), "feature/add-auth"),
+		testWorktreeWithBranch(filepath.Join(resolvedReal, "wt-other"), "feature/other"),
+	}
+
+	t.Run("absolute path through a symlink", func(t *testing.T) {
+		wt, err := resolveTarget(filepath.Join(link, "wt-feature"), worktrees, "")
+		require.NoError(t, err)
+		assert.Equal(t, filepath.Join(resolvedReal, "wt-feature"), wt.AbsolutePath)
+	})
+
+	t.Run("space path through a symlink", func(t *testing.T) {
+		wt, err := resolveTarget("wt-feature", worktrees, filepath.Join(link, "wt-feature"))
+		require.NoError(t, err)
+		assert.Equal(t, filepath.Join(resolvedReal, "wt-feature"), wt.AbsolutePath)
+	})
+
+	t.Run("missing space path falls through", func(t *testing.T) {
+		wt, err := resolveTarget("wt-other", worktrees, filepath.Join(link, "wt-missing"))
+		require.NoError(t, err)
+		assert.Equal(t, filepath.Join(resolvedReal, "wt-other"), wt.AbsolutePath)
+	})
 }
 
 func TestResolveTarget(t *testing.T) {

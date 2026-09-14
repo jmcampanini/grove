@@ -137,18 +137,13 @@ func spaceWorktreePath(ctx *removeContext, target string) string {
 // held by exactly one worktree anywhere, or a branch name. A name shared by
 // several worktrees outside the active space is ambiguous.
 func resolveTarget(target string, worktrees []git.Worktree, spacePath string) (*git.Worktree, error) {
-	for i := range worktrees {
-		if worktrees[i].AbsolutePath == target {
-			return &worktrees[i], nil
-		}
+	// git worktree list prints resolved paths, so compare resolved forms;
+	// on macOS the temp and /var trees are symlinks into /private.
+	if wt := worktreeAtPath(worktrees, target); wt != nil {
+		return wt, nil
 	}
-
-	if spacePath != "" {
-		for i := range worktrees {
-			if worktrees[i].AbsolutePath == spacePath {
-				return &worktrees[i], nil
-			}
-		}
+	if wt := worktreeAtPath(worktrees, spacePath); wt != nil {
+		return wt, nil
 	}
 
 	var byName []*git.Worktree
@@ -176,6 +171,31 @@ func resolveTarget(target string, worktrees []git.Worktree, spacePath string) (*
 	}
 
 	return nil, fmt.Errorf("no worktree found matching %q", target)
+}
+
+// worktreeAtPath returns the worktree whose path equals path, comparing the
+// symlink-resolved forms when the path exists. An empty path matches nothing.
+func worktreeAtPath(worktrees []git.Worktree, path string) *git.Worktree {
+	if path == "" {
+		return nil
+	}
+	resolved := canonicalPath(path)
+	for i := range worktrees {
+		if worktrees[i].AbsolutePath == path || canonicalPath(worktrees[i].AbsolutePath) == resolved {
+			return &worktrees[i]
+		}
+	}
+	return nil
+}
+
+// canonicalPath resolves symlinks in path, or returns it unchanged when it
+// does not exist.
+func canonicalPath(path string) string {
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return path
+	}
+	return resolved
 }
 
 func extractBranchName(wt *git.Worktree) string {
