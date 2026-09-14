@@ -137,8 +137,6 @@ func spaceWorktreePath(ctx *removeContext, target string) string {
 // held by exactly one worktree anywhere, or a branch name. A name shared by
 // several worktrees outside the active space is ambiguous.
 func resolveTarget(target string, worktrees []git.Worktree, spacePath string) (*git.Worktree, error) {
-	// git worktree list prints resolved paths, so compare resolved forms;
-	// on macOS the temp and /var trees are symlinks into /private.
 	if wt := worktreeAtPath(worktrees, target); wt != nil {
 		return wt, nil
 	}
@@ -173,15 +171,17 @@ func resolveTarget(target string, worktrees []git.Worktree, spacePath string) (*
 	return nil, fmt.Errorf("no worktree found matching %q", target)
 }
 
-// worktreeAtPath returns the worktree whose path equals path, comparing the
-// symlink-resolved forms when the path exists. An empty path matches nothing.
+// worktreeAtPath returns the worktree whose path equals path. git worktree
+// list prints resolved paths, so both sides are compared after resolving
+// symlinks; on macOS the temp and /var trees are symlinks into /private. An
+// empty path matches nothing.
 func worktreeAtPath(worktrees []git.Worktree, path string) *git.Worktree {
 	if path == "" {
 		return nil
 	}
 	resolved := canonicalPath(path)
 	for i := range worktrees {
-		if worktrees[i].AbsolutePath == path || canonicalPath(worktrees[i].AbsolutePath) == resolved {
+		if canonicalPath(worktrees[i].AbsolutePath) == resolved {
 			return &worktrees[i]
 		}
 	}
