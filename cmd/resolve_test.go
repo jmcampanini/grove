@@ -13,14 +13,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func setupResolveWorkspace(t *testing.T, root, primaryBranch string) {
+// setupResolveRepo creates a primary clone at root/main and a linked worktree
+// at root/elsewhere/wt-feature, mirroring a worktree placed under a separate
+// worktree root.
+func setupResolveRepo(t *testing.T, root string) {
 	t.Helper()
 
-	primaryDir := filepath.Join(root, primaryBranch)
+	primaryDir := filepath.Join(root, "main")
 	require.NoError(t, os.Mkdir(primaryDir, 0755))
 	initGitRepo(t, primaryDir)
 
-	featureDir := filepath.Join(root, "wt-feature")
+	featureDir := filepath.Join(root, "elsewhere", "wt-feature")
 	cmd := exec.Command("git", "worktree", "add", "-b", "feature", featureDir)
 	cmd.Dir = primaryDir
 	out, err := cmd.CombinedOutput()
@@ -40,45 +43,34 @@ func TestExecuteResolve(t *testing.T) {
 			name: "primary worktree path returns itself",
 			setup: func(t *testing.T) string {
 				root := t.TempDir()
-				setupResolveWorkspace(t, root, "main")
+				setupResolveRepo(t, root)
 				return filepath.Join(root, "main")
 			},
 			wantSuffix: "/main",
 		},
 		{
-			name: "non-primary worktree path returns primary",
+			name: "linked worktree elsewhere on disk returns primary",
 			setup: func(t *testing.T) string {
 				root := t.TempDir()
-				setupResolveWorkspace(t, root, "main")
-				return filepath.Join(root, "wt-feature")
+				setupResolveRepo(t, root)
+				return filepath.Join(root, "elsewhere", "wt-feature")
 			},
 			wantSuffix: "/main",
 		},
 		{
-			name: "workspace parent path returns primary",
+			name: "parent directory of worktrees returns error",
 			setup: func(t *testing.T) string {
 				root := t.TempDir()
-				setupResolveWorkspace(t, root, "main")
-				return root
+				setupResolveRepo(t, root)
+				return filepath.Join(root, "elsewhere")
 			},
-			wantSuffix: "/main",
-		},
-		{
-			name: "workspace with develop as primary",
-			setup: func(t *testing.T) string {
-				root := t.TempDir()
-				primaryDir := filepath.Join(root, "develop")
-				require.NoError(t, os.Mkdir(primaryDir, 0755))
-				initGitRepoWithBranch(t, primaryDir, "develop")
-				return root
-			},
-			wantSuffix: "/develop",
+			wantErr: "is not inside a git worktree",
 		},
 		{
 			name: "subdirectory within worktree resolves to primary",
 			setup: func(t *testing.T) string {
 				root := t.TempDir()
-				setupResolveWorkspace(t, root, "main")
+				setupResolveRepo(t, root)
 				sub := filepath.Join(root, "main", "subdir")
 				require.NoError(t, os.Mkdir(sub, 0755))
 				return sub
@@ -97,7 +89,7 @@ func TestExecuteResolve(t *testing.T) {
 			setup: func(t *testing.T) string {
 				return t.TempDir()
 			},
-			wantErr: "is not a grove workspace or worktree",
+			wantErr: "is not inside a git worktree",
 		},
 		{
 			name: "file path returns error",
@@ -117,9 +109,8 @@ func TestExecuteResolve(t *testing.T) {
 			var buf bytes.Buffer
 
 			ctx := &resolveContext{
-				logger:          testLogger(),
-				primaryBranches: []string{"main", "develop", "master"},
-				timeout:         timeout,
+				logger:  testLogger(),
+				timeout: timeout,
 			}
 
 			err := executeResolve(&buf, targetPath, ctx)

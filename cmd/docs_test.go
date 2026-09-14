@@ -26,7 +26,7 @@ func TestDocsCommandWritesReference(t *testing.T) {
 	assert.Contains(t, output, "Pass --debug to also emit debug diagnostics.")
 	assert.Contains(t, output, "Pass --quiet to emit only error diagnostics.")
 	assert.Contains(t, output, "Command failures remain visible on")
-	assert.Contains(t, output, "[workspace]")
+	assert.Contains(t, output, "[worktree]")
 	assert.Contains(t, output, "--worktree-template: overrides local_branch.worktree_template")
 	assert.Contains(t, output, "[naming]\n    lowercase = true\n    max_length = 30\n    strip_prefixes")
 	assert.Contains(t, output, `branch_template = "feature/{{.PhraseSlug}}"`)

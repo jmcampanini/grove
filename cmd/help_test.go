@@ -49,6 +49,24 @@ func TestExitCodesTopicPrintsSameHelpFromBothEntryPoints(t *testing.T) {
 	}
 }
 
+func TestLayoutTopicPrintsSameHelpFromBothEntryPoints(t *testing.T) {
+	direct, stderr, err := executeForTest("layout")
+	require.NoError(t, err, stderr)
+	viaHelp, stderr, err := executeForTest("help", "layout")
+	require.NoError(t, err, stderr)
+
+	assert.Equal(t, direct, viaHelp)
+	for _, want := range []string{
+		`root = "$CODE_DIR/.worktrees"`,
+		`layout = "{{.Space}}/{{.Host}}/{{.Owner}}/{{.Repo}}/{{.Name}}"`,
+		`space = "grove"`,
+		"--space claude",
+		"Every command still operates on all worktrees",
+	} {
+		assert.Contains(t, direct, want)
+	}
+}
+
 func TestEveryApplicationCommandHasWrappedLongHelp(t *testing.T) {
 	var visit func(*cobra.Command)
 	visit = func(command *cobra.Command) {

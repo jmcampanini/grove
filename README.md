@@ -1,8 +1,10 @@
 # grove
 
-Grove manages git worktrees as a workspace: one directory per branch, all siblings of the primary worktree. It creates a branch and worktree from a phrase, a GitHub pull request, or a GitHub issue, and lists, syncs, and prunes the worktrees it finds.
+Grove manages git worktrees: one directory per branch, placed under a configurable root instead of next to the clone. It creates a branch and worktree from a phrase, a GitHub pull request, or a GitHub issue, and lists, syncs, and prunes the worktrees it finds.
 
-Command help is the canonical reference: `grove --help` and each command's `--help` describe every user-facing contract, `grove config --help` describes configuration precedence, `grove help workspace` describes the workspace layout, and `grove help exit-codes` describes exit statuses. `grove docs` prints a longer Markdown reference that supplements command help.
+By default a worktree for `github.com/acme/app` lands at `$CODE_DIR/.worktrees/grove/github.com/acme/app/<name>`. The `grove` segment is the space: agent launchers pass `--space claude` or `--space pi` so their worktrees sit apart from yours, and every command still sees all of them.
+
+Command help is the canonical reference: `grove --help` and each command's `--help` describe every user-facing contract, `grove config --help` describes configuration precedence, `grove help layout` describes where worktrees go, and `grove help exit-codes` describes exit statuses. `grove docs` prints a longer Markdown reference that supplements command help.
 
 ## Install
 
@@ -30,11 +32,12 @@ make build
 
 ## Representative commands
 
-Run these from inside a workspace (see `grove help workspace`).
+Run these from inside a repository: the clone or any of its worktrees.
 
 | Command | Result |
 |---|---|
-| `grove create "add user authentication"` | Create a branch and a sibling worktree from the phrase and print the worktree path. |
+| `grove create "add user authentication"` | Create a branch and worktree from the phrase and print the worktree path. |
+| `grove create "run tests" --space claude` | Same, placed under the `claude` space. |
 | `grove create "add user authentication" --from-remote-primary` | Same, but branch from the latest remote primary branch without updating the primary worktree; meant for automation. |
 | `grove checkout feature/fix-login` | Check out an existing local or remote branch into a new worktree. |
 | `grove pr checkout 42` | Check out a pull request into a worktree. |
@@ -50,4 +53,4 @@ Grove runs `git` for every worktree, git, pull request, and issue command, and `
 
 ## Configuration
 
-Grove reads `grove.toml` from the XDG config directory, from your home directory and each directory below it down to the main worktree, the current worktree, and the current directory, in that order, with later files overriding earlier ones and the `--worktree-template` flag overriding them all; `grove config --help` documents the full precedence, `grove config` prints the values in effect, and `grove docs` prints the schema.
+Grove reads `grove.toml` from the XDG config directory, from your home directory and each directory below it down to the main worktree, the current worktree, and the current directory, in that order, with later files overriding earlier ones and the `--space` and `--worktree-template` flags overriding them all; `grove config --help` documents the full precedence, `grove config` prints the values in effect, and `grove docs` prints the schema. Worktree placement is the `[worktree]` section: `root` (default `$CODE_DIR/.worktrees`), `layout` (default `{{.Space}}/{{.Host}}/{{.Owner}}/{{.Repo}}/{{.Name}}`), and `space` (default `grove`).

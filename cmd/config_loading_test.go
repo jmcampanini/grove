@@ -119,3 +119,30 @@ func TestConfigCommandProvenanceNamesSourceFile(t *testing.T) {
 
 	assert.Contains(t, out.String(), configPath)
 }
+
+func TestConfigCommandSpaceFlagOverridesFile(t *testing.T) {
+	isolatedConfigHome(t, "[worktree]\nspace = \"codex\"\n")
+	workDir := tempDirResolved(t)
+	t.Chdir(workDir)
+
+	var out, errOut bytes.Buffer
+	root := NewRootCommand(strings.NewReader(""), &out, &errOut)
+	root.SetArgs([]string{"config", "--space", "claude"})
+	require.NoError(t, root.ExecuteContext(context.Background()), errOut.String())
+
+	assert.Contains(t, out.String(), `space = "claude"`)
+}
+
+func TestConfigCommandRejectsInvalidSpaceFlag(t *testing.T) {
+	isolatedConfigHome(t, "")
+	workDir := tempDirResolved(t)
+	t.Chdir(workDir)
+
+	var out, errOut bytes.Buffer
+	root := NewRootCommand(strings.NewReader(""), &out, &errOut)
+	root.SetArgs([]string{"config", "--space", "claude/sub"})
+	err := root.ExecuteContext(context.Background())
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "worktree.space cannot contain '/'")
+}

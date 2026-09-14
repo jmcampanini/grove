@@ -17,13 +17,12 @@ func newResolveCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "resolve [path]",
 		Short: "Print the absolute path of the primary worktree",
-		Long: `Resolve and print the absolute path of the primary worktree for a workspace.
+		Long: `Resolve and print the absolute path of the primary worktree.
 
-The path argument can be:
-  - A worktree directory (returns the primary worktree for that workspace)
-  - A workspace directory (parent of worktrees; discovers the primary among
-    children)
-  - Omitted (defaults to the current directory)`,
+The path argument is a directory inside the primary worktree or any linked
+worktree of a repository, at any depth. When omitted, the current directory
+is used. Scripts use this to run repository-wide commands from the primary
+worktree after starting in a worktree elsewhere on disk.`,
 		Args:    cobra.MaximumNArgs(1),
 		RunE:    runResolve,
 		GroupID: "utility",
@@ -31,10 +30,9 @@ The path argument can be:
 }
 
 type resolveContext struct {
-	ctx             context.Context
-	logger          *log.Logger
-	primaryBranches []string
-	timeout         time.Duration
+	ctx     context.Context
+	logger  *log.Logger
+	timeout time.Duration
 }
 
 func runResolve(cmd *cobra.Command, args []string) error {
@@ -49,10 +47,9 @@ func runResolve(cmd *cobra.Command, args []string) error {
 	}
 
 	ctx := &resolveContext{
-		ctx:             cmd.Context(),
-		logger:          commandLogger(cmd),
-		primaryBranches: cfg.Workspace.PrimaryBranches,
-		timeout:         cfg.Git.Timeout,
+		ctx:     cmd.Context(),
+		logger:  commandLogger(cmd),
+		timeout: cfg.Git.Timeout,
 	}
 
 	return executeResolve(cmd.OutOrStdout(), targetPath, ctx)
@@ -92,17 +89,12 @@ func resolveGitDir(targetPath string, ctx *resolveContext) (string, error) {
 		return "", fmt.Errorf("git error: %w", err)
 	}
 
-	if worktreeRoot != "" {
-		ctx.logger.Debug("resolve: path is inside a worktree", "worktreeRoot", worktreeRoot)
-		return worktreeRoot, nil
+	if worktreeRoot == "" {
+		return "", fmt.Errorf("%s is not inside a git worktree", targetPath)
 	}
 
-	ctx.logger.Debug("resolve: path is not a worktree, trying workspace discovery", "path", targetPath)
-	wsRoot, err := resolveWorkspaceRoot(ctx.ctx, ctx.logger, targetPath, ctx.primaryBranches, ctx.timeout)
-	if err != nil {
-		return "", fmt.Errorf("%s is not a grove workspace or worktree: %w", targetPath, err)
-	}
-	return wsRoot, nil
+	ctx.logger.Debug("resolve: path is inside a worktree", "worktreeRoot", worktreeRoot)
+	return worktreeRoot, nil
 }
 
 func resolveTargetPath(args []string) (string, error) {

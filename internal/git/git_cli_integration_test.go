@@ -192,50 +192,41 @@ func TestGetMainWorktreePath_Integration_FromLinkedWorktree(t *testing.T) {
 }
 
 // =============================================================================
-// GetWorkspacePath tests
+// GetRemoteURL tests
 // =============================================================================
 
-func TestGetWorkspacePath_Integration(t *testing.T) {
+func TestGetRemoteURL_Integration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
 
 	repo := newTestRepo(t)
 	repo.commit("initial commit")
+	runGit(t, repo.path(), "remote", "add", "origin", "git@github.com:acme/app.git")
 
-	workspacePath, err := repo.Git.GetWorkspacePath()
+	url, err := repo.Git.GetRemoteURL("origin")
 
 	require.NoError(t, err)
-	// Workspace path is the parent of the main worktree
-	// Compare resolved paths to handle symlinks (e.g., /var -> /private/var on macOS)
-	assert.Equal(t, filepath.Dir(repo.path()), resolvePath(t, workspacePath))
+	assert.Equal(t, "git@github.com:acme/app.git", url)
 }
 
-func TestGetWorkspacePath_Integration_FromLinkedWorktree(t *testing.T) {
+func TestGetRemoteURL_Integration_IgnoresInsteadOf(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
 
 	repo := newTestRepo(t)
 	repo.commit("initial commit")
-	repo.createBranch("feature")
+	runGit(t, repo.path(), "remote", "add", "origin", "git@github.com:acme/app.git")
+	runGit(t, repo.path(), "config", "url./srv/mirror/app.git.insteadOf", "git@github.com:acme/app.git")
 
-	// Create a linked worktree
-	worktreePath := filepath.Join(t.TempDir(), "feature-worktree")
-	repo.createWorktree(worktreePath, "feature")
-
-	// Create GitCli pointing to the linked worktree
-	linkedGit := New(context.Background(), false, worktreePath, testTimeout, nil).(*GitCli)
-
-	workspacePath, err := linkedGit.GetWorkspacePath()
+	url, err := repo.Git.GetRemoteURL("origin")
 
 	require.NoError(t, err)
-	// Workspace path should still be the parent of the main worktree
-	// Compare resolved paths to handle symlinks (e.g., /var -> /private/var on macOS)
-	assert.Equal(t, filepath.Dir(repo.path()), resolvePath(t, workspacePath))
+	assert.Equal(t, "git@github.com:acme/app.git", url)
 }
 
-func TestGetWorkspacePath_Integration_FromSubdirectory(t *testing.T) {
+func TestGetRemoteURL_Integration_MissingRemote(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
@@ -243,17 +234,10 @@ func TestGetWorkspacePath_Integration_FromSubdirectory(t *testing.T) {
 	repo := newTestRepo(t)
 	repo.commit("initial commit")
 
-	// Create a subdirectory and use a GitCli pointing to it
-	subdir := filepath.Join(repo.path(), "subdir", "nested")
-	require.NoError(t, os.MkdirAll(subdir, 0755))
+	_, err := repo.Git.GetRemoteURL("origin")
 
-	subdirGit := New(context.Background(), false, subdir, testTimeout, nil).(*GitCli)
-	workspacePath, err := subdirGit.GetWorkspacePath()
-
-	require.NoError(t, err)
-	// Workspace path should be the parent of the main worktree
-	// Compare resolved paths to handle symlinks (e.g., /var -> /private/var on macOS)
-	assert.Equal(t, filepath.Dir(repo.path()), resolvePath(t, workspacePath))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "remote 'origin' does not exist")
 }
 
 // =============================================================================

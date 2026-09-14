@@ -76,7 +76,7 @@ type mockGit struct {
 	getRemoteDefaultBranchFn            func(remoteName string) (string, error)
 	getRepoDefaultBranchFn              func(remoteName string) (string, error)
 	getStatusFn                         func(absPath string) (string, error)
-	getWorkspacePathFn                  func() (string, error)
+	getRemoteURLFn                      func(remoteName string) (string, error)
 	getWorktreeRootFn                   func() (string, error)
 	isWorktreeDirtyFn                   func(absPath string) (bool, error)
 	listLocalBranchesFn                 func() ([]git.LocalBranch, error)
@@ -197,11 +197,11 @@ func (m *mockGit) GetStatus(absPath string) (string, error) {
 	return "", nil
 }
 
-func (m *mockGit) GetWorkspacePath() (string, error) {
-	if m.getWorkspacePathFn != nil {
-		return m.getWorkspacePathFn()
+func (m *mockGit) GetRemoteURL(remoteName string) (string, error) {
+	if m.getRemoteURLFn != nil {
+		return m.getRemoteURLFn(remoteName)
 	}
-	return "/workspace", nil
+	return "git@github.com:acme/app.git", nil
 }
 
 func (m *mockGit) GetWorktreeRoot() (string, error) {
@@ -295,8 +295,21 @@ func (m *mockGit) SyncTags(remoteName string) error {
 	return nil
 }
 
+// defaultTestConfig returns the defaults with worktrees placed directly under
+// /workspace, so mock-based tests can assert on <root>/<name> paths.
 func defaultTestConfig() config.Config {
-	return config.DefaultConfig()
+	cfg := config.DefaultConfig()
+	cfg.Worktree.Root = "/workspace"
+	cfg.Worktree.Layout = "{{.Name}}"
+	return cfg
+}
+
+// testConfigRootedAt returns defaultTestConfig with worktrees placed directly
+// under dir.
+func testConfigRootedAt(dir string) config.Config {
+	cfg := defaultTestConfig()
+	cfg.Worktree.Root = dir
+	return cfg
 }
 
 func createTestWorktree(path string, branchName string) git.Worktree {
@@ -453,7 +466,7 @@ func TestCheckoutPRWorktree(t *testing.T) {
 				},
 			},
 			cfg: func() config.Config {
-				cfg := config.DefaultConfig()
+				cfg := defaultTestConfig()
 				cfg.PullRequest.BranchTemplate = "pr/{{.Number}}"
 				return cfg
 			}(),
@@ -475,7 +488,7 @@ func TestCheckoutPRWorktree(t *testing.T) {
 				},
 			},
 			cfg: func() config.Config {
-				cfg := config.DefaultConfig()
+				cfg := defaultTestConfig()
 				cfg.PullRequest.WorktreeTemplate = `{{if eq .Number 123}}{{index "" 1}}{{else}}ok{{end}}`
 				return cfg
 			}(),

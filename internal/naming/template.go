@@ -23,7 +23,7 @@ func parseNameTemplate(field, source string, testData any, maxLength int, valida
 	if err != nil {
 		return nil, fmt.Errorf("invalid %s: %w", field, err)
 	}
-	if err := validateTemplateFields(tmpl, testData); err != nil {
+	if err := ValidateTemplateFields(tmpl, testData); err != nil {
 		return nil, fmt.Errorf("invalid %s: %w", field, err)
 	}
 	if _, err := renderName(tmpl, testData, maxLength, validate); err != nil {
@@ -37,7 +37,9 @@ type templateFieldValidator struct {
 	templateName string
 }
 
-func validateTemplateFields(tmpl *template.Template, testData any) error {
+// ValidateTemplateFields rejects any field reference in tmpl that is not a
+// direct exported field of testData's struct type, and any nested access.
+func ValidateTemplateFields(tmpl *template.Template, testData any) error {
 	names, err := directTemplateFields(testData)
 	if err != nil {
 		return err

@@ -33,8 +33,8 @@ one sets:
      worktree.
   6. grove.toml in the current directory, when it differs from the worktree
      root.
-  7. The global --worktree-template flag, which sets
-     local_branch.worktree_template when given.
+  7. The global --space and --worktree-template flags, which set
+     worktree.space and local_branch.worktree_template when given.
 
 Each file is loaded once. No environment variable sets a configuration
 value; XDG_CONFIG_HOME only changes where step 2 looks. Every file is
@@ -44,12 +44,13 @@ parsed, or that contains a key grove does not recognize, fails the command.
 The merged result is validated after the last layer; an invalid result
 fails the command. grove docs lists the schema and validation rules.
 
-From a workspace root, the main worktree is the child directory named after
-the first matching workspace.primary_branches entry. Outside a repository or
-workspace, this command still works: it loads the defaults, the step 2 file,
-and grove.toml in each directory from the home directory down to the
-current directory. grove namer and grove resolve use the same fallback.
-Inside a repository, every command loads the same files in the same order.
+Outside a repository, this command still works: it loads the defaults, the
+step 2 file, and grove.toml in each directory from the home directory down
+to the current directory. grove namer uses the same fallback. Inside a
+repository, every command loads the same files in the same order. Steps 3
+and 4 follow the main worktree, so a worktree placed under worktree.root
+reads the same repository files as the main worktree; only step 5 is
+specific to it.
 
 The output is the merged TOML and nothing else; it reloads as a grove.toml:
 
@@ -57,7 +58,7 @@ The output is the merged TOML and nothing else; it reloads as a grove.toml:
 
 --provenance (alias --sources) prints a tab-separated table instead, with
 Path, Value, and Source columns and one row per field. Source is <default>,
-the absolute path of the file that last set the value, or <pflag> for the
+the absolute path of the file that last set the value, or <pflag> for a
 flag. Nothing is redacted; the configuration holds no secret fields.`,
 		Args:    cobra.NoArgs,
 		GroupID: "config",

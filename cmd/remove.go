@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"charm.land/log/v2"
+	"github.com/jmcampanini/grove/internal/config"
 	"github.com/jmcampanini/grove/internal/git"
 	"github.com/spf13/cobra"
 )
@@ -20,7 +22,9 @@ func newRemoveCmd() *cobra.Command {
 
 The target can be:
   - An absolute path to a worktree
-  - A directory name within the workspace (e.g., "wt-my-feature")
+  - A worktree directory name (e.g., "wt-my-feature"), which is the
+    worktree at the path the active space gives that name (see grove help
+    layout); a worktree elsewhere needs its path or branch
   - A branch name (e.g., "feature/my-feature")
 
 By default, removes both the worktree and its local branch.
@@ -39,7 +43,9 @@ The main worktree cannot be removed.`,
 }
 
 type removeContext struct {
+	cfg              config.Config
 	gitClient        git.Git
+	logger           *log.Logger
 	mainWorktreePath string
 }
 
@@ -52,7 +58,9 @@ func runRemove(cmd *cobra.Command, args []string, force, keepBranch bool) error 
 	// Root the git client at mainWorktreePath so that post-removal commands
 	// (DeleteBranch, PruneWorktrees) still work even when cwd is the removed worktree.
 	ctx := &removeContext{
+		cfg:              rt.cfg,
 		gitClient:        git.New(cmd.Context(), false, rt.mainWorktreePath, rt.cfg.Git.Timeout, rt.logger),
+		logger:           rt.logger,
 		mainWorktreePath: rt.mainWorktreePath,
 	}
 
@@ -65,12 +73,7 @@ func executeRemove(w io.Writer, ctx *removeContext, target string, force, keepBr
 		return fmt.Errorf("failed to list worktrees: %w", err)
 	}
 
-	workspacePath, err := ctx.gitClient.GetWorkspacePath()
-	if err != nil {
-		return fmt.Errorf("failed to get workspace path: %w", err)
-	}
-
-	wt, err := resolveTarget(target, worktrees, workspacePath)
+	wt, err := resolveTarget(target, worktrees, spaceWorktreePath(ctx, target))
 	if err != nil {
 		return err
 	}
@@ -113,18 +116,28 @@ func executeRemove(w io.Writer, ctx *removeContext, target string, force, keepBr
 	return err
 }
 
-func resolveTarget(target string, worktrees []git.Worktree, workspacePath string) (*git.Worktree, error) {
-	for i := range worktrees {
-		if worktrees[i].AbsolutePath == target {
-			return &worktrees[i], nil
-		}
+// spaceWorktreePath renders where the active space would place a worktree
+// named target, or "" when that cannot be determined. Removal must keep
+// working for worktrees outside the layout, so a layout that cannot render
+// (unset root variable, no remote) only disables the space lookup.
+func spaceWorktreePath(ctx *removeContext, target string) string {
+	path, err := resolveWorktreePath(ctx.cfg, ctx.gitClient, target)
+	if err != nil {
+		ctx.logger.Debug("cannot render the active space path; a bare name will not match", "target", target, "err", err)
+		return ""
 	}
+	return path
+}
 
-	absTarget := filepath.Join(workspacePath, target)
-	for i := range worktrees {
-		if worktrees[i].AbsolutePath == absTarget {
-			return &worktrees[i], nil
-		}
+// resolveTarget finds the worktree for target: an absolute path, the worktree
+// at spacePath (where the active space places a worktree named target), or a
+// branch name. A name is never matched outside the active space.
+func resolveTarget(target string, worktrees []git.Worktree, spacePath string) (*git.Worktree, error) {
+	if wt := worktreeAtPath(worktrees, target); wt != nil {
+		return wt, nil
+	}
+	if wt := worktreeAtPath(worktrees, spacePath); wt != nil {
+		return wt, nil
 	}
 
 	for i := range worktrees {
@@ -134,6 +147,33 @@ func resolveTarget(target string, worktrees []git.Worktree, workspacePath string
 	}
 
 	return nil, fmt.Errorf("no worktree found matching %q", target)
+}
+
+// worktreeAtPath returns the worktree whose path equals path. git worktree
+// list prints resolved paths, so both sides are compared after resolving
+// symlinks; on macOS the temp and /var trees are symlinks into /private. An
+// empty path matches nothing.
+func worktreeAtPath(worktrees []git.Worktree, path string) *git.Worktree {
+	if path == "" {
+		return nil
+	}
+	resolved := canonicalPath(path)
+	for i := range worktrees {
+		if canonicalPath(worktrees[i].AbsolutePath) == resolved {
+			return &worktrees[i]
+		}
+	}
+	return nil
+}
+
+// canonicalPath resolves symlinks in path, or returns it unchanged when it
+// does not exist.
+func canonicalPath(path string) string {
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return path
+	}
+	return resolved
 }
 
 func extractBranchName(wt *git.Worktree) string {

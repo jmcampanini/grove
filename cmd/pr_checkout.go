@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -100,12 +99,10 @@ func checkoutPRWorktree(stdout io.Writer, ctx *prCheckoutContext, prInfo github.
 		return err
 	}
 
-	workspacePath, err := ctx.gitClient.GetWorkspacePath()
+	wtPath, err := resolveWorktreePath(ctx.cfg, ctx.gitClient, worktreeName)
 	if err != nil {
-		return fmt.Errorf("failed to get workspace path: %w", err)
+		return err
 	}
-
-	wtPath := filepath.Join(workspacePath, worktreeName)
 
 	if _, err := os.Stat(wtPath); err == nil {
 		return fmt.Errorf("worktree path %s already exists (not a PR worktree or different branch)", wtPath)

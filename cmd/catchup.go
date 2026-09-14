@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 
 	"github.com/jmcampanini/grove/internal/git"
 	"github.com/spf13/cobra"
@@ -33,18 +32,9 @@ type catchupContext struct {
 }
 
 func runCatchup(cmd *cobra.Command, _ []string) error {
-	originalCwd, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("failed to get working directory: %w", err)
-	}
-
 	rt, err := loadCommandRuntime(cmd)
 	if err != nil {
 		return err
-	}
-
-	if rt.cwd != originalCwd {
-		return errors.New("catchup must be run from inside a worktree, not from the workspace root")
 	}
 
 	ctx := &catchupContext{

@@ -17,6 +17,7 @@ func TestExecuteCreate(t *testing.T) {
 	tests := []struct {
 		branchTemplate string
 		gitMock        func(workspaceDir string) *mockGit
+		layout         string
 		name           string
 		phrase         string
 		reuse          bool
@@ -24,14 +25,13 @@ func TestExecuteCreate(t *testing.T) {
 		wantErr        bool
 		wantErrContain string
 		wantOutput     string
+		worktreeRoot   string
 	}{
 		{
 			name:   "simple phrase",
 			phrase: "add logging support",
 			gitMock: func(workspaceDir string) *mockGit {
-				return &mockGit{
-					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
-				}
+				return &mockGit{}
 			},
 			wantOutput: "wt-add-logging-support",
 		},
@@ -39,9 +39,7 @@ func TestExecuteCreate(t *testing.T) {
 			name:   "special characters",
 			phrase: "fix: handle 404 & 500 errors!",
 			gitMock: func(workspaceDir string) *mockGit {
-				return &mockGit{
-					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
-				}
+				return &mockGit{}
 			},
 			wantOutput: "wt-fix-handle-404-500-err",
 		},
@@ -49,9 +47,7 @@ func TestExecuteCreate(t *testing.T) {
 			name:   "mixed casing",
 			phrase: "Add OAuth2 Google Integration",
 			gitMock: func(workspaceDir string) *mockGit {
-				return &mockGit{
-					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
-				}
+				return &mockGit{}
 			},
 			wantOutput: "wt-add-oauth2-google-inte",
 		},
@@ -59,9 +55,7 @@ func TestExecuteCreate(t *testing.T) {
 			name:   "long generated branch is capped before worktree naming",
 			phrase: "implement comprehensive user authentication and authorization system with role based access",
 			gitMock: func(workspaceDir string) *mockGit {
-				return &mockGit{
-					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
-				}
+				return &mockGit{}
 			},
 			wantOutput: "wt-implement-comprehensiv",
 		},
@@ -78,7 +72,6 @@ func TestExecuteCreate(t *testing.T) {
 			phrase: "add logging support",
 			gitMock: func(workspaceDir string) *mockGit {
 				return &mockGit{
-					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
 					branchExistsFn: func(branchName string, caseInsensitive bool) (bool, error) {
 						return true, nil
 					},
@@ -98,9 +91,7 @@ func TestExecuteCreate(t *testing.T) {
 			name:   "all special chars slugifies to empty",
 			phrase: "@#$%^&*",
 			gitMock: func(workspaceDir string) *mockGit {
-				return &mockGit{
-					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
-				}
+				return &mockGit{}
 			},
 			wantErr:        true,
 			wantErrContain: "empty branch name after slugification",
@@ -109,9 +100,7 @@ func TestExecuteCreate(t *testing.T) {
 			name:   "worktree path already exists on disk",
 			phrase: "add logging support",
 			gitMock: func(workspaceDir string) *mockGit {
-				return &mockGit{
-					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
-				}
+				return &mockGit{}
 			},
 			setupFS: func(t *testing.T, workspaceDir string) {
 				t.Helper()
@@ -121,24 +110,47 @@ func TestExecuteCreate(t *testing.T) {
 			wantErrContain: "already exists",
 		},
 		{
-			name:   "workspace path error",
+			name:           "worktree root references unset variable",
+			phrase:         "add logging support",
+			worktreeRoot:   "$GROVE_TEST_UNSET_ROOT/.worktrees",
+			gitMock:        func(_ string) *mockGit { return &mockGit{} },
+			wantErr:        true,
+			wantErrContain: "unset environment variable GROVE_TEST_UNSET_ROOT",
+		},
+		{
+			name:   "layout needs a remote but the repository has none",
 			phrase: "add logging support",
+			layout: "{{.Host}}/{{.Owner}}/{{.Repo}}/{{.Name}}",
 			gitMock: func(_ string) *mockGit {
 				return &mockGit{
-					getWorkspacePathFn: func() (string, error) {
-						return "", fmt.Errorf("git error")
-					},
+					getRemoteURLFn: func(string) (string, error) { return "", fmt.Errorf("remote 'origin' does not exist") },
 				}
 			},
 			wantErr:        true,
-			wantErrContain: "failed to get workspace path",
+			wantErrContain: "remote 'origin' does not exist",
+		},
+		{
+			name:   "layout renders origin even when pushDefault names another remote",
+			phrase: "add logging support",
+			layout: "{{.Space}}/{{.Host}}/{{.Owner}}/{{.Repo}}/{{.Name}}",
+			gitMock: func(_ string) *mockGit {
+				return &mockGit{
+					getDefaultRemoteFn: func(fallback string) (string, error) { return "fork", nil },
+					getRemoteURLFn: func(remoteName string) (string, error) {
+						if remoteName != "origin" {
+							return "", fmt.Errorf("unexpected remote %q", remoteName)
+						}
+						return "https://gitlab.example.com/group/sub/app.git", nil
+					},
+				}
+			},
+			wantOutput: "grove/gitlab.example.com/group/sub/app/wt-add-logging-support",
 		},
 		{
 			name:   "worktree creation error",
 			phrase: "add logging support",
 			gitMock: func(workspaceDir string) *mockGit {
 				return &mockGit{
-					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
 					createWorktreeForNewBranchFromRefFn: func(_, _, _ string) error {
 						return assert.AnError
 					},
@@ -153,7 +165,6 @@ func TestExecuteCreate(t *testing.T) {
 			reuse:  true,
 			gitMock: func(workspaceDir string) *mockGit {
 				return &mockGit{
-					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
 					branchExistsFn: func(_ string, _ bool) (bool, error) {
 						return true, nil
 					},
@@ -179,7 +190,6 @@ func TestExecuteCreate(t *testing.T) {
 			reuse:  true,
 			gitMock: func(workspaceDir string) *mockGit {
 				return &mockGit{
-					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
 					branchExistsFn: func(_ string, _ bool) (bool, error) {
 						return true, nil
 					},
@@ -201,7 +211,6 @@ func TestExecuteCreate(t *testing.T) {
 			reuse:  true,
 			gitMock: func(workspaceDir string) *mockGit {
 				return &mockGit{
-					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
 					branchExistsFn: func(_ string, _ bool) (bool, error) {
 						return true, nil
 					},
@@ -226,9 +235,7 @@ func TestExecuteCreate(t *testing.T) {
 			phrase: "add logging support",
 			reuse:  true,
 			gitMock: func(workspaceDir string) *mockGit {
-				return &mockGit{
-					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
-				}
+				return &mockGit{}
 			},
 			wantOutput: "wt-add-logging-support",
 		},
@@ -238,7 +245,6 @@ func TestExecuteCreate(t *testing.T) {
 			reuse:  true,
 			gitMock: func(workspaceDir string) *mockGit {
 				return &mockGit{
-					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
 					branchExistsFn: func(_ string, _ bool) (bool, error) {
 						return true, nil
 					},
@@ -255,7 +261,6 @@ func TestExecuteCreate(t *testing.T) {
 			reuse:  true,
 			gitMock: func(workspaceDir string) *mockGit {
 				return &mockGit{
-					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
 					branchExistsFn: func(_ string, _ bool) (bool, error) {
 						return true, nil
 					},
@@ -276,7 +281,6 @@ func TestExecuteCreate(t *testing.T) {
 			reuse:  true,
 			gitMock: func(workspaceDir string) *mockGit {
 				return &mockGit{
-					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
 					branchExistsFn: func(_ string, _ bool) (bool, error) {
 						return true, nil
 					},
@@ -298,7 +302,6 @@ func TestExecuteCreate(t *testing.T) {
 			reuse:  true,
 			gitMock: func(workspaceDir string) *mockGit {
 				return &mockGit{
-					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
 					branchExistsFn: func(_ string, _ bool) (bool, error) {
 						return true, nil
 					},
@@ -315,9 +318,7 @@ func TestExecuteCreate(t *testing.T) {
 			phrase: "add logging support",
 			reuse:  true,
 			gitMock: func(workspaceDir string) *mockGit {
-				return &mockGit{
-					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
-				}
+				return &mockGit{}
 			},
 			setupFS: func(t *testing.T, workspaceDir string) {
 				t.Helper()
@@ -332,7 +333,6 @@ func TestExecuteCreate(t *testing.T) {
 			reuse:  true,
 			gitMock: func(workspaceDir string) *mockGit {
 				return &mockGit{
-					getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
 					branchExistsFn: func(_ string, _ bool) (bool, error) {
 						return true, nil
 					},
@@ -360,8 +360,15 @@ func TestExecuteCreate(t *testing.T) {
 
 			var stdout bytes.Buffer
 			cfg := defaultTestConfig()
+			cfg.Worktree.Root = workspaceDir
 			if tt.branchTemplate != "" {
 				cfg.LocalBranch.BranchTemplate = tt.branchTemplate
+			}
+			if tt.layout != "" {
+				cfg.Worktree.Layout = tt.layout
+			}
+			if tt.worktreeRoot != "" {
+				cfg.Worktree.Root = tt.worktreeRoot
 			}
 			ctx := &createContext{
 				cfg:       cfg,
@@ -501,7 +508,6 @@ func TestExecuteCreate_FromRemotePrimary(t *testing.T) {
 
 			calls := createFromRemotePrimaryCalls{}
 			gitMock := &mockGit{
-				getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
 				getDefaultRemoteFn: func(fallback string) (string, error) {
 					assert.Equal(t, "origin", fallback)
 					if tt.getDefaultRemoteErr != nil {
@@ -531,7 +537,7 @@ func TestExecuteCreate_FromRemotePrimary(t *testing.T) {
 
 			var stdout bytes.Buffer
 			ctx := &createContext{
-				cfg:               defaultTestConfig(),
+				cfg:               testConfigRootedAt(workspaceDir),
 				fromRemotePrimary: true,
 				gitClient:         gitMock,
 				logger:            testLogger(),
@@ -573,7 +579,6 @@ func TestExecuteCreate_ReuseVerifiesGitArgs(t *testing.T) {
 
 	var gotBranch, gotPath string
 	gitMock := &mockGit{
-		getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
 		branchExistsFn: func(_ string, _ bool) (bool, error) {
 			return true, nil
 		},
@@ -589,7 +594,7 @@ func TestExecuteCreate_ReuseVerifiesGitArgs(t *testing.T) {
 
 	var stdout bytes.Buffer
 	ctx := &createContext{
-		cfg:       defaultTestConfig(),
+		cfg:       testConfigRootedAt(workspaceDir),
 		gitClient: gitMock,
 		logger:    testLogger(),
 		reuse:     true,
@@ -641,7 +646,6 @@ func TestExecuteCreate_VerifiesGitArgs(t *testing.T) {
 
 			var gotBranch, gotPath, gotBaseRef string
 			gitMock := &mockGit{
-				getWorkspacePathFn: func() (string, error) { return workspaceDir, nil },
 				createWorktreeForNewBranchFromRefFn: func(newBranchName, worktreeAbsPath, baseRef string) error {
 					gotBranch = newBranchName
 					gotPath = worktreeAbsPath
@@ -653,7 +657,7 @@ func TestExecuteCreate_VerifiesGitArgs(t *testing.T) {
 			var stdout bytes.Buffer
 			ctx := &createContext{
 				baseRef:   tt.baseRef,
-				cfg:       defaultTestConfig(),
+				cfg:       testConfigRootedAt(workspaceDir),
 				gitClient: gitMock,
 				logger:    testLogger(),
 			}
