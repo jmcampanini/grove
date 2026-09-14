@@ -36,7 +36,7 @@ func ParseRemoteURL(raw string) (Remote, error) {
 	path = strings.TrimSuffix(path, ".git")
 	path = strings.Trim(path, "/")
 	segments := strings.Split(path, "/")
-	if len(segments) < 2 || segments[len(segments)-1] == "" {
+	if len(segments) < 2 {
 		return Remote{}, fmt.Errorf("remote URL %q has no owner and repository path", raw)
 	}
 	for _, segment := range segments {

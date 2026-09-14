@@ -6,10 +6,10 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"maps"
 	"path/filepath"
 	"reflect"
 	"slices"
-	"sort"
 	"strings"
 	"text/template"
 	"text/template/parse"
@@ -137,22 +137,17 @@ func expandRoot(root string, lookupEnv LookupEnv, homeDir string) (string, error
 		root = homeDir + root[1:]
 	}
 
-	var missing []string
-	seen := map[string]bool{}
+	missing := map[string]bool{}
 	expanded := expandVariables(root, func(name string) string {
 		value, ok := lookupEnv(name)
 		if !ok || value == "" {
-			if !seen[name] {
-				seen[name] = true
-				missing = append(missing, name)
-			}
-			return ""
+			missing[name] = true
 		}
 		return value
 	})
 	if len(missing) > 0 {
-		sort.Strings(missing)
-		return "", fmt.Errorf("%q references unset environment variable %s; set it or configure worktree.root without it", root, strings.Join(missing, ", "))
+		names := slices.Sorted(maps.Keys(missing))
+		return "", fmt.Errorf("%q references unset environment variable %s; set it or configure worktree.root without it", root, strings.Join(names, ", "))
 	}
 
 	if !filepath.IsAbs(expanded) {
@@ -178,7 +173,7 @@ func expandVariables(s string, mapping func(string) string) string {
 				continue
 			}
 			name := s[i+2 : i+2+end]
-			if name == "" || !isVariableName(name) {
+			if !isVariableName(name) {
 				out.WriteByte(s[i])
 				continue
 			}
@@ -192,7 +187,7 @@ func expandVariables(s string, mapping func(string) string) string {
 			end++
 		}
 		name := s[i+1 : end]
-		if name == "" || !isVariableName(name) {
+		if !isVariableName(name) {
 			out.WriteByte(s[i])
 			continue
 		}

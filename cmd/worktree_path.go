@@ -14,11 +14,9 @@ import (
 // configured space and, when the layout uses them, the host, owner, and
 // repository of the default remote.
 func resolveWorktreePath(cfg config.Config, gitClient git.Git, name string) (string, error) {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		homeDir = ""
-	}
-
+	// An unknown home directory is "" here; layout.New reports it only when
+	// worktree.root starts with "~".
+	homeDir, _ := os.UserHomeDir()
 	resolver, err := layout.New(cfg.Worktree, os.LookupEnv, homeDir)
 	if err != nil {
 		return "", err
