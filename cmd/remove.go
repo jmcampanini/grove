@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"charm.land/log/v2"
+	"github.com/jmcampanini/grove/internal/config"
 	"github.com/jmcampanini/grove/internal/git"
 	"github.com/spf13/cobra"
 )
@@ -20,9 +22,13 @@ func newRemoveCmd() *cobra.Command {
 
 The target can be:
   - An absolute path to a worktree
-  - A worktree directory name (e.g., "wt-my-feature"); when several
-    worktrees share that name, pass the path instead
+  - A worktree directory name (e.g., "wt-my-feature"), looked up first at
+    the path the active space would give it (see grove help layout), then
+    anywhere in the repository when exactly one worktree has that name
   - A branch name (e.g., "feature/my-feature")
+
+A name that only exists outside the active space and is shared by several
+worktrees is ambiguous; pass the path instead.
 
 By default, removes both the worktree and its local branch.
 Use --keep-branch to preserve the branch after removing the worktree.
@@ -40,7 +46,9 @@ The main worktree cannot be removed.`,
 }
 
 type removeContext struct {
+	cfg              config.Config
 	gitClient        git.Git
+	logger           *log.Logger
 	mainWorktreePath string
 }
 
@@ -53,7 +61,9 @@ func runRemove(cmd *cobra.Command, args []string, force, keepBranch bool) error 
 	// Root the git client at mainWorktreePath so that post-removal commands
 	// (DeleteBranch, PruneWorktrees) still work even when cwd is the removed worktree.
 	ctx := &removeContext{
+		cfg:              rt.cfg,
 		gitClient:        git.New(cmd.Context(), false, rt.mainWorktreePath, rt.cfg.Git.Timeout, rt.logger),
+		logger:           rt.logger,
 		mainWorktreePath: rt.mainWorktreePath,
 	}
 
@@ -66,7 +76,7 @@ func executeRemove(w io.Writer, ctx *removeContext, target string, force, keepBr
 		return fmt.Errorf("failed to list worktrees: %w", err)
 	}
 
-	wt, err := resolveTarget(target, worktrees)
+	wt, err := resolveTarget(target, worktrees, spaceWorktreePath(ctx, target))
 	if err != nil {
 		return err
 	}
@@ -109,10 +119,35 @@ func executeRemove(w io.Writer, ctx *removeContext, target string, force, keepBr
 	return err
 }
 
-func resolveTarget(target string, worktrees []git.Worktree) (*git.Worktree, error) {
+// spaceWorktreePath renders where the active space would place a worktree
+// named target, or "" when that cannot be determined. Removal must keep
+// working for worktrees outside the layout, so a layout that cannot render
+// (unset root variable, no remote) only disables the space lookup.
+func spaceWorktreePath(ctx *removeContext, target string) string {
+	path, err := resolveWorktreePath(ctx.cfg, ctx.gitClient, target)
+	if err != nil {
+		ctx.logger.Debug("cannot render the active space path; matching names across all worktrees", "target", target, "err", err)
+		return ""
+	}
+	return path
+}
+
+// resolveTarget finds the worktree for target: an absolute path, the name of
+// the worktree at spacePath (the active space's path for that name), a name
+// held by exactly one worktree anywhere, or a branch name. A name shared by
+// several worktrees outside the active space is ambiguous.
+func resolveTarget(target string, worktrees []git.Worktree, spacePath string) (*git.Worktree, error) {
 	for i := range worktrees {
 		if worktrees[i].AbsolutePath == target {
 			return &worktrees[i], nil
+		}
+	}
+
+	if spacePath != "" {
+		for i := range worktrees {
+			if worktrees[i].AbsolutePath == spacePath {
+				return &worktrees[i], nil
+			}
 		}
 	}
 
@@ -125,18 +160,19 @@ func resolveTarget(target string, worktrees []git.Worktree) (*git.Worktree, erro
 	if len(byName) == 1 {
 		return byName[0], nil
 	}
+
+	for i := range worktrees {
+		if name := extractBranchName(&worktrees[i]); name == target {
+			return &worktrees[i], nil
+		}
+	}
+
 	if len(byName) > 1 {
 		paths := make([]string, 0, len(byName))
 		for _, wt := range byName {
 			paths = append(paths, wt.AbsolutePath)
 		}
 		return nil, fmt.Errorf("worktree name %q is ambiguous; pass one of these paths instead:\n  %s", target, strings.Join(paths, "\n  "))
-	}
-
-	for i := range worktrees {
-		if name := extractBranchName(&worktrees[i]); name == target {
-			return &worktrees[i], nil
-		}
 	}
 
 	return nil, fmt.Errorf("no worktree found matching %q", target)

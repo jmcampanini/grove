@@ -208,7 +208,9 @@ func TestExecuteRemove(t *testing.T) {
 			var buf bytes.Buffer
 
 			ctx := &removeContext{
+				cfg:              defaultTestConfig(),
 				gitClient:        tt.gitMock,
+				logger:           testLogger(),
 				mainWorktreePath: tt.mainWorktree,
 			}
 
@@ -230,6 +232,66 @@ func TestExecuteRemove(t *testing.T) {
 	}
 }
 
+func TestExecuteRemove_BareNameUsesActiveSpace(t *testing.T) {
+	var removed string
+	gitMock := &mockGit{
+		listWorktreesFn: func() ([]git.Worktree, error) {
+			return []git.Worktree{
+				testWorktreeWithBranch("/repo", "main"),
+				testWorktreeWithBranch("/root/grove/github.com/acme/app/wt-shared", "feature/shared"),
+				testWorktreeWithBranch("/root/claude/github.com/acme/app/wt-shared", "feature/shared-agent"),
+			}, nil
+		},
+		isWorktreeDirtyFn: func(_ string) (bool, error) { return false, nil },
+		removeWorktreeFn: func(path string, _ bool) error {
+			removed = path
+			return nil
+		},
+		deleteBranchFn:   func(_ string, _ bool) error { return nil },
+		pruneWorktreesFn: func() error { return nil },
+	}
+
+	cfg := defaultTestConfig()
+	cfg.Worktree.Root = "/root"
+	cfg.Worktree.Layout = "{{.Space}}/{{.Host}}/{{.Owner}}/{{.Repo}}/{{.Name}}"
+	cfg.Worktree.Space = "claude"
+
+	var buf bytes.Buffer
+	ctx := &removeContext{cfg: cfg, gitClient: gitMock, logger: testLogger(), mainWorktreePath: "/repo"}
+	require.NoError(t, executeRemove(&buf, ctx, "wt-shared", false, false))
+
+	assert.Equal(t, "/root/claude/github.com/acme/app/wt-shared", removed)
+	assert.Equal(t, "Removed worktree wt-shared and branch feature/shared-agent\n", buf.String())
+}
+
+func TestExecuteRemove_LayoutFailureStillRemovesByPath(t *testing.T) {
+	var removed string
+	gitMock := &mockGit{
+		listWorktreesFn: func() ([]git.Worktree, error) {
+			return []git.Worktree{
+				testWorktreeWithBranch("/repo", "main"),
+				testWorktreeWithBranch("/old/wt-legacy", "feature/legacy"),
+			}, nil
+		},
+		isWorktreeDirtyFn: func(_ string) (bool, error) { return false, nil },
+		removeWorktreeFn: func(path string, _ bool) error {
+			removed = path
+			return nil
+		},
+		deleteBranchFn:   func(_ string, _ bool) error { return nil },
+		pruneWorktreesFn: func() error { return nil },
+	}
+
+	cfg := defaultTestConfig()
+	cfg.Worktree.Root = "$GROVE_TEST_UNSET_ROOT/.worktrees"
+
+	var buf bytes.Buffer
+	ctx := &removeContext{cfg: cfg, gitClient: gitMock, logger: testLogger(), mainWorktreePath: "/repo"}
+	require.NoError(t, executeRemove(&buf, ctx, "wt-legacy", false, false))
+
+	assert.Equal(t, "/old/wt-legacy", removed)
+}
+
 func TestResolveTarget(t *testing.T) {
 	worktrees := []git.Worktree{
 		testWorktreeWithBranch("/workspace/main", "main"),
@@ -237,10 +299,13 @@ func TestResolveTarget(t *testing.T) {
 		testWorktreeDetached("/workspace/wt-detached"),
 		testWorktreeWithBranch("/root/grove/github.com/acme/app/wt-shared", "feature/shared"),
 		testWorktreeWithBranch("/root/claude/github.com/acme/app/wt-shared", "feature/shared-agent"),
+		testWorktreeWithBranch("/root/grove/github.com/acme/app/wt-branchy", "wt-branchy"),
+		testWorktreeWithBranch("/root/claude/github.com/acme/app/wt-branchy", "feature/branchy"),
 	}
 
 	tests := []struct {
 		name           string
+		spacePath      string
 		target         string
 		wantErr        bool
 		wantErrContain string
@@ -267,10 +332,40 @@ func TestResolveTarget(t *testing.T) {
 			wantPath: "/workspace/wt-detached",
 		},
 		{
-			name:           "ambiguous directory name lists candidate paths",
+			name:      "shared name resolves in the active space",
+			target:    "wt-shared",
+			spacePath: "/root/claude/github.com/acme/app/wt-shared",
+			wantPath:  "/root/claude/github.com/acme/app/wt-shared",
+		},
+		{
+			name:      "space path takes precedence over a unique name elsewhere",
+			target:    "wt-feature",
+			spacePath: "/workspace/wt-feature",
+			wantPath:  "/workspace/wt-feature",
+		},
+		{
+			name:      "space path with no worktree falls back to a unique name",
+			target:    "wt-feature",
+			spacePath: "/root/grove/github.com/acme/app/wt-feature",
+			wantPath:  "/workspace/wt-feature",
+		},
+		{
+			name:     "shared name matching a branch wins over ambiguity",
+			target:   "wt-branchy",
+			wantPath: "/root/grove/github.com/acme/app/wt-branchy",
+		},
+		{
+			name:           "shared name outside the active space is ambiguous",
 			target:         "wt-shared",
+			spacePath:      "/root/pi/github.com/acme/app/wt-shared",
 			wantErr:        true,
 			wantErrContain: "/root/claude/github.com/acme/app/wt-shared",
+		},
+		{
+			name:           "shared name without a space path is ambiguous",
+			target:         "wt-shared",
+			wantErr:        true,
+			wantErrContain: "/root/grove/github.com/acme/app/wt-shared",
 		},
 		{
 			name:           "not found",
@@ -282,7 +377,7 @@ func TestResolveTarget(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			wt, err := resolveTarget(tt.target, worktrees)
+			wt, err := resolveTarget(tt.target, worktrees, tt.spacePath)
 
 			if tt.wantErr {
 				require.Error(t, err)
