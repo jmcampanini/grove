@@ -24,6 +24,8 @@ func TestParseRemoteURL(t *testing.T) {
 		{name: "nested groups join into owner", raw: "git@gitlab.com:group/sub/team/app.git", want: Remote{Host: "gitlab.com", Owner: "group/sub/team", Repo: "app"}},
 		{name: "trailing slash", raw: "https://github.com/acme/app/", want: Remote{Host: "github.com", Owner: "acme", Repo: "app"}},
 		{name: "surrounding whitespace", raw: "  git@github.com:acme/app.git\n", want: Remote{Host: "github.com", Owner: "acme", Repo: "app"}},
+		{name: "ssh scheme with IPv6 host", raw: "ssh://git@[2001:db8::1]/acme/app.git", want: Remote{Host: "2001:db8::1", Owner: "acme", Repo: "app"}},
+		{name: "scp-like with bracketed IPv6 host is unsupported", raw: "git@[2001:db8::1]:acme/app.git", wantErr: "bracketed IPv6 host in scp-like form"},
 		{name: "empty", raw: "", wantErr: "remote URL is empty"},
 		{name: "local absolute path", raw: "/srv/git/app.git", wantErr: "has no host"},
 		{name: "local relative path with colon later", raw: "./repos/app:1", wantErr: "has no host"},
