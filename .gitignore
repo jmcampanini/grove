@@ -16,3 +16,7 @@ coverage.*
 # Local editor and dependency directories
 .idea/
 vendor/
+
+# mise personal overrides
+mise.local.toml
+.mise.local.toml

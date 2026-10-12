@@ -1,3 +1,5 @@
-- Run `make check` to validate that changes work correctly
-- Use `make build` to build the binary (outputs to `build/grove`); never use `go build` directly
+- This repository uses mise for tool versions and task execution. Run tasks with `mise run <task>`; do not call `go`, `golangci-lint`, or similar tools directly. `mise tasks` lists every task.
+- Run `mise run check` to validate that changes work correctly
+- Use `mise run build` to build the binary (outputs to `build/grove`); never use `go build` directly
+- `mise.toml` pins Go, golangci-lint, and govulncheck; `mise.lock` records their checksums. Bump a tool with `mise upgrade --bump <tool>`, run `mise lock` and `mise run check`, and commit both files.
 - Keep command help the canonical user-facing documentation and the README a landing page; keep both consistent with observable behavior.

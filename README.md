@@ -25,10 +25,18 @@ brew upgrade --fetch-HEAD grove
 
 ### From source
 
+With Git and [mise](https://mise.jdx.dev) installed (`brew install mise` on macOS), mise supplies the pinned Go toolchain from `mise.toml`:
+
 ```sh
-make build
+git clone https://github.com/jmcampanini/grove
+cd grove
+mise trust
+mise install
+mise run build
 # then copy ./build/grove to a directory on your PATH
 ```
+
+To upgrade, run `git pull`, rebuild with `mise install && mise run build`, and replace the binary on your `PATH`.
 
 ## Representative commands
 
