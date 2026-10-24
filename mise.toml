@@ -5,7 +5,7 @@ lockfile = true
 lockfile_platforms = ["linux-x64", "macos-arm64"]
 
 [tools]
-go = "1.27.2"
+go = "1.27.3"
 golangci-lint = "2.14.0"
 "go:golang.org/x/vuln/cmd/govulncheck" = "1.9.0"
 
@@ -21,6 +21,13 @@ run = '''
 version="${VERSION:-$(git describe --tags --dirty --always 2>/dev/null || printf 'unknown')}"
 mkdir -p build
 go build -trimpath -buildvcs=false -ldflags "-X github.com/jmcampanini/grove/cmd.Version=${version}" -o build/grove .
+'''
+
+[tasks.install]
+description = "Install the CLI with git-derived version metadata."
+run = '''
+version="${VERSION:-$(git describe --tags --dirty --always 2>/dev/null || printf 'unknown')}"
+go install -trimpath -buildvcs=false -ldflags "-X github.com/jmcampanini/grove/cmd.Version=${version}" .
 '''
 
 [tasks.test]
@@ -75,12 +82,12 @@ run = "govulncheck ./..."
 # Add report-only tasks here; fixers (fmt, lint-fix, tidy) stay out.
 [tasks.check]
 description = "Run the complete local verification contract."
-depends = ["fmt-check", "tidy-check", "lint", "test", "version-check", "vuln"]
+depends = ["fmt-check", "tidy-check", "lint", "test", "build", "version-check", "vuln"]
 
 [tasks.clean]
 description = "Remove build artifacts, coverage files, and the Go test cache."
 run = [
   "rm -rf build dist",
-  "go clean -testcache",
   "rm -f *.out cover.* coverage.*",
+  "go clean -testcache",
 ]
