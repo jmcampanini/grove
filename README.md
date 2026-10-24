@@ -26,7 +26,10 @@ brew upgrade --fetch-HEAD grove
 ### From source
 
 ```sh
-make build
+brew install git mise
+mise trust
+mise install
+mise run build
 # then copy ./build/grove to a directory on your PATH
 ```
 
