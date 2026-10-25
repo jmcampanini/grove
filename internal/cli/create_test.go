@@ -1,0 +1,673 @@
+package cli
+
+import (
+	"bytes"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/jmcampanini/grove/internal/git"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestExecuteCreate(t *testing.T) {
+	tests := []struct {
+		branchTemplate string
+		gitMock        func(workspaceDir string) *mockGit
+		layout         string
+		name           string
+		phrase         string
+		reuse          bool
+		setupFS        func(t *testing.T, workspaceDir string)
+		wantErr        bool
+		wantErrContain string
+		wantOutput     string
+		worktreeRoot   string
+	}{
+		{
+			name:   "simple phrase",
+			phrase: "add logging support",
+			gitMock: func(workspaceDir string) *mockGit {
+				return &mockGit{}
+			},
+			wantOutput: "wt-add-logging-support",
+		},
+		{
+			name:   "special characters",
+			phrase: "fix: handle 404 & 500 errors!",
+			gitMock: func(workspaceDir string) *mockGit {
+				return &mockGit{}
+			},
+			wantOutput: "wt-fix-handle-404-500-err",
+		},
+		{
+			name:   "mixed casing",
+			phrase: "Add OAuth2 Google Integration",
+			gitMock: func(workspaceDir string) *mockGit {
+				return &mockGit{}
+			},
+			wantOutput: "wt-add-oauth2-google-inte",
+		},
+		{
+			name:   "long generated branch is capped before worktree naming",
+			phrase: "implement comprehensive user authentication and authorization system with role based access",
+			gitMock: func(workspaceDir string) *mockGit {
+				return &mockGit{}
+			},
+			wantOutput: "wt-implement-comprehensiv",
+		},
+		{
+			branchTemplate: "{{.Unknown}}",
+			name:           "invalid naming template",
+			phrase:         "add logging support",
+			gitMock:        func(string) *mockGit { return &mockGit{} },
+			wantErr:        true,
+			wantErrContain: "failed to initialize local branch namer",
+		},
+		{
+			name:   "duplicate branch",
+			phrase: "add logging support",
+			gitMock: func(workspaceDir string) *mockGit {
+				return &mockGit{
+					branchExistsFn: func(branchName string, caseInsensitive bool) (bool, error) {
+						return true, nil
+					},
+				}
+			},
+			wantErr:        true,
+			wantErrContain: "already exists",
+		},
+		{
+			name:           "empty phrase",
+			phrase:         "   ",
+			gitMock:        func(workspaceDir string) *mockGit { return &mockGit{} },
+			wantErr:        true,
+			wantErrContain: "phrase cannot be empty",
+		},
+		{
+			name:   "all special chars slugifies to empty",
+			phrase: "@#$%^&*",
+			gitMock: func(workspaceDir string) *mockGit {
+				return &mockGit{}
+			},
+			wantErr:        true,
+			wantErrContain: "empty branch name after slugification",
+		},
+		{
+			name:   "worktree path already exists on disk",
+			phrase: "add logging support",
+			gitMock: func(workspaceDir string) *mockGit {
+				return &mockGit{}
+			},
+			setupFS: func(t *testing.T, workspaceDir string) {
+				t.Helper()
+				require.NoError(t, os.MkdirAll(filepath.Join(workspaceDir, "wt-add-logging-support"), 0o755))
+			},
+			wantErr:        true,
+			wantErrContain: "already exists",
+		},
+		{
+			name:           "worktree root references unset variable",
+			phrase:         "add logging support",
+			worktreeRoot:   "$GROVE_TEST_UNSET_ROOT/.worktrees",
+			gitMock:        func(_ string) *mockGit { return &mockGit{} },
+			wantErr:        true,
+			wantErrContain: "unset environment variable GROVE_TEST_UNSET_ROOT",
+		},
+		{
+			name:   "layout needs a remote but the repository has none",
+			phrase: "add logging support",
+			layout: "{{.Host}}/{{.Owner}}/{{.Repo}}/{{.Name}}",
+			gitMock: func(_ string) *mockGit {
+				return &mockGit{
+					getRemoteURLFn: func(string) (string, error) { return "", fmt.Errorf("remote 'origin' does not exist") },
+				}
+			},
+			wantErr:        true,
+			wantErrContain: "remote 'origin' does not exist",
+		},
+		{
+			name:   "layout renders origin even when pushDefault names another remote",
+			phrase: "add logging support",
+			layout: "{{.Space}}/{{.Host}}/{{.Owner}}/{{.Repo}}/{{.Name}}",
+			gitMock: func(_ string) *mockGit {
+				return &mockGit{
+					getDefaultRemoteFn: func(fallback string) (string, error) { return "fork", nil },
+					getRemoteURLFn: func(remoteName string) (string, error) {
+						if remoteName != "origin" {
+							return "", fmt.Errorf("unexpected remote %q", remoteName)
+						}
+						return "https://gitlab.example.com/group/sub/app.git", nil
+					},
+				}
+			},
+			wantOutput: "grove/gitlab.example.com/group/sub/app/wt-add-logging-support",
+		},
+		{
+			name:   "worktree creation error",
+			phrase: "add logging support",
+			gitMock: func(workspaceDir string) *mockGit {
+				return &mockGit{
+					createWorktreeForNewBranchFromRefFn: func(_, _, _ string) error {
+						return assert.AnError
+					},
+				}
+			},
+			wantErr:        true,
+			wantErrContain: "failed to create branch and worktree",
+		},
+		{
+			name:   "reuse with existing worktree",
+			phrase: "add logging support",
+			reuse:  true,
+			gitMock: func(workspaceDir string) *mockGit {
+				return &mockGit{
+					branchExistsFn: func(_ string, _ bool) (bool, error) {
+						return true, nil
+					},
+					listWorktreesFn: func() ([]git.Worktree, error) {
+						return []git.Worktree{
+							{
+								AbsolutePath: filepath.Join(workspaceDir, "wt-add-logging-support"),
+								Ref:          git.NewLocalBranch("feature/add-logging-support", "", "", false, 0, 0, git.Commit{}),
+							},
+						}, nil
+					},
+				}
+			},
+			setupFS: func(t *testing.T, workspaceDir string) {
+				t.Helper()
+				require.NoError(t, os.MkdirAll(filepath.Join(workspaceDir, "wt-add-logging-support"), 0o755))
+			},
+			wantOutput: "wt-add-logging-support",
+		},
+		{
+			name:   "reuse with stale worktree entry",
+			phrase: "add logging support",
+			reuse:  true,
+			gitMock: func(workspaceDir string) *mockGit {
+				return &mockGit{
+					branchExistsFn: func(_ string, _ bool) (bool, error) {
+						return true, nil
+					},
+					listWorktreesFn: func() ([]git.Worktree, error) {
+						return []git.Worktree{
+							{
+								AbsolutePath: filepath.Join(workspaceDir, "nonexistent-dir"),
+								Ref:          git.NewLocalBranch("feature/add-logging-support", "", "", false, 0, 0, git.Commit{}),
+							},
+						}, nil
+					},
+				}
+			},
+			wantOutput: "wt-add-logging-support",
+		},
+		{
+			name:   "reuse with stale worktree entry and prune fails",
+			phrase: "add logging support",
+			reuse:  true,
+			gitMock: func(workspaceDir string) *mockGit {
+				return &mockGit{
+					branchExistsFn: func(_ string, _ bool) (bool, error) {
+						return true, nil
+					},
+					listWorktreesFn: func() ([]git.Worktree, error) {
+						return []git.Worktree{
+							{
+								AbsolutePath: filepath.Join(workspaceDir, "nonexistent-dir"),
+								Ref:          git.NewLocalBranch("feature/add-logging-support", "", "", false, 0, 0, git.Commit{}),
+							},
+						}, nil
+					},
+					pruneWorktreesFn: func() error {
+						return assert.AnError
+					},
+				}
+			},
+			wantErr:        true,
+			wantErrContain: "failed to prune stale worktrees",
+		},
+		{
+			name:   "reuse with nothing existing",
+			phrase: "add logging support",
+			reuse:  true,
+			gitMock: func(workspaceDir string) *mockGit {
+				return &mockGit{}
+			},
+			wantOutput: "wt-add-logging-support",
+		},
+		{
+			name:   "reuse with branch but no worktree",
+			phrase: "add logging support",
+			reuse:  true,
+			gitMock: func(workspaceDir string) *mockGit {
+				return &mockGit{
+					branchExistsFn: func(_ string, _ bool) (bool, error) {
+						return true, nil
+					},
+					listWorktreesFn: func() ([]git.Worktree, error) {
+						return nil, nil
+					},
+				}
+			},
+			wantOutput: "wt-add-logging-support",
+		},
+		{
+			name:   "reuse with branch but no worktree and create fails",
+			phrase: "add logging support",
+			reuse:  true,
+			gitMock: func(workspaceDir string) *mockGit {
+				return &mockGit{
+					branchExistsFn: func(_ string, _ bool) (bool, error) {
+						return true, nil
+					},
+					listWorktreesFn: func() ([]git.Worktree, error) {
+						return nil, nil
+					},
+					createWorktreeForExistingBranchFn: func(_, _ string) error {
+						return assert.AnError
+					},
+				}
+			},
+			wantErr:        true,
+			wantErrContain: "failed to create worktree for existing branch",
+		},
+		{
+			name:   "reuse with branch and orphaned dir on disk",
+			phrase: "add logging support",
+			reuse:  true,
+			gitMock: func(workspaceDir string) *mockGit {
+				return &mockGit{
+					branchExistsFn: func(_ string, _ bool) (bool, error) {
+						return true, nil
+					},
+					listWorktreesFn: func() ([]git.Worktree, error) {
+						return nil, nil
+					},
+				}
+			},
+			setupFS: func(t *testing.T, workspaceDir string) {
+				t.Helper()
+				require.NoError(t, os.MkdirAll(filepath.Join(workspaceDir, "wt-add-logging-support"), 0o755))
+			},
+			wantErr:        true,
+			wantErrContain: "already exists",
+		},
+		{
+			name:   "reuse with ListWorktrees error",
+			phrase: "add logging support",
+			reuse:  true,
+			gitMock: func(workspaceDir string) *mockGit {
+				return &mockGit{
+					branchExistsFn: func(_ string, _ bool) (bool, error) {
+						return true, nil
+					},
+					listWorktreesFn: func() ([]git.Worktree, error) {
+						return nil, assert.AnError
+					},
+				}
+			},
+			wantErr:        true,
+			wantErrContain: "failed to list worktrees",
+		},
+		{
+			name:   "reuse with orphaned dir on disk",
+			phrase: "add logging support",
+			reuse:  true,
+			gitMock: func(workspaceDir string) *mockGit {
+				return &mockGit{}
+			},
+			setupFS: func(t *testing.T, workspaceDir string) {
+				t.Helper()
+				require.NoError(t, os.MkdirAll(filepath.Join(workspaceDir, "wt-add-logging-support"), 0o755))
+			},
+			wantErr:        true,
+			wantErrContain: "already exists",
+		},
+		{
+			name:   "reuse with non-matching worktrees",
+			phrase: "add logging support",
+			reuse:  true,
+			gitMock: func(workspaceDir string) *mockGit {
+				return &mockGit{
+					branchExistsFn: func(_ string, _ bool) (bool, error) {
+						return true, nil
+					},
+					listWorktreesFn: func() ([]git.Worktree, error) {
+						return []git.Worktree{
+							{
+								AbsolutePath: filepath.Join(workspaceDir, "wt-something-else"),
+								Ref:          git.NewLocalBranch("feature/something-else", "", "", false, 0, 0, git.Commit{}),
+							},
+						}, nil
+					},
+				}
+			},
+			wantOutput: "wt-add-logging-support",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			workspaceDir := t.TempDir()
+
+			if tt.setupFS != nil {
+				tt.setupFS(t, workspaceDir)
+			}
+
+			var stdout bytes.Buffer
+			cfg := defaultTestConfig()
+			cfg.Worktree.Root = workspaceDir
+			if tt.branchTemplate != "" {
+				cfg.LocalBranch.BranchTemplate = tt.branchTemplate
+			}
+			if tt.layout != "" {
+				cfg.Worktree.Layout = tt.layout
+			}
+			if tt.worktreeRoot != "" {
+				cfg.Worktree.Root = tt.worktreeRoot
+			}
+			ctx := &createContext{
+				cfg:       cfg,
+				gitClient: tt.gitMock(workspaceDir),
+				logger:    testLogger(),
+				reuse:     tt.reuse,
+			}
+
+			err := executeCreate(&stdout, ctx, tt.phrase)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.wantErrContain != "" {
+					assert.Contains(t, err.Error(), tt.wantErrContain)
+				}
+				return
+			}
+
+			require.NoError(t, err)
+
+			if tt.wantOutput != "" {
+				output := strings.TrimSpace(stdout.String())
+				assert.Equal(t, filepath.Join(workspaceDir, tt.wantOutput), output)
+			}
+		})
+	}
+}
+
+func TestCreateModeFlagsAreMutuallyExclusive(t *testing.T) {
+	tests := []struct {
+		args []string
+		name string
+	}{
+		{name: "--from and --reuse", args: []string{"create", "x", "--from", "main", "--reuse"}},
+		{name: "--from and --from-remote-primary", args: []string{"create", "x", "--from", "main", "--from-remote-primary"}},
+		{name: "--reuse and --from-remote-primary", args: []string{"create", "x", "--reuse", "--from-remote-primary"}},
+		{name: "all three", args: []string{"create", "x", "--from", "main", "--reuse", "--from-remote-primary"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stdout, _, err := executeForTest(tt.args...)
+
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "none of the others can be")
+			assert.Empty(t, stdout)
+		})
+	}
+}
+
+func TestExecuteCreate_FromRemotePrimary(t *testing.T) {
+	const expectedWorktreeName = "wt-add-logging-support"
+
+	type createFromRemotePrimaryCalls struct {
+		baseRef             string
+		branch              string
+		defaultBranchRemote string
+		fetchBranch         string
+		fetchRemote         string
+		path                string
+	}
+
+	tests := []struct {
+		name                      string
+		defaultBranch             string
+		defaultRemote             string
+		fetchErr                  error
+		getDefaultRemoteErr       error
+		getRemoteDefaultBranchErr error
+		wantBaseRef               string
+		wantDefaultBranchRemote   string
+		wantErrContain            string
+		wantFetchBranch           string
+		wantFetchRemote           string
+	}{
+		{
+			name:                    "success with origin main",
+			defaultBranch:           "main",
+			defaultRemote:           "origin",
+			wantBaseRef:             "origin/main",
+			wantDefaultBranchRemote: "origin",
+			wantFetchBranch:         "main",
+			wantFetchRemote:         "origin",
+		},
+		{
+			name:                    "custom default branch",
+			defaultBranch:           "develop",
+			defaultRemote:           "origin",
+			wantBaseRef:             "origin/develop",
+			wantDefaultBranchRemote: "origin",
+			wantFetchBranch:         "develop",
+			wantFetchRemote:         "origin",
+		},
+		{
+			name:                    "custom default remote",
+			defaultBranch:           "trunk",
+			defaultRemote:           "upstream",
+			wantBaseRef:             "upstream/trunk",
+			wantDefaultBranchRemote: "upstream",
+			wantFetchBranch:         "trunk",
+			wantFetchRemote:         "upstream",
+		},
+		{
+			name:                    "missing default branch",
+			defaultBranch:           "",
+			defaultRemote:           "origin",
+			wantDefaultBranchRemote: "origin",
+			wantErrContain:          "could not determine default branch for remote \"origin\"",
+		},
+		{
+			name:                    "fetch failure propagates",
+			defaultBranch:           "main",
+			defaultRemote:           "origin",
+			fetchErr:                assert.AnError,
+			wantDefaultBranchRemote: "origin",
+			wantErrContain:          "failed to fetch default branch \"main\" from remote \"origin\"",
+			wantFetchBranch:         "main",
+			wantFetchRemote:         "origin",
+		},
+		{
+			name:                "default remote failure propagates",
+			getDefaultRemoteErr: assert.AnError,
+			wantErrContain:      "failed to determine default remote",
+		},
+		{
+			name:                      "default branch failure propagates",
+			defaultRemote:             "origin",
+			getRemoteDefaultBranchErr: assert.AnError,
+			wantDefaultBranchRemote:   "origin",
+			wantErrContain:            "failed to determine default branch for remote \"origin\"",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			workspaceDir := t.TempDir()
+
+			calls := createFromRemotePrimaryCalls{}
+			gitMock := &mockGit{
+				getDefaultRemoteFn: func(fallback string) (string, error) {
+					assert.Equal(t, "origin", fallback)
+					if tt.getDefaultRemoteErr != nil {
+						return "", tt.getDefaultRemoteErr
+					}
+					return tt.defaultRemote, nil
+				},
+				getRemoteDefaultBranchFn: func(remoteName string) (string, error) {
+					calls.defaultBranchRemote = remoteName
+					if tt.getRemoteDefaultBranchErr != nil {
+						return "", tt.getRemoteDefaultBranchErr
+					}
+					return tt.defaultBranch, nil
+				},
+				fetchRemoteTrackingBranchFn: func(remoteName, branchName string) error {
+					calls.fetchRemote = remoteName
+					calls.fetchBranch = branchName
+					return tt.fetchErr
+				},
+				createWorktreeForNewBranchFromRefFn: func(newBranchName, worktreeAbsPath, baseRef string) error {
+					calls.branch = newBranchName
+					calls.path = worktreeAbsPath
+					calls.baseRef = baseRef
+					return nil
+				},
+			}
+
+			var stdout bytes.Buffer
+			ctx := &createContext{
+				cfg:               testConfigRootedAt(workspaceDir),
+				fromRemotePrimary: true,
+				gitClient:         gitMock,
+				logger:            testLogger(),
+			}
+
+			err := executeCreate(&stdout, ctx, "add logging support")
+			if tt.wantErrContain != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErrContain)
+				assert.Empty(t, calls.baseRef)
+				assert.Empty(t, calls.branch)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, "feature/add-logging-support", calls.branch)
+				wantOutputPath := filepath.Join(workspaceDir, expectedWorktreeName)
+				assert.Equal(t, wantOutputPath, calls.path)
+				assert.Equal(t, tt.wantBaseRef, calls.baseRef)
+				assert.Equal(t, wantOutputPath+"\n", stdout.String())
+			}
+
+			assert.Equal(t, tt.wantDefaultBranchRemote, calls.defaultBranchRemote)
+			assert.Equal(t, tt.wantFetchRemote, calls.fetchRemote)
+			assert.Equal(t, tt.wantFetchBranch, calls.fetchBranch)
+		})
+	}
+}
+
+func TestCreateCommandHasFromRemotePrimaryFlag(t *testing.T) {
+	assert.NotNil(t, newCreateCmd(commandServices{loadRuntime: loadCommandRuntime}).Flags().Lookup("from-remote-primary"))
+}
+
+func TestCreateHelpDocumentsNamingTemplates(t *testing.T) {
+	help := newCreateCmd(commandServices{loadRuntime: loadCommandRuntime}).Long
+	assert.Contains(t, help, `--worktree-template "subagent-{{.BranchSlug}}"`)
+}
+
+func TestExecuteCreate_ReuseVerifiesGitArgs(t *testing.T) {
+	workspaceDir := t.TempDir()
+
+	var gotBranch, gotPath string
+	gitMock := &mockGit{
+		branchExistsFn: func(_ string, _ bool) (bool, error) {
+			return true, nil
+		},
+		listWorktreesFn: func() ([]git.Worktree, error) {
+			return nil, nil
+		},
+		createWorktreeForExistingBranchFn: func(branchName, worktreeAbsPath string) error {
+			gotBranch = branchName
+			gotPath = worktreeAbsPath
+			return nil
+		},
+	}
+
+	var stdout bytes.Buffer
+	ctx := &createContext{
+		cfg:       testConfigRootedAt(workspaceDir),
+		gitClient: gitMock,
+		logger:    testLogger(),
+		reuse:     true,
+	}
+
+	err := executeCreate(&stdout, ctx, "add logging support")
+	require.NoError(t, err)
+
+	assert.Equal(t, "feature/add-logging-support", gotBranch)
+	assert.Equal(t, filepath.Join(workspaceDir, "wt-add-logging-support"), gotPath)
+}
+
+func TestExecuteCreate_VerifiesGitArgs(t *testing.T) {
+	tests := []struct {
+		name        string
+		baseRef     string
+		wantBaseRef string
+	}{
+		{
+			name:        "default HEAD when no --from",
+			baseRef:     "",
+			wantBaseRef: "",
+		},
+		{
+			name:        "--from with branch name",
+			baseRef:     "main",
+			wantBaseRef: "main",
+		},
+		{
+			name:        "--from with remote tracking branch",
+			baseRef:     "origin/develop",
+			wantBaseRef: "origin/develop",
+		},
+		{
+			name:        "--from with tag",
+			baseRef:     "v1.2.0",
+			wantBaseRef: "v1.2.0",
+		},
+		{
+			name:        "--from with commit SHA",
+			baseRef:     "abc1234",
+			wantBaseRef: "abc1234",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			workspaceDir := t.TempDir()
+
+			var gotBranch, gotPath, gotBaseRef string
+			gitMock := &mockGit{
+				createWorktreeForNewBranchFromRefFn: func(newBranchName, worktreeAbsPath, baseRef string) error {
+					gotBranch = newBranchName
+					gotPath = worktreeAbsPath
+					gotBaseRef = baseRef
+					return nil
+				},
+			}
+
+			var stdout bytes.Buffer
+			ctx := &createContext{
+				baseRef:   tt.baseRef,
+				cfg:       testConfigRootedAt(workspaceDir),
+				gitClient: gitMock,
+				logger:    testLogger(),
+			}
+
+			err := executeCreate(&stdout, ctx, "add logging support")
+			require.NoError(t, err)
+
+			assert.Equal(t, "feature/add-logging-support", gotBranch)
+			assert.Equal(t, filepath.Join(workspaceDir, "wt-add-logging-support"), gotPath)
+			assert.Equal(t, tt.wantBaseRef, gotBaseRef)
+		})
+	}
+}

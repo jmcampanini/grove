@@ -1,0 +1,235 @@
+package cli
+
+import (
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"strings"
+
+	"charm.land/log/v2"
+	"github.com/jmcampanini/grove/internal/config"
+	"github.com/jmcampanini/grove/internal/git"
+	"github.com/jmcampanini/grove/internal/naming"
+	"github.com/jmcampanini/grove/internal/worktree"
+	"github.com/spf13/cobra"
+)
+
+func newCreateCmd(services commandServices) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "create <phrase>",
+		Short: "Create a new branch and worktree from a descriptive phrase",
+		Long: `Create creates a new git branch and worktree from a descriptive phrase.
+
+By default, the new branch is created from the current HEAD. Use --from to
+specify a different starting point (any git ref: branch, tag, or commit SHA).
+Use --from-remote-primary to fetch and start from the latest remote primary
+branch without updating the primary worktree; this is recommended for
+automation.
+Use --reuse to attach to an existing branch/worktree for the phrase instead of
+failing when it already exists.
+
+Creation mode flags are mutually exclusive; choose at most one:
+  --from <ref>
+  --from-remote-primary
+  --reuse
+
+The phrase is converted to branch and worktree names using the configured
+local branch templates. Use the global --worktree-template flag to override
+local_branch.worktree_template for a single invocation. The worktree is
+placed under worktree.root by worktree.layout; the global --space flag
+selects the space segment for one invocation (see grove help layout).
+
+Example:
+  grove create "add user authentication"
+  grove create "fix bug in login"
+  grove create "hotfix" --from main
+  grove create "backport" --from v1.2.0
+  grove create "experiment" --from origin/develop
+  grove create "add user authentication" --from-remote-primary
+  grove create "add user authentication" --reuse
+  grove create "run tests" --space claude
+  grove create "run tests" --worktree-template "subagent-{{.BranchSlug}}"
+
+Note: The create command takes a single quoted string argument.
+
+To check out an existing pull request, use 'grove pr checkout' instead.`,
+		Args:    cobra.ExactArgs(1),
+		GroupID: "worktree",
+		RunE:    services.runCreate,
+	}
+	cmd.Flags().String("from", "", "git ref (branch, tag, or commit) to create the new branch from (default: HEAD)")
+	cmd.Flags().Bool("from-remote-primary", false, "fetch the default remote's primary branch and create the new branch from it")
+	cmd.Flags().Bool("reuse", false, "reuse existing worktree if one already exists for this phrase")
+	cmd.MarkFlagsMutuallyExclusive("from", "from-remote-primary", "reuse")
+	return cmd
+}
+
+type createContext struct {
+	baseRef           string
+	cfg               config.Config
+	fromRemotePrimary bool
+	gitClient         git.Git
+	logger            *log.Logger
+	reuse             bool
+}
+
+func (services commandServices) runCreate(cmd *cobra.Command, args []string) error {
+	phrase := args[0]
+
+	fromRef, err := cmd.Flags().GetString("from")
+	if err != nil {
+		return err
+	}
+
+	reuse, err := cmd.Flags().GetBool("reuse")
+	if err != nil {
+		return err
+	}
+
+	fromRemotePrimary, err := cmd.Flags().GetBool("from-remote-primary")
+	if err != nil {
+		return err
+	}
+
+	rt, err := services.loadRuntime(cmd)
+	if err != nil {
+		return err
+	}
+
+	ctx := &createContext{
+		baseRef:           fromRef,
+		cfg:               rt.Config,
+		fromRemotePrimary: fromRemotePrimary,
+		gitClient:         rt.GitClient,
+		logger:            rt.Logger,
+		reuse:             reuse,
+	}
+
+	return executeCreate(cmd.OutOrStdout(), ctx, phrase)
+}
+
+func executeCreate(stdout io.Writer, ctx *createContext, phrase string) error {
+	if err := validateCreatePhrase(phrase); err != nil {
+		return err
+	}
+
+	namer, err := naming.NewLocalBranchNamer(ctx.cfg.LocalBranch, ctx.cfg.Naming)
+	if err != nil {
+		return fmt.Errorf("failed to initialize local branch namer: %w", err)
+	}
+
+	branchName, err := namer.GenerateBranchName(phrase)
+	if errors.Is(err, naming.ErrEmptySlug) {
+		return fmt.Errorf(`phrase %q produces an empty branch name after slugification
+
+Please provide a phrase with at least one alphanumeric character.
+Examples:
+  grove create "add user auth"
+  grove create "fix-bug-123"`, phrase)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to generate branch name: %w", err)
+	}
+
+	exists, err := ctx.gitClient.BranchExists(branchName, false)
+	if err != nil {
+		return fmt.Errorf("failed to check if branch exists: %w", err)
+	}
+	if exists {
+		if !ctx.reuse {
+			return fmt.Errorf("branch %q already exists; to use it: git worktree add <path> %s", branchName, branchName)
+		}
+		return reuseExistingBranch(stdout, ctx, namer, branchName)
+	}
+
+	worktreeName, err := namer.GenerateWorktreeName(branchName)
+	if err != nil {
+		return fmt.Errorf("failed to generate worktree name for branch %q: %w", branchName, err)
+	}
+	worktreePath, err := worktree.ResolvePath(ctx.cfg, ctx.gitClient, worktreeName)
+	if err != nil {
+		return err
+	}
+
+	if _, err := os.Stat(worktreePath); err == nil {
+		return fmt.Errorf("worktree path %q already exists; to remove it: git worktree remove %s", worktreePath, worktreeName)
+	}
+
+	baseRef, err := resolveCreateBaseRef(ctx)
+	if err != nil {
+		return err
+	}
+
+	if err := ctx.gitClient.CreateWorktreeForNewBranchFromRef(branchName, worktreePath, baseRef); err != nil {
+		return fmt.Errorf("failed to create branch and worktree: %w", err)
+	}
+
+	_, err = fmt.Fprintln(stdout, worktreePath)
+	return err
+}
+
+func validateCreatePhrase(phrase string) error {
+	if strings.TrimSpace(phrase) == "" {
+		return errors.New("phrase cannot be empty")
+	}
+	return nil
+}
+
+func resolveCreateBaseRef(ctx *createContext) (string, error) {
+	if ctx.fromRemotePrimary {
+		return worktree.ResolveRemotePrimaryBaseRef(ctx.gitClient)
+	}
+	return ctx.baseRef, nil
+}
+
+func reuseExistingBranch(stdout io.Writer, ctx *createContext, namer *naming.LocalBranchNamer, branchName string) error {
+	worktrees, err := ctx.gitClient.ListWorktrees()
+	if err != nil {
+		return fmt.Errorf("failed to list worktrees: %w", err)
+	}
+
+	foundStale := false
+	for _, wt := range worktrees {
+		if wt.Ref == nil {
+			continue
+		}
+		if branch, ok := wt.Ref.FullBranch(); ok && branch.Name == branchName {
+			if _, statErr := os.Stat(wt.AbsolutePath); statErr != nil {
+				ctx.logger.WithPrefix("create").Warn("stale worktree entry found", "branch", branchName, "path", wt.AbsolutePath)
+				foundStale = true
+				continue
+			}
+			ctx.logger.WithPrefix("create").Warn("reusing existing worktree", "branch", branchName, "path", wt.AbsolutePath)
+			_, err = fmt.Fprintln(stdout, wt.AbsolutePath)
+			return err
+		}
+	}
+
+	if foundStale {
+		if err := ctx.gitClient.PruneWorktrees(); err != nil {
+			return fmt.Errorf("failed to prune stale worktrees: %w", err)
+		}
+	}
+
+	worktreeName, err := namer.GenerateWorktreeName(branchName)
+	if err != nil {
+		return fmt.Errorf("failed to generate worktree name for branch %q: %w", branchName, err)
+	}
+	worktreePath, err := worktree.ResolvePath(ctx.cfg, ctx.gitClient, worktreeName)
+	if err != nil {
+		return err
+	}
+
+	if _, err := os.Stat(worktreePath); err == nil {
+		return fmt.Errorf("worktree path %q already exists; to remove it: git worktree remove %s", worktreePath, worktreeName)
+	}
+
+	ctx.logger.WithPrefix("create").Warn("creating worktree for existing branch", "branch", branchName, "path", worktreePath)
+	if err := ctx.gitClient.CreateWorktreeForExistingBranch(branchName, worktreePath); err != nil {
+		return fmt.Errorf("failed to create worktree for existing branch: %w", err)
+	}
+
+	_, err = fmt.Fprintln(stdout, worktreePath)
+	return err
+}
