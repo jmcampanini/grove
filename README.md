@@ -6,9 +6,11 @@ By default a worktree for `github.com/acme/app` lands at `$CODE_DIR/.worktrees/g
 
 Command help is the canonical reference: `grove --help` and each command's `--help` describe every user-facing contract, `grove config --help` describes configuration precedence, `grove help layout` describes where worktrees go, and `grove help exit-codes` describes exit statuses. `grove docs` prints a longer Markdown reference that supplements command help.
 
+
 ## Install
 
 The Homebrew formula builds from the `main` branch HEAD; there is no tagged release.
+
 
 ### Homebrew (macOS)
 
@@ -23,6 +25,7 @@ Upgrade to the latest commit:
 brew upgrade --fetch-HEAD grove
 ```
 
+
 ### From source
 
 ```sh
@@ -32,6 +35,7 @@ mise install
 mise run build
 # then copy ./build/grove to a directory on your PATH
 ```
+
 
 ## Representative commands
 
@@ -50,9 +54,11 @@ Run these from inside a repository: the clone or any of its worktrees.
 | `grove prune` | Interactively remove worktrees that are likely no longer needed. |
 | `grove config --provenance` | Print each configuration value with its source. |
 
+
 ## Required external programs
 
 Grove runs `git` for every worktree, git, pull request, and issue command, and `gh` for the `pr` and `issue` commands and `grove prune`. Both must be on `PATH`. Grove disables their interactive prompts (`GIT_TERMINAL_PROMPT=0`, `GH_PROMPT_DISABLED=1`), so `gh` must already be authenticated. `grove status` asks `gh` for pull request data and shows a worktree as local when that call fails. Grove never runs `fzf`; the `--fzf` flags only shape output for a pipeline you build.
+
 
 ## Configuration
 
