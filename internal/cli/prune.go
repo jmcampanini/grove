@@ -572,7 +572,7 @@ func executeRemovals(w io.Writer, gitClient git.Git, selected []prunable, revali
 		if p.evidence.kind == pruneEvidenceOrphaned {
 			err = removeOrphanedWorktree(gitClient, p.path, p.branchName)
 		} else {
-			err = worktree.RemoveWorktreeAndBranch(gitClient, p.path, p.branchName)
+			err = removeWorktreeAndBranch(gitClient, p.path, p.branchName)
 		}
 		results[i] = pruneResult{err: err, prunable: p}
 	}
@@ -649,5 +649,5 @@ func removeOrphanedWorktree(gitClient git.Git, path, branchName string) error {
 	if err := gitClient.RemoveWorktree(path, true); err != nil {
 		return fmt.Errorf("failed to remove orphaned worktree %q: %w", filepath.Base(path), err)
 	}
-	return worktree.DeleteBranchIfExists(gitClient, branchName)
+	return deleteBranchIfExists(gitClient, branchName)
 }
