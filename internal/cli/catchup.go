@@ -1,0 +1,119 @@
+package cli
+
+import (
+	"errors"
+	"fmt"
+	"io"
+
+	"github.com/jmcampanini/grove/internal/git"
+	"github.com/spf13/cobra"
+)
+
+func newCatchupCmd(services commandServices) *cobra.Command {
+	return &cobra.Command{
+		Use:   "catchup",
+		Short: "Merge the latest remote root branch into the current feature branch",
+		Long: `Catchup fetches the remote root branch (e.g., origin/main) and merges it
+into the current feature branch. This keeps your feature branch up to date
+with the latest changes from the main line of development.
+
+The root branch is determined by querying the remote's HEAD reference.
+
+The worktree must be in a clean state (no uncommitted changes). If it is
+dirty, commit, stash, or reset your changes before running catchup.`,
+		Args:    cobra.NoArgs,
+		RunE:    services.runCatchup,
+		GroupID: "git",
+	}
+}
+
+type catchupContext struct {
+	gitClient git.Git
+}
+
+func (services commandServices) runCatchup(cmd *cobra.Command, _ []string) error {
+	rt, err := services.loadRuntime(cmd)
+	if err != nil {
+		return err
+	}
+
+	ctx := &catchupContext{
+		gitClient: rt.GitClient,
+	}
+
+	return executeCatchup(cmd.OutOrStdout(), ctx)
+}
+
+func executeCatchup(w io.Writer, ctx *catchupContext) error {
+	currentBranch, err := ctx.gitClient.GetCurrentBranch()
+	if err != nil {
+		return fmt.Errorf("failed to get current branch: %w", err)
+	}
+	if currentBranch == "HEAD" {
+		return errors.New("cannot catch up: detached HEAD state")
+	}
+
+	remoteName, err := ctx.gitClient.GetDefaultRemote("origin")
+	if err != nil {
+		return fmt.Errorf("failed to get default remote: %w", err)
+	}
+
+	rootBranch, err := ctx.gitClient.GetRepoDefaultBranch(remoteName)
+	if err != nil {
+		return fmt.Errorf("failed to determine root branch: %w", err)
+	}
+	if rootBranch == "" {
+		return fmt.Errorf("could not determine root branch; run 'git remote set-head %s --auto' to configure", remoteName)
+	}
+
+	if currentBranch == rootBranch {
+		return fmt.Errorf("already on root branch %q; use 'grove sync' instead", rootBranch)
+	}
+
+	worktreeRoot, err := ctx.gitClient.GetWorktreeRoot()
+	if err != nil {
+		return fmt.Errorf("failed to get worktree root: %w", err)
+	}
+
+	dirty, err := ctx.gitClient.IsWorktreeDirty(worktreeRoot)
+	if err != nil {
+		return fmt.Errorf("failed to check worktree state: %w", err)
+	}
+	if dirty {
+		return errors.New("worktree has uncommitted changes; commit, stash, or reset before running catchup")
+	}
+
+	if _, err := ctx.gitClient.FetchRemote(remoteName); err != nil {
+		return fmt.Errorf("failed to fetch remote %q: %w", remoteName, err)
+	}
+
+	mergeRef := remoteName + "/" + rootBranch
+
+	if err := requireRefExists(ctx.gitClient, mergeRef, remoteName); err != nil {
+		return err
+	}
+
+	output, err := ctx.gitClient.Merge(mergeRef)
+	if err != nil {
+		return fmt.Errorf("failed to merge %s: %w", mergeRef, err)
+	}
+
+	if output != "" {
+		if _, err := fmt.Fprintln(w, output); err != nil {
+			return err
+		}
+	}
+	_, err = fmt.Fprintf(w, "Merged %s into %s\n", mergeRef, currentBranch)
+	return err
+}
+
+func requireRefExists(gitClient git.Git, ref, remoteName string) error {
+	exists, err := gitClient.RefExists(ref)
+	if err != nil {
+		return fmt.Errorf("failed to verify ref %q: %w", ref, err)
+	}
+	if !exists {
+		return fmt.Errorf("ref %q does not exist after fetch; check that remote %q is configured correctly", ref, remoteName)
+	}
+	return nil
+}
