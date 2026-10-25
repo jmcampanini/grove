@@ -1,5 +1,6 @@
 # Contributing
 
+
 ## Development
 
 1. Run `mise tasks` to see available tasks.
