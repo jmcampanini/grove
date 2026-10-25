@@ -113,7 +113,7 @@ func startIssueWorktree(stdout io.Writer, ctx *issueStartContext, issueInfo gith
 		}
 	}
 
-	wtPath, err := worktree.ResolveWorktreePath(ctx.cfg, ctx.gitClient, worktreeName)
+	wtPath, err := worktree.ResolvePath(ctx.cfg, ctx.gitClient, worktreeName)
 	if err != nil {
 		return err
 	}
@@ -128,18 +128,18 @@ func startIssueWorktree(stdout io.Writer, ctx *issueStartContext, issueInfo gith
 	return err
 }
 
-func reuseLiveIssueWorktree(stdout io.Writer, ctx *issueStartContext, issueInfo github.Issue, worktree *git.Worktree) (bool, error) {
-	if worktree == nil {
+func reuseLiveIssueWorktree(stdout io.Writer, ctx *issueStartContext, issueInfo github.Issue, wt *git.Worktree) (bool, error) {
+	if wt == nil {
 		return false, nil
 	}
-	if _, err := os.Stat(worktree.AbsolutePath); err != nil {
+	if _, err := os.Stat(wt.AbsolutePath); err != nil {
 		if !os.IsNotExist(err) {
-			return false, fmt.Errorf("failed to inspect existing worktree %s: %w", worktree.AbsolutePath, err)
+			return false, fmt.Errorf("failed to inspect existing worktree %s: %w", wt.AbsolutePath, err)
 		}
 		return false, nil
 	}
-	ctx.logger.WithPrefix("issue").Warn("worktree already exists for issue", "number", issueInfo.Number, "path", worktree.AbsolutePath)
-	_, err := fmt.Fprintln(stdout, worktree.AbsolutePath)
+	ctx.logger.WithPrefix("issue").Warn("worktree already exists for issue", "number", issueInfo.Number, "path", wt.AbsolutePath)
+	_, err := fmt.Fprintln(stdout, wt.AbsolutePath)
 	return true, err
 }
 

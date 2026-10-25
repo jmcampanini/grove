@@ -9,11 +9,11 @@ import (
 	"github.com/jmcampanini/grove/internal/layout"
 )
 
-// ResolveWorktreePath renders the absolute path for a new worktree named
+// ResolvePath renders the absolute path for a new worktree named
 // name: worktree.root joined with worktree.layout rendered from the
 // configured space and, when the layout uses them, the host, owner, and
 // repository of the origin remote.
-func ResolveWorktreePath(cfg config.Config, gitClient git.Git, name string) (string, error) {
+func ResolvePath(cfg config.Config, gitClient git.Git, name string) (string, error) {
 	// An unknown home directory is "" here; layout.New reports it only when
 	// worktree.root starts with "~".
 	homeDir, _ := os.UserHomeDir()

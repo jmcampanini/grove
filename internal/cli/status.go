@@ -53,7 +53,7 @@ func (services commandServices) runStatus(cmd *cobra.Command, _ []string) error 
 }
 
 func gatherStatuses(ctx *worktree.StatusContext) ([]worktree.Status, error) {
-	worktrees, branchMap, err := worktree.LoadWorktreesAndBranches(ctx.GitClient)
+	worktrees, branchMap, err := worktree.LoadWithBranches(ctx.GitClient)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +68,7 @@ func gatherStatuses(ctx *worktree.StatusContext) ([]worktree.Status, error) {
 }
 
 func buildWorktreeStatus(ctx *worktree.StatusContext, wt git.Worktree, branchMap map[string]git.LocalBranch) worktree.Status {
-	ws := worktree.NewWorktreeStatus(ctx, wt, branchMap)
+	ws := worktree.NewStatus(ctx.MainWorktreePath, wt, branchMap)
 	if ws.BranchName == "" {
 		return ws
 	}

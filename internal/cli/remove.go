@@ -121,7 +121,7 @@ func executeRemove(w io.Writer, ctx *removeContext, target string, force, keepBr
 // working for worktrees outside the layout, so a layout that cannot render
 // (unset root variable, no remote) only disables the space lookup.
 func spaceWorktreePath(ctx *removeContext, target string) string {
-	path, err := worktree.ResolveWorktreePath(ctx.cfg, ctx.gitClient, target)
+	path, err := worktree.ResolvePath(ctx.cfg, ctx.gitClient, target)
 	if err != nil {
 		ctx.logger.Debug("cannot render the active space path; a bare name will not match", "target", target, "err", err)
 		return ""

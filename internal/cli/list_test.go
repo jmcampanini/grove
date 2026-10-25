@@ -10,10 +10,27 @@ import (
 	"github.com/jmcampanini/grove/internal/config"
 	"github.com/jmcampanini/grove/internal/git"
 	"github.com/jmcampanini/grove/internal/naming"
-	"github.com/jmcampanini/grove/internal/worktree"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func testLocalNamer(t *testing.T, worktreeTemplate string) *naming.LocalBranchNamer {
+	t.Helper()
+	cfg := defaultTestConfig()
+	cfg.LocalBranch.WorktreeTemplate = worktreeTemplate
+	namer, err := naming.NewLocalBranchNamer(cfg.LocalBranch, cfg.Naming)
+	require.NoError(t, err)
+	return namer
+}
+
+func testPRNamer(t *testing.T, worktreeTemplate string) *naming.PullRequestNamer {
+	t.Helper()
+	cfg := defaultTestConfig()
+	cfg.PullRequest.WorktreeTemplate = worktreeTemplate
+	namer, err := naming.NewPullRequestNamer(cfg.PullRequest, cfg.Naming)
+	require.NoError(t, err)
+	return namer
+}
 
 func TestGetDisplayName(t *testing.T) {
 	tests := []struct {
@@ -64,53 +81,6 @@ func TestGetDisplayName(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			namer := testLocalNamer(t, tt.wtTemplate)
 			got := getDisplayName(namer, tt.absPath)
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
-
-func TestShortSHASafe(t *testing.T) {
-	tests := []struct {
-		name   string
-		sha    string
-		maxLen int
-		want   string
-	}{
-		{
-			name:   "normal SHA truncated",
-			sha:    "abc1234def5678",
-			maxLen: 7,
-			want:   "abc1234",
-		},
-		{
-			name:   "SHA exactly maxLen",
-			sha:    "abc1234",
-			maxLen: 7,
-			want:   "abc1234",
-		},
-		{
-			name:   "SHA shorter than maxLen",
-			sha:    "abc",
-			maxLen: 7,
-			want:   "abc",
-		},
-		{
-			name:   "empty SHA returns placeholder",
-			sha:    "",
-			maxLen: 7,
-			want:   "(no sha)",
-		},
-		{
-			name:   "maxLen of 0 returns empty",
-			sha:    "abc1234",
-			maxLen: 0,
-			want:   "",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := worktree.ShortSHASafe(tt.sha, tt.maxLen)
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -550,22 +520,4 @@ func TestExecuteList(t *testing.T) {
 			}
 		})
 	}
-}
-
-func testLocalNamer(t *testing.T, worktreeTemplate string) *naming.LocalBranchNamer {
-	t.Helper()
-	cfg := defaultTestConfig()
-	cfg.LocalBranch.WorktreeTemplate = worktreeTemplate
-	namer, err := naming.NewLocalBranchNamer(cfg.LocalBranch, cfg.Naming)
-	require.NoError(t, err)
-	return namer
-}
-
-func testPRNamer(t *testing.T, worktreeTemplate string) *naming.PullRequestNamer {
-	t.Helper()
-	cfg := defaultTestConfig()
-	cfg.PullRequest.WorktreeTemplate = worktreeTemplate
-	namer, err := naming.NewPullRequestNamer(cfg.PullRequest, cfg.Naming)
-	require.NoError(t, err)
-	return namer
 }

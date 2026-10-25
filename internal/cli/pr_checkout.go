@@ -100,7 +100,7 @@ func checkoutPRWorktree(stdout io.Writer, ctx *prCheckoutContext, prInfo github.
 		return err
 	}
 
-	wtPath, err := worktree.ResolveWorktreePath(ctx.cfg, ctx.gitClient, worktreeName)
+	wtPath, err := worktree.ResolvePath(ctx.cfg, ctx.gitClient, worktreeName)
 	if err != nil {
 		return err
 	}

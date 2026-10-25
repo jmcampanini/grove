@@ -142,14 +142,14 @@ func executePrune(w io.Writer, ctx *worktree.StatusContext) error {
 }
 
 func gatherPruneStatuses(ctx *worktree.StatusContext) ([]worktree.Status, error) {
-	worktrees, branchMap, err := worktree.LoadWorktreesAndBranches(ctx.GitClient)
+	worktrees, branchMap, err := worktree.LoadWithBranches(ctx.GitClient)
 	if err != nil {
 		return nil, err
 	}
 
 	statuses := make([]worktree.Status, 0, len(worktrees))
-	for _, worktree := range worktrees {
-		status, err := buildPruneWorktreeStatus(ctx, worktree, branchMap)
+	for _, wt := range worktrees {
+		status, err := buildPruneWorktreeStatus(ctx, wt, branchMap)
 		if err != nil {
 			return nil, err
 		}
@@ -159,7 +159,7 @@ func gatherPruneStatuses(ctx *worktree.StatusContext) ([]worktree.Status, error)
 }
 
 func buildPruneWorktreeStatus(ctx *worktree.StatusContext, wt git.Worktree, branchMap map[string]git.LocalBranch) (worktree.Status, error) {
-	status := worktree.NewWorktreeStatus(ctx, wt, branchMap)
+	status := worktree.NewStatus(ctx.MainWorktreePath, wt, branchMap)
 	if status.IsMain || status.Locked {
 		return status, nil
 	}

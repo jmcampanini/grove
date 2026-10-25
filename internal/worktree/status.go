@@ -34,8 +34,8 @@ type Status struct {
 	Tracking   TrackingInfo
 }
 
-// LoadWorktreesAndBranches lists worktrees and indexes local branches by name.
-func LoadWorktreesAndBranches(gitClient git.Git) ([]git.Worktree, map[string]git.LocalBranch, error) {
+// LoadWithBranches lists worktrees and indexes local branches by name.
+func LoadWithBranches(gitClient git.Git) ([]git.Worktree, map[string]git.LocalBranch, error) {
 	worktrees, err := gitClient.ListWorktrees()
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to list worktrees: %w", err)
@@ -52,11 +52,11 @@ func LoadWorktreesAndBranches(gitClient git.Git) ([]git.Worktree, map[string]git
 	return worktrees, branchMap, nil
 }
 
-// NewWorktreeStatus records identity and tracking without querying dirty or pull request state.
-func NewWorktreeStatus(ctx *StatusContext, wt git.Worktree, branchMap map[string]git.LocalBranch) Status {
+// NewStatus records identity and tracking without querying dirty or pull request state.
+func NewStatus(mainWorktreePath string, wt git.Worktree, branchMap map[string]git.LocalBranch) Status {
 	ws := Status{
 		AbsPath: wt.AbsolutePath,
-		IsMain:  wt.AbsolutePath == ctx.MainWorktreePath,
+		IsMain:  wt.AbsolutePath == mainWorktreePath,
 		Locked:  wt.Locked,
 	}
 	ws.BranchName = ExtractBranchName(&wt)

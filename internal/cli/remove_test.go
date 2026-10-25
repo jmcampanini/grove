@@ -12,6 +12,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func testWorktreeWithBranch(path, branchName string) git.Worktree {
+	commit := git.NewCommit("abc123", "test", time.Now(), "tester")
+	branch := git.NewLocalBranch(branchName, "", path, true, 0, 0, commit)
+	return git.Worktree{AbsolutePath: path, Ref: &branch}
+}
+
 func TestExecuteRemove(t *testing.T) {
 	tests := []struct {
 		force          bool
@@ -405,10 +411,4 @@ func TestResolveTarget(t *testing.T) {
 			}
 		})
 	}
-}
-
-func testWorktreeWithBranch(path, branchName string) git.Worktree {
-	commit := git.NewCommit("abc123", "test", time.Now(), "tester")
-	branch := git.NewLocalBranch(branchName, "", path, true, 0, 0, commit)
-	return git.Worktree{AbsolutePath: path, Ref: &branch}
 }

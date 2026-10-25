@@ -168,7 +168,7 @@ func createWorktreeForBranch(stdout io.Writer, ctx *checkoutContext, branchName 
 		return fmt.Errorf("failed to generate worktree name for branch %q: %w", branchName, err)
 	}
 
-	worktreePath, err := worktree.ResolveWorktreePath(ctx.cfg, ctx.gitClient, worktreeName)
+	worktreePath, err := worktree.ResolvePath(ctx.cfg, ctx.gitClient, worktreeName)
 	if err != nil {
 		return err
 	}

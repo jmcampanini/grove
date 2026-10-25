@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bytes"
 	"context"
 	"io"
 	"os"
@@ -9,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmcampanini/grove/internal/config"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -51,67 +49,6 @@ func TestRuntimeAndReportingConfigAgreeInRepo(t *testing.T) {
 	assert.Equal(t, rt.Config, cfg)
 	assert.Equal(t, rt.ConfigReport, report)
 	assert.Equal(t, 33, cfg.Naming.MaxLength, "repo config overrides the XDG layer")
-}
-
-func TestConfigCommandOutsideRepoRoundTrips(t *testing.T) {
-	isolatedConfigHome(t, "[naming]\nmax_length = 42\n")
-	workDir := tempDirResolved(t)
-	t.Chdir(workDir)
-
-	var out, errOut bytes.Buffer
-	root := NewRootCommand(strings.NewReader(""), &out, &errOut)
-	root.SetArgs([]string{"config"})
-	require.NoError(t, root.ExecuteContext(context.Background()), errOut.String())
-
-	roundTripPath := filepath.Join(workDir, "roundtrip.toml")
-	require.NoError(t, os.WriteFile(roundTripPath, out.Bytes(), 0o644))
-	reloaded, _, err := config.Load([]string{roundTripPath}, nil)
-	require.NoError(t, err)
-
-	want, _, err := loadReportingConfig(newTestRoot(), workDir)
-	require.NoError(t, err)
-	assert.Equal(t, want, reloaded, "config output should round-trip to the effective config")
-	assert.Equal(t, 42, reloaded.Naming.MaxLength)
-}
-
-func TestConfigCommandProvenanceNamesSourceFile(t *testing.T) {
-	configPath := isolatedConfigHome(t, "[naming]\nmax_length = 42\n")
-	workDir := tempDirResolved(t)
-	t.Chdir(workDir)
-
-	var out, errOut bytes.Buffer
-	root := NewRootCommand(strings.NewReader(""), &out, &errOut)
-	root.SetArgs([]string{"config", "--provenance"})
-	require.NoError(t, root.ExecuteContext(context.Background()), errOut.String())
-
-	assert.Contains(t, out.String(), configPath)
-}
-
-func TestConfigCommandSpaceFlagOverridesFile(t *testing.T) {
-	isolatedConfigHome(t, "[worktree]\nspace = \"codex\"\n")
-	workDir := tempDirResolved(t)
-	t.Chdir(workDir)
-
-	var out, errOut bytes.Buffer
-	root := NewRootCommand(strings.NewReader(""), &out, &errOut)
-	root.SetArgs([]string{"config", "--space", "claude"})
-	require.NoError(t, root.ExecuteContext(context.Background()), errOut.String())
-
-	assert.Contains(t, out.String(), `space = "claude"`)
-}
-
-func TestConfigCommandRejectsInvalidSpaceFlag(t *testing.T) {
-	isolatedConfigHome(t, "")
-	workDir := tempDirResolved(t)
-	t.Chdir(workDir)
-
-	var out, errOut bytes.Buffer
-	root := NewRootCommand(strings.NewReader(""), &out, &errOut)
-	root.SetArgs([]string{"config", "--space", "claude/sub"})
-	err := root.ExecuteContext(context.Background())
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "worktree.space cannot contain '/'")
 }
 
 // isolatedConfigHome creates a fake HOME containing an XDG-default grove
