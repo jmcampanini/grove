@@ -1,10 +1,6 @@
 # grove
 
-Grove manages git worktrees: one directory per branch, placed under a configurable root instead of next to the clone. It creates a branch and worktree from a phrase, a GitHub pull request, or a GitHub issue, and lists, syncs, and prunes the worktrees it finds.
-
-By default a worktree for `github.com/acme/app` lands at `$CODE_DIR/.worktrees/grove/github.com/acme/app/<name>`. The `grove` segment is the space: agent launchers pass `--space claude` or `--space pi` so their worktrees sit apart from yours, and every command still sees all of them.
-
-Command help is the canonical reference: `grove --help` and each command's `--help` describe every user-facing contract, `grove config --help` describes configuration precedence, `grove help layout` describes where worktrees go, and `grove help exit-codes` describes exit statuses. `grove docs` prints a longer Markdown reference that supplements command help.
+Grove manages git worktrees: one directory per branch, placed under a configurable root instead of next to the clone. It creates a branch and worktree from a phrase, a GitHub pull request, or a GitHub issue, and lists, syncs, and prunes the worktrees it finds. `grove sync` prompts before discarding uncommitted changes unless `--force` is passed, and `grove prune` removes worktrees and their branches only after you select and confirm them.
 
 
 ## Install
@@ -30,6 +26,8 @@ brew upgrade --fetch-HEAD grove
 
 ```sh
 brew install git mise
+git clone https://github.com/jmcampanini/grove
+cd grove
 mise trust
 mise install
 mise run build
@@ -50,16 +48,23 @@ Run these from inside a repository: the clone or any of its worktrees.
 | `grove pr checkout 42` | Check out a pull request into a worktree. |
 | `grove issue start 17` | Create a branch and worktree to work on an issue. |
 | `grove status` | Show a dashboard of every worktree with branch tracking, dirty state, and pull request information. |
-| `grove sync` | Fetch and hard-reset the current branch to its remote tracking branch after confirmation. |
+| `grove sync` | Fetch and hard-reset the current branch to its remote tracking branch. |
 | `grove prune` | Interactively remove worktrees that are likely no longer needed. |
-| `grove config --provenance` | Print each configuration value with its source. |
+
+`grove --help`, each command's `--help`, and the help topics `grove help layout` and `grove help exit-codes` are the canonical reference; `grove docs` supplements them.
 
 
 ## Required external programs
 
-Grove runs `git` for every worktree, git, pull request, and issue command, and `gh` for the `pr` and `issue` commands and `grove prune`. Both must be on `PATH`. Grove disables their interactive prompts (`GIT_TERMINAL_PROMPT=0`, `GH_PROMPT_DISABLED=1`), so `gh` must already be authenticated. `grove status` asks `gh` for pull request data and shows a worktree as local when that call fails. Grove never runs `fzf`; the `--fzf` flags only shape output for a pipeline you build.
+- `git`: every command that reads or changes a repository runs it.
+- `gh`: the `pr` and `issue` commands, `grove prune`, and the pull request data in `grove status` need it, and it must already be authenticated because grove disables its prompts.
 
 
 ## Configuration
 
-Grove reads `grove.toml` from the XDG config directory, from your home directory and each directory below it down to the main worktree, the current worktree, and the current directory, in that order, with later files overriding earlier ones and the `--space` and `--worktree-template` flags overriding them all; `grove config --help` documents the full precedence, `grove config` prints the values in effect, and `grove docs` prints the schema. Worktree placement is the `[worktree]` section: `root` (default `$CODE_DIR/.worktrees`), `layout` (default `{{.Space}}/{{.Host}}/{{.Owner}}/{{.Repo}}/{{.Name}}`), and `space` (default `grove`).
+Grove reads `grove.toml` from `$XDG_CONFIG_HOME/grove` (or `~/.config/grove`), from your home directory and each directory below it down to the main worktree, from the current worktree, and from the current directory. `grove config --help` documents the discovery order.
+
+```toml
+[worktree]
+root = "~/Code/.worktrees"
+```
