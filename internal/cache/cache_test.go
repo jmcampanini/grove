@@ -84,7 +84,7 @@ func TestCache_GetSet(t *testing.T) {
 			key:     "nonexistent",
 			wantVal: "",
 			wantHit: false,
-			setup:   func(t *testing.T, dir string) {},
+			setup:   func(_ *testing.T, _ string) {},
 		},
 		{
 			name:    "zero TTL disables caching",

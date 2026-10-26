@@ -199,6 +199,8 @@ func (n *IssueNamer) GenerateWorktreeName(number int, title, branch string) (str
 	return name, nil
 }
 
+// WorktreeLiteralPrefix returns the literal text issue.worktree_template
+// starts with before its first field, or "" when it starts with a field.
 func (n *IssueNamer) WorktreeLiteralPrefix() string {
 	return n.worktreeLiteralPrefix
 }

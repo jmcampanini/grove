@@ -27,7 +27,7 @@ func TestExecuteCheckout(t *testing.T) {
 		{
 			name: "local branch exists",
 			ref:  "feature/add-user-authentication",
-			gitMock: func(workspaceDir string) *mockGit {
+			gitMock: func(_ string) *mockGit {
 				return &mockGit{
 					branchExistsFn: func(branchName string, _ bool) (bool, error) {
 						return branchName == "feature/add-user-authentication", nil
@@ -39,7 +39,7 @@ func TestExecuteCheckout(t *testing.T) {
 		{
 			name: "local branch without prefix",
 			ref:  "my-experiment",
-			gitMock: func(workspaceDir string) *mockGit {
+			gitMock: func(_ string) *mockGit {
 				return &mockGit{
 					branchExistsFn: func(branchName string, _ bool) (bool, error) {
 						return branchName == "my-experiment", nil
@@ -51,7 +51,7 @@ func TestExecuteCheckout(t *testing.T) {
 		{
 			name: "local branch not found suggests remote",
 			ref:  "nonexistent-branch",
-			gitMock: func(workspaceDir string) *mockGit {
+			gitMock: func(_ string) *mockGit {
 				return &mockGit{}
 			},
 			wantErr:        true,
@@ -60,7 +60,7 @@ func TestExecuteCheckout(t *testing.T) {
 		{
 			name: "local branch with slash not found suggests remote",
 			ref:  "feature/nonexistent",
-			gitMock: func(workspaceDir string) *mockGit {
+			gitMock: func(_ string) *mockGit {
 				return &mockGit{
 					listRemotesFn: func() ([]string, error) {
 						return []string{"origin"}, nil
@@ -73,7 +73,7 @@ func TestExecuteCheckout(t *testing.T) {
 		{
 			name: "remote branch fetches and creates worktree",
 			ref:  "origin/feature/fix-login",
-			gitMock: func(workspaceDir string) *mockGit {
+			gitMock: func(_ string) *mockGit {
 				return &mockGit{
 					listRemotesFn: func() ([]string, error) {
 						return []string{"origin"}, nil
@@ -91,7 +91,7 @@ func TestExecuteCheckout(t *testing.T) {
 		{
 			name: "remote branch with local already existing skips fetch",
 			ref:  "origin/feature/fix-login",
-			gitMock: func(workspaceDir string) *mockGit {
+			gitMock: func(_ string) *mockGit {
 				return &mockGit{
 					listRemotesFn: func() ([]string, error) {
 						return []string{"origin"}, nil
@@ -131,7 +131,7 @@ func TestExecuteCheckout(t *testing.T) {
 		{
 			name: "first slash segment not a known remote falls through to local",
 			ref:  "feature/fix-login",
-			gitMock: func(workspaceDir string) *mockGit {
+			gitMock: func(_ string) *mockGit {
 				return &mockGit{
 					listRemotesFn: func() ([]string, error) {
 						return []string{"origin", "upstream"}, nil
@@ -146,7 +146,7 @@ func TestExecuteCheckout(t *testing.T) {
 		{
 			name: "worktree path already exists on disk",
 			ref:  "feature/fix-login",
-			gitMock: func(workspaceDir string) *mockGit {
+			gitMock: func(_ string) *mockGit {
 				return &mockGit{
 					branchExistsFn: func(_ string, _ bool) (bool, error) {
 						return true, nil
@@ -200,7 +200,7 @@ func TestExecuteCheckout(t *testing.T) {
 		{
 			name: "create worktree error",
 			ref:  "feature/fix-login",
-			gitMock: func(workspaceDir string) *mockGit {
+			gitMock: func(_ string) *mockGit {
 				return &mockGit{
 					branchExistsFn: func(_ string, _ bool) (bool, error) {
 						return true, nil
@@ -245,7 +245,7 @@ func TestExecuteCheckout(t *testing.T) {
 		{
 			name: "upstream remote works",
 			ref:  "upstream/hotfix-123",
-			gitMock: func(workspaceDir string) *mockGit {
+			gitMock: func(_ string) *mockGit {
 				return &mockGit{
 					listRemotesFn: func() ([]string, error) {
 						return []string{"origin", "upstream"}, nil

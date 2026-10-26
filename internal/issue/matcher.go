@@ -1,3 +1,4 @@
+// Package issue matches GitHub issues to the worktrees that work on them.
 package issue
 
 import (
@@ -13,6 +14,7 @@ type Match struct {
 	WorktreePath string
 }
 
+// HasWorktree reports whether a worktree was found for the issue.
 func (m Match) HasWorktree() bool {
 	return m.WorktreePath != ""
 }

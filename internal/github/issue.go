@@ -7,8 +7,10 @@ import (
 	"time"
 )
 
+// IssueState is the open or closed state GitHub reports for an issue.
 type IssueState string
 
+// Issue states as GitHub reports them.
 const (
 	IssueStateOpen   IssueState = "OPEN"
 	IssueStateClosed IssueState = "CLOSED"
@@ -18,6 +20,7 @@ func (s IssueState) String() string {
 	return string(s)
 }
 
+// IsValid reports whether s is a state GitHub can report.
 func (s IssueState) IsValid() bool {
 	switch s {
 	case IssueStateOpen, IssueStateClosed:
@@ -30,6 +33,7 @@ func (s IssueState) IsValid() bool {
 // GitHub returns an empty reason for open issues.
 type IssueStateReason string
 
+// Reasons GitHub attaches to a closed issue.
 const (
 	IssueStateReasonCompleted  IssueStateReason = "COMPLETED"
 	IssueStateReasonNotPlanned IssueStateReason = "NOT_PLANNED"
@@ -72,6 +76,8 @@ type IssueComment struct {
 	CreatedAt   time.Time
 }
 
+// Issue is a GitHub issue as gh returns it. Assignees, Body, Comments,
+// Milestone, and StateReason are populated only by GetIssue.
 type Issue struct {
 	Assignees   []string // Assignee logins
 	AuthorLogin string   // May be empty if author's account was deleted
@@ -88,13 +94,16 @@ type Issue struct {
 	URL         string
 }
 
-// issueListJsonFields are the fields fetched for issue lists; issueViewJsonFields
+// issueListJSONFields are the fields fetched for issue lists; issueViewJSONFields
 // adds the detail-only fields fetched for a single issue.
 const (
-	issueListJsonFields = "author,createdAt,labels,number,state,title,updatedAt,url"
-	issueViewJsonFields = issueListJsonFields + ",assignees,body,comments,milestone,stateReason"
+	issueListJSONFields = "author,createdAt,labels,number,state,title,updatedAt,url"
+	issueViewJSONFields = issueListJSONFields + ",assignees,body,comments,milestone,stateReason"
 )
 
+// UnmarshalJSON decodes the gh issue JSON shape, flattening the author,
+// assignee, and milestone objects to their names. An unknown state is an
+// error.
 func (i *Issue) UnmarshalJSON(data []byte) error {
 	type rawComment struct {
 		Author struct {

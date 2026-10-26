@@ -1,3 +1,4 @@
+// Package logging tees diagnostic output to the terminal and the grove log file.
 package logging
 
 import (

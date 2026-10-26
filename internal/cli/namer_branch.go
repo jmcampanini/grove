@@ -8,7 +8,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newNamerBranchCmd(services commandServices) *cobra.Command {
+func newNamerBranchCmd(_ commandServices) *cobra.Command {
 	return &cobra.Command{
 		Use:   "branch <phrase>",
 		Short: "Generate a branch name from a phrase",

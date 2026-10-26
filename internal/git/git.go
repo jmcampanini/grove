@@ -2,14 +2,21 @@ package git
 
 import "time"
 
+// WorktreeRefType identifies what kind of ref a worktree has checked out.
 type WorktreeRefType int
 
 const (
+	// WorktreeRefTypeBranch is a worktree checked out on a local branch.
 	WorktreeRefTypeBranch WorktreeRefType = iota
+	// WorktreeRefTypeCommit is a worktree with a detached HEAD at a plain commit.
 	WorktreeRefTypeCommit
+	// WorktreeRefTypeTag is a worktree with a detached HEAD at a tag.
 	WorktreeRefTypeTag
 )
 
+// WorktreeRef is the branch, tag, or bare commit a worktree has checked out.
+// FullBranch and FullTag report whether the ref is of that kind and return it;
+// Commit always returns the commit the ref points at.
 type WorktreeRef interface {
 	Type() WorktreeRefType
 	FullBranch() (*LocalBranch, bool)
@@ -17,6 +24,8 @@ type WorktreeRef interface {
 	Commit() Commit
 }
 
+// Worktree is one entry of git worktree list. Ref is nil for a bare
+// worktree, so callers must check it before use.
 type Worktree struct {
 	AbsolutePath string
 	HeadSHA      string
@@ -24,6 +33,8 @@ type Worktree struct {
 	Ref          WorktreeRef
 }
 
+// CommitSHA returns HeadSHA when git reported one, otherwise the SHA of
+// Ref's commit, or "" when neither is known.
 func (w Worktree) CommitSHA() string {
 	if w.HeadSHA != "" {
 		return w.HeadSHA
@@ -34,6 +45,8 @@ func (w Worktree) CommitSHA() string {
 	return w.Ref.Commit().SHA
 }
 
+// Commit is a git commit with the metadata grove displays. It is also the
+// WorktreeRef of a detached HEAD that is not at a tag.
 type Commit struct {
 	CommittedBy string
 	CommittedOn time.Time
@@ -43,6 +56,8 @@ type Commit struct {
 
 var _ WorktreeRef = &Commit{}
 
+// NewCommit returns a Commit holding the given values as is; it does not
+// consult the repository.
 func NewCommit(sha, subject string, committedOn time.Time, committedBy string) Commit {
 	return Commit{
 		CommittedBy: committedBy,
@@ -51,11 +66,21 @@ func NewCommit(sha, subject string, committedOn time.Time, committedBy string) C
 		Subject:     subject,
 	}
 }
-func (c Commit) Type() WorktreeRefType            { return WorktreeRefTypeCommit }
-func (c Commit) FullBranch() (*LocalBranch, bool) { return nil, false }
-func (c Commit) FullTag() (*Tag, bool)            { return nil, false }
-func (c Commit) Commit() Commit                   { return c }
 
+// Type reports WorktreeRefTypeCommit.
+func (c Commit) Type() WorktreeRefType { return WorktreeRefTypeCommit }
+
+// FullBranch always reports false: a bare commit is not a branch.
+func (c Commit) FullBranch() (*LocalBranch, bool) { return nil, false }
+
+// FullTag always reports false: a bare commit is not a tag.
+func (c Commit) FullTag() (*Tag, bool) { return nil, false }
+
+// Commit returns c itself.
+func (c Commit) Commit() Commit { return c }
+
+// Tag is a git tag with its tagger metadata. A lightweight tag carries only
+// Name and the commit; the other fields are zero.
 type Tag struct {
 	commit      Commit
 	Message     string    // tag message (empty for lightweight tags)
@@ -67,6 +92,8 @@ type Tag struct {
 
 var _ WorktreeRef = &Tag{}
 
+// NewTag builds a Tag; pass zero values for message, tagger, and taggedOn
+// to describe a lightweight tag.
 func NewTag(name string, commit Commit, message, taggerName, taggerEmail string, taggedOn time.Time) Tag {
 	return Tag{
 		commit:      commit,
@@ -78,10 +105,17 @@ func NewTag(name string, commit Commit, message, taggerName, taggerEmail string,
 	}
 }
 
-func (t Tag) Type() WorktreeRefType            { return WorktreeRefTypeTag }
+// Type reports WorktreeRefTypeTag.
+func (t Tag) Type() WorktreeRefType { return WorktreeRefTypeTag }
+
+// FullBranch always reports false: a tag is not a branch.
 func (t Tag) FullBranch() (*LocalBranch, bool) { return nil, false }
-func (t Tag) FullTag() (*Tag, bool)            { return &t, true }
-func (t Tag) Commit() Commit                   { return t.commit }
+
+// FullTag returns t.
+func (t Tag) FullTag() (*Tag, bool) { return &t, true }
+
+// Commit returns the commit the tag points at, dereferenced for annotated tags.
+func (t Tag) Commit() Commit { return t.commit }
 
 // Date returns the most relevant date for the tag, either TaggedOn or Commit().CommittedOn
 func (t Tag) Date() time.Time {
@@ -96,6 +130,8 @@ func (t Tag) IsAnnotated() bool {
 	return t.TaggerName != "" || t.TaggerEmail != "" || !t.TaggedOn.IsZero() || t.Message != ""
 }
 
+// LocalBranch is a local branch with its upstream tracking state and, when
+// checked out, the worktree that holds it.
 type LocalBranch struct {
 	Ahead                int // Commits ahead of upstream
 	Behind               int // Commits behind upstream
@@ -108,6 +144,8 @@ type LocalBranch struct {
 
 var _ WorktreeRef = &LocalBranch{}
 
+// NewLocalBranch returns a LocalBranch holding the given values as is, with
+// commit as its tip; it does not consult the repository.
 func NewLocalBranch(name, upstreamName, worktreeAbsolutePath string, isCheckedOut bool, ahead, behind int, commit Commit) LocalBranch {
 	return LocalBranch{
 		Ahead:                ahead,
@@ -120,17 +158,27 @@ func NewLocalBranch(name, upstreamName, worktreeAbsolutePath string, isCheckedOu
 	}
 }
 
-func (b LocalBranch) Type() WorktreeRefType            { return WorktreeRefTypeBranch }
-func (b LocalBranch) FullBranch() (*LocalBranch, bool) { return &b, true }
-func (b LocalBranch) FullTag() (*Tag, bool)            { return nil, false }
-func (b LocalBranch) Commit() Commit                   { return b.commit }
+// Type reports WorktreeRefTypeBranch.
+func (b LocalBranch) Type() WorktreeRefType { return WorktreeRefTypeBranch }
 
+// FullBranch returns b.
+func (b LocalBranch) FullBranch() (*LocalBranch, bool) { return &b, true }
+
+// FullTag always reports false: a branch is not a tag.
+func (b LocalBranch) FullTag() (*Tag, bool) { return nil, false }
+
+// Commit returns the branch tip.
+func (b LocalBranch) Commit() Commit { return b.commit }
+
+// RemoteBranch is a remote-tracking branch as recorded locally by the last fetch.
 type RemoteBranch struct {
 	commit     Commit
 	Name       string // Short branch name without remote prefix (e.g., "main")
 	RemoteName string // Remote name (e.g., "origin")
 }
 
+// NewRemoteBranch returns a RemoteBranch holding the given values as is, with
+// commit as its tip; it does not consult the repository.
 func NewRemoteBranch(name, remoteName string, commit Commit) RemoteBranch {
 	return RemoteBranch{
 		commit:     commit,
@@ -139,9 +187,15 @@ func NewRemoteBranch(name, remoteName string, commit Commit) RemoteBranch {
 	}
 }
 
-func (b RemoteBranch) Commit() Commit   { return b.commit }
+// Commit returns the remote-tracking tip.
+func (b RemoteBranch) Commit() Commit { return b.commit }
+
+// FullName returns the remote-qualified name, such as "origin/main".
 func (b RemoteBranch) FullName() string { return b.RemoteName + "/" + b.Name }
 
+// Git is the set of git operations grove needs. Methods documented as
+// mutating change repository state; a dry-run implementation logs them
+// instead of executing them.
 type Git interface {
 
 	// GetCurrentBranch returns the current branch name.

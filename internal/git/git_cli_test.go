@@ -855,7 +855,7 @@ commitsubject Beta feature
 // =============================================================================
 
 func TestParseWorktreeBlock(t *testing.T) {
-	g := newTestGitCli()
+	g := newTestCLI()
 
 	// Setup branch and tag maps for tests
 	mainBranch := NewLocalBranch("main", "", "/home/user/project", true, 0, 0,
@@ -997,7 +997,7 @@ func TestParseWorktreeBlock(t *testing.T) {
 }
 
 func TestParseWorktreeBlockUsesPorcelainHead(t *testing.T) {
-	g := newTestGitCli()
+	g := newTestCLI()
 	branchCommit := NewCommit("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "Earlier", time.Time{}, "Jane")
 	branch := NewLocalBranch("feature", "", "/home/user/feature", true, 0, 0, branchCommit)
 	porcelainHead := "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"

@@ -17,10 +17,10 @@ import (
 
 const testTimeout = 30 * time.Second
 
-// newTestGitCli creates a GitCli instance suitable for unit testing.
+// newTestCLI creates a CLI instance suitable for unit testing.
 // The logger discards output and workingDir is set to a placeholder.
-func newTestGitCli() *GitCli {
-	return &GitCli{
+func newTestCLI() *CLI {
+	return &CLI{
 		dryRun:     false,
 		log:        clog.New(io.Discard),
 		timeout:    testTimeout,
@@ -30,7 +30,7 @@ func newTestGitCli() *GitCli {
 
 // testRepo provides a temporary git repository for integration tests.
 type testRepo struct {
-	Git     *GitCli
+	Git     *CLI
 	rootDir string
 	t       *testing.T
 }
@@ -46,7 +46,7 @@ func newTestRepo(t *testing.T) *testRepo {
 	runGit(t, dir, "config", "user.name", "Test User")
 
 	return &testRepo{
-		Git:     New(context.Background(), false, dir, testTimeout, nil).(*GitCli),
+		Git:     New(context.Background(), false, dir, testTimeout, nil).(*CLI),
 		rootDir: dir,
 		t:       t,
 	}
@@ -63,7 +63,7 @@ func newTestRepoWithDryRun(t *testing.T) *testRepo {
 	runGit(t, dir, "config", "user.name", "Test User")
 
 	return &testRepo{
-		Git:     New(context.Background(), true, dir, testTimeout, nil).(*GitCli),
+		Git:     New(context.Background(), true, dir, testTimeout, nil).(*CLI),
 		rootDir: dir,
 		t:       t,
 	}

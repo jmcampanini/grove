@@ -140,7 +140,7 @@ func outputIssueListTable(w io.Writer, matches []issue.Match) error {
 	t := table.New().
 		Border(lipgloss.NormalBorder()).
 		BorderStyle(lipgloss.NewStyle().Foreground(purple)).
-		StyleFunc(func(row, col int) lipgloss.Style {
+		StyleFunc(func(row, _ int) lipgloss.Style {
 			switch {
 			case row == table.HeaderRow:
 				return headerStyle

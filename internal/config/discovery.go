@@ -7,7 +7,7 @@ import (
 
 const configFileName = "grove.toml"
 
-// ConfigPaths returns ordered list of config file paths to check.
+// Paths returns ordered list of config file paths to check.
 // Paths are ordered from lowest to highest priority, so that when decoded
 // sequentially, each subsequent file overrides values from previous files.
 //
@@ -20,7 +20,7 @@ const configFileName = "grove.toml"
 //
 // The worktreeRoot and gitRoot may be the same directory if running from the main worktree.
 // Empty strings for worktreeRoot or gitRoot are handled gracefully.
-func ConfigPaths(cwd, worktreeRoot, gitRoot, homeDir string) []string {
+func Paths(cwd, worktreeRoot, gitRoot, homeDir string) []string {
 	var paths []string
 	seen := make(map[string]bool)
 
@@ -83,5 +83,5 @@ func ConfigPaths(cwd, worktreeRoot, gitRoot, homeDir string) []string {
 //  1. File in XDG config directory (~/.config/grove/grove.toml)
 //  2. Files in each directory from home down to cwd (inclusive)
 func BootstrapConfigPaths(cwd, homeDir string) []string {
-	return ConfigPaths(cwd, "", cwd, homeDir)
+	return Paths(cwd, "", cwd, homeDir)
 }

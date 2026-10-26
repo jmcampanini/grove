@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newCacheClearCmd(services commandServices) *cobra.Command {
+func newCacheClearCmd(_ commandServices) *cobra.Command {
 	return &cobra.Command{
 		Use:   "clear",
 		Short: "Remove all cached data",

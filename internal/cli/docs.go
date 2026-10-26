@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newDocsCmd(services commandServices) *cobra.Command {
+func newDocsCmd(_ commandServices) *cobra.Command {
 	return &cobra.Command{
 		Use:   "docs",
 		Short: "Print Grove reference documentation",
