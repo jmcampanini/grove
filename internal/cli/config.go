@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/jmcampanini/go-config-loader/configreporter"
 	"github.com/spf13/cobra"
@@ -22,9 +24,9 @@ Values load in this order, and a later layer replaces any value an earlier
 one sets:
 
   1. Built-in defaults.
-  2. $XDG_CONFIG_HOME/grove/grove.toml, or ~/.config/grove/grove.toml when
-     XDG_CONFIG_HOME is unset or not an absolute path. A relative value is
-     ignored, never resolved against the current directory.
+  2. $XDG_CONFIG_HOME/grove/config.toml, or ~/.config/grove/config.toml
+     when XDG_CONFIG_HOME is unset, empty, or not an absolute path. A
+     relative value is ignored, never resolved against the current directory.
   3. grove.toml in each directory from the home directory down to the parent
      of the main worktree, when the main worktree is under the home
      directory. The current directory is skipped here and loaded at step 6.
@@ -52,21 +54,25 @@ and 4 follow the main worktree, so a worktree placed under worktree.root
 reads the same repository files as the main worktree; only step 5 is
 specific to it.
 
-The output is the merged TOML and nothing else; it reloads as a grove.toml:
+By default the output is the merged TOML and nothing else; it reloads as a
+grove.toml:
 
   grove config > grove.toml
 
---provenance (alias --sources) prints a tab-separated table instead, with
-Path, Value, and Source columns and one row per field. Source is <default>,
-the absolute path of the file that last set the value, or <pflag> for a
-flag. Nothing is redacted; the configuration holds no secret fields.`,
+--provenance (alias --sources) appends field-level provenance after the
+TOML: a blank line, a "# Provenance" line, then a tab-separated table with
+Path, Value, and Source columns and one row per field, every line prefixed
+with "# ". The output stays valid TOML and still reloads. Source is
+<default>, the absolute path of the file that last set the value, or
+<pflag> for a flag. Nothing is redacted; the configuration holds no secret
+fields.`,
 		Args:    cobra.NoArgs,
 		GroupID: "config",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runConfig(cmd, provenance)
 		},
 	}
-	cmd.Flags().BoolVar(&provenance, "provenance", false, "Print field-level configuration provenance")
+	cmd.Flags().BoolVar(&provenance, "provenance", false, "Append field-level configuration provenance as TOML comments")
 	cmd.Flags().BoolVar(&provenance, "sources", false, "Alias for --provenance")
 	return cmd
 }
@@ -83,32 +89,51 @@ func runConfig(cmd *cobra.Command, provenance bool) error {
 	}
 
 	reporter := configreporter.New(cfg, report)
-	if provenance {
-		return writeConfigProvenance(cmd.OutOrStdout(), reporter.ProvenanceHeaders(), reporter.ProvenanceRows())
-	}
-
 	if err := reporter.WriteTOML(cmd.OutOrStdout()); err != nil {
 		return fmt.Errorf("failed to encode config: %w", err)
 	}
+
+	if provenance {
+		return writeConfigProvenance(cmd.OutOrStdout(), reporter.ProvenanceHeaders(), reporter.ProvenanceRows())
+	}
 	return nil
 }
 
+// writeConfigProvenance appends the provenance table as TOML comment lines so
+// the report that precedes it stays loadable.
 func writeConfigProvenance(w io.Writer, headers []string, rows [][]string) error {
-	if len(headers) > 0 {
-		if err := writeTabSeparatedRow(w, headers); err != nil {
-			return err
-		}
+	if _, err := fmt.Fprintln(w, "\n# Provenance"); err != nil {
+		return err
 	}
-
-	for _, row := range rows {
-		if err := writeTabSeparatedRow(w, row); err != nil {
+	for _, cells := range append([][]string{headers}, rows...) {
+		escaped := make([]string, len(cells))
+		for i, cell := range cells {
+			escaped[i] = commentCell(cell)
+		}
+		if _, err := fmt.Fprintf(w, "# %s\n", strings.Join(escaped, "\t")); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func writeTabSeparatedRow(w io.Writer, cells []string) error {
-	_, err := fmt.Fprintln(w, strings.Join(cells, "\t"))
-	return err
+// commentCell escapes the bytes a TOML comment cannot carry (control
+// characters and invalid UTF-8), so a row stays one comment line whatever a
+// discovered file path contains. Ordinary paths pass through unchanged.
+func commentCell(cell string) string {
+	var b strings.Builder
+	for i := 0; i < len(cell); {
+		r, size := utf8.DecodeRuneInString(cell[i:])
+		switch {
+		case r == utf8.RuneError && size == 1:
+			fmt.Fprintf(&b, `\x%02x`, cell[i])
+		case r < 0x20 || r == 0x7f:
+			quoted := strconv.QuoteRune(r)
+			b.WriteString(quoted[1 : len(quoted)-1])
+		default:
+			b.WriteRune(r)
+		}
+		i += size
+	}
+	return b.String()
 }

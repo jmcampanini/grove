@@ -177,6 +177,8 @@ func TestConfig_Validate(t *testing.T) {
 }
 
 func TestPaths(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", "")
+
 	tests := []struct {
 		name         string
 		cwd          string
@@ -193,6 +195,7 @@ func TestPaths(t *testing.T) {
 			gitRoot:      "/Users/jim/project",
 			homeDir:      "/Users/jim",
 			wantContains: []string{
+				"/Users/jim/.config/grove/config.toml",
 				"/Users/jim/project/grove.toml",
 				"/Users/jim/grove.toml",
 			},
@@ -347,7 +350,7 @@ func TestBootstrapConfigPaths(t *testing.T) {
 			cwd:     "/Users/jim/code/org/project",
 			homeDir: "/Users/jim",
 			want: []string{
-				"/Users/jim/.config/grove/grove.toml",
+				"/Users/jim/.config/grove/config.toml",
 				"/Users/jim/grove.toml",
 				"/Users/jim/code/grove.toml",
 				"/Users/jim/code/org/grove.toml",
@@ -360,7 +363,7 @@ func TestBootstrapConfigPaths(t *testing.T) {
 			homeDir:   "/Users/jim",
 			xdgConfig: "/custom/xdg",
 			want: []string{
-				"/custom/xdg/grove/grove.toml",
+				"/custom/xdg/grove/config.toml",
 				"/Users/jim/grove.toml",
 				"/Users/jim/project/grove.toml",
 			},
@@ -378,7 +381,7 @@ func TestBootstrapConfigPaths(t *testing.T) {
 			cwd:     "",
 			homeDir: "/Users/jim",
 			want: []string{
-				"/Users/jim/.config/grove/grove.toml",
+				"/Users/jim/.config/grove/config.toml",
 			},
 		},
 		{
@@ -387,7 +390,7 @@ func TestBootstrapConfigPaths(t *testing.T) {
 			homeDir:   "/Users/jim",
 			xdgConfig: "relative/xdg",
 			want: []string{
-				"/Users/jim/.config/grove/grove.toml",
+				"/Users/jim/.config/grove/config.toml",
 				"/Users/jim/grove.toml",
 				"/Users/jim/project/grove.toml",
 			},

@@ -5,14 +5,17 @@ import (
 	"path/filepath"
 )
 
-const configFileName = "grove.toml"
+const (
+	configFileName    = "grove.toml"
+	xdgConfigFileName = "config.toml"
+)
 
 // Paths returns ordered list of config file paths to check.
 // Paths are ordered from lowest to highest priority, so that when decoded
 // sequentially, each subsequent file overrides values from previous files.
 //
 // Order (lowest to highest priority):
-//  1. File in XDG config directory (~/.config/grove/grove.toml)
+//  1. File in XDG config directory (~/.config/grove/config.toml)
 //  2. Files walking up from git root toward home directory
 //  3. File in git repository root (main worktree)
 //  4. File in current worktree root (if different from git root)
@@ -24,11 +27,11 @@ func Paths(cwd, worktreeRoot, gitRoot, homeDir string) []string {
 	var paths []string
 	seen := make(map[string]bool)
 
-	addPath := func(dir string) {
+	addPath := func(dir, fileName string) {
 		if dir == "" {
 			return
 		}
-		path := filepath.Join(dir, configFileName)
+		path := filepath.Join(dir, fileName)
 		if !seen[path] {
 			seen[path] = true
 			paths = append(paths, path)
@@ -38,14 +41,14 @@ func Paths(cwd, worktreeRoot, gitRoot, homeDir string) []string {
 	// A relative XDG_CONFIG_HOME is invalid per the XDG spec: ignore it and
 	// use the default config home instead of resolving it against cwd.
 	if xdgConfigDir := os.Getenv("XDG_CONFIG_HOME"); xdgConfigDir != "" && filepath.IsAbs(xdgConfigDir) {
-		addPath(filepath.Join(xdgConfigDir, "grove"))
+		addPath(filepath.Join(xdgConfigDir, "grove"), xdgConfigFileName)
 	} else if homeDir != "" {
-		addPath(filepath.Join(homeDir, ".config", "grove"))
+		addPath(filepath.Join(homeDir, ".config", "grove"), xdgConfigFileName)
 	}
 
 	if gitRoot != "" && homeDir != "" {
 		// Collect ancestors from gitRoot's parent up to home.
-		// Skip cwd so it appears only via addPath(cwd) below (highest priority),
+		// Skip cwd so it appears only via the addPath(cwd, ...) call below (highest priority),
 		// but always include homeDir since it's the walk boundary.
 		var ancestors []string
 		current := filepath.Dir(gitRoot)
@@ -65,13 +68,13 @@ func Paths(cwd, worktreeRoot, gitRoot, homeDir string) []string {
 
 		// Add in reverse order: home first (lowest priority), closest to gitRoot last
 		for i := len(ancestors) - 1; i >= 0; i-- {
-			addPath(ancestors[i])
+			addPath(ancestors[i], configFileName)
 		}
 	}
 
-	addPath(gitRoot)
-	addPath(worktreeRoot)
-	addPath(cwd)
+	addPath(gitRoot, configFileName)
+	addPath(worktreeRoot, configFileName)
+	addPath(cwd, configFileName)
 
 	return paths
 }
@@ -80,7 +83,7 @@ func Paths(cwd, worktreeRoot, gitRoot, homeDir string) []string {
 // Reporting and naming commands use it outside a repository.
 //
 // Order (lowest to highest priority):
-//  1. File in XDG config directory (~/.config/grove/grove.toml)
+//  1. File in XDG config directory (~/.config/grove/config.toml)
 //  2. Files in each directory from home down to cwd (inclusive)
 func BootstrapConfigPaths(cwd, homeDir string) []string {
 	return Paths(cwd, "", cwd, homeDir)
