@@ -304,7 +304,7 @@ func TestConfigPaths(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			paths := ConfigPaths(tt.cwd, tt.worktreeRoot, tt.gitRoot, tt.homeDir)
+			paths := Paths(tt.cwd, tt.worktreeRoot, tt.gitRoot, tt.homeDir)
 
 			// Check that expected paths are present
 			for _, want := range tt.wantContains {

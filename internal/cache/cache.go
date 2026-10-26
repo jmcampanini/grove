@@ -1,3 +1,5 @@
+// Package cache stores gh command output on disk with a time-to-live so
+// repeated previews can skip the network.
 package cache
 
 import (

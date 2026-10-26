@@ -1,3 +1,4 @@
+// Package pr matches GitHub pull requests to the worktrees that check them out.
 package pr
 
 import (
@@ -13,6 +14,7 @@ type Match struct {
 	WorktreePath string
 }
 
+// HasWorktree reports whether a worktree was found for the pull request.
 func (m Match) HasWorktree() bool {
 	return m.WorktreePath != ""
 }

@@ -14,8 +14,10 @@ import (
 	"github.com/jmcampanini/grove/internal/process"
 )
 
-// GitCli provides high-level git operations by executing real git commands via the git CLI.
-type GitCli struct {
+// CLI implements Git by running the git executable in a fixed working
+// directory. With dryRun set, mutating methods log the command and return
+// success without running it.
+type CLI struct {
 	ctx        context.Context
 	dryRun     bool
 	log        *clog.Logger
@@ -23,9 +25,9 @@ type GitCli struct {
 	workingDir string
 }
 
-var _ Git = &GitCli{}
+var _ Git = &CLI{}
 
-// New creates a new GitCli instance that executes git commands in the specified working directory.
+// New creates a CLI that executes git commands in the specified working directory.
 // A nil logger falls back to the default logger.
 func New(ctx context.Context, dryRun bool, workingDir string, timeout time.Duration, logger *clog.Logger) Git {
 	if ctx == nil {
@@ -34,7 +36,7 @@ func New(ctx context.Context, dryRun bool, workingDir string, timeout time.Durat
 	if logger == nil {
 		logger = clog.Default()
 	}
-	return &GitCli{
+	return &CLI{
 		ctx:        ctx,
 		dryRun:     dryRun,
 		log:        logger.WithPrefix("git"),
@@ -43,7 +45,7 @@ func New(ctx context.Context, dryRun bool, workingDir string, timeout time.Durat
 	}
 }
 
-func (g *GitCli) executeGitCommand(args ...string) (string, error) {
+func (g *CLI) executeGitCommand(args ...string) (string, error) {
 	g.log.Debug("Executing git command", "cmd", "git", "args", args, "workingDir", g.workingDir)
 
 	result, err := process.Run(g.ctx, process.Spec{
@@ -81,7 +83,7 @@ func (g *GitCli) executeGitCommand(args ...string) (string, error) {
 }
 
 // executeMutatingGitCommand runs a git command that modifies state, unless in dry-run mode.
-func (g *GitCli) executeMutatingGitCommand(errContext string, args ...string) error {
+func (g *CLI) executeMutatingGitCommand(errContext string, args ...string) error {
 	if g.dryRun {
 		g.log.Info("Would execute git command", "cmd", "git", "args", args)
 		return nil
@@ -93,7 +95,7 @@ func (g *GitCli) executeMutatingGitCommand(errContext string, args ...string) er
 }
 
 // executeMutatingGitCommandWithOutput runs a git command that modifies state and returns its output.
-func (g *GitCli) executeMutatingGitCommandWithOutput(errContext string, args ...string) (string, error) {
+func (g *CLI) executeMutatingGitCommandWithOutput(errContext string, args ...string) (string, error) {
 	if g.dryRun {
 		g.log.Info("Would execute git command", "cmd", "git", "args", args)
 		return fmt.Sprintf("Would execute: git %s", strings.Join(args, " ")), nil
@@ -105,7 +107,9 @@ func (g *GitCli) executeMutatingGitCommandWithOutput(errContext string, args ...
 	return output, nil
 }
 
-func (g *GitCli) GetMainWorktreePath() (string, error) {
+// GetMainWorktreePath returns the parent of the common git directory, which
+// is the primary worktree even when called from a linked worktree.
+func (g *CLI) GetMainWorktreePath() (string, error) {
 	commonDir, err := g.executeGitCommand("rev-parse", "--git-common-dir")
 	if err != nil {
 		return "", fmt.Errorf("failed to get git common dir: %w", err)
@@ -128,7 +132,9 @@ func (g *GitCli) GetMainWorktreePath() (string, error) {
 	return mainWorktree, nil
 }
 
-func (g *GitCli) GetRemoteURL(remoteName string) (string, error) {
+// GetRemoteURL reads remote.<name>.url as configured, without insteadOf
+// rewriting. A missing remote is an error.
+func (g *CLI) GetRemoteURL(remoteName string) (string, error) {
 	// git remote get-url applies url.*.insteadOf rewrites, which are a
 	// transport detail; read the configured value instead.
 	output, err := g.executeGitCommand("config", "--get", "remote."+remoteName+".url")
@@ -141,7 +147,9 @@ func (g *GitCli) GetRemoteURL(remoteName string) (string, error) {
 	return output, nil
 }
 
-func (g *GitCli) GetWorktreeRoot() (string, error) {
+// GetWorktreeRoot returns the top-level directory of the current worktree,
+// or ("", nil) when the working directory is not inside a repository.
+func (g *CLI) GetWorktreeRoot() (string, error) {
 	output, err := g.executeGitCommand("rev-parse", "--show-toplevel")
 	if err != nil {
 		if strings.Contains(err.Error(), "not a git repo") {
@@ -153,7 +161,9 @@ func (g *GitCli) GetWorktreeRoot() (string, error) {
 	return output, nil
 }
 
-func (g *GitCli) GetCurrentBranch() (string, error) {
+// GetCurrentBranch returns the short name of the checked-out branch, or
+// "HEAD" when detached.
+func (g *CLI) GetCurrentBranch() (string, error) {
 	output, err := g.executeGitCommand("rev-parse", "--abbrev-ref", "HEAD")
 	if err != nil {
 		return "", fmt.Errorf("failed to get current branch: %w", err)
@@ -161,7 +171,8 @@ func (g *GitCli) GetCurrentBranch() (string, error) {
 	return output, nil
 }
 
-func (g *GitCli) GetCommitSubject() (string, error) {
+// GetCommitSubject returns the first line of the HEAD commit message.
+func (g *CLI) GetCommitSubject() (string, error) {
 	output, err := g.executeGitCommand("log", "-1", "--format=%s")
 	if err != nil {
 		return "", fmt.Errorf("failed to get commit subject: %w", err)
@@ -169,7 +180,9 @@ func (g *GitCli) GetCommitSubject() (string, error) {
 	return output, nil
 }
 
-func (g *GitCli) GetDefaultRemote(fallback string) (string, error) {
+// GetDefaultRemote returns remote.pushDefault when configured, otherwise
+// fallback. It never fails on a missing setting.
+func (g *CLI) GetDefaultRemote(fallback string) (string, error) {
 	output, err := g.executeGitCommand("config", "--get", "remote.pushDefault")
 	if err == nil && output != "" {
 		g.log.Debug("Found remote.pushDefault", "remote", output)
@@ -181,7 +194,7 @@ func (g *GitCli) GetDefaultRemote(fallback string) (string, error) {
 }
 
 // remoteExists checks if a remote with the given name is configured.
-func (g *GitCli) remoteExists(remoteName string) (bool, error) {
+func (g *CLI) remoteExists(remoteName string) (bool, error) {
 	_, err := g.executeGitCommand("remote", "get-url", remoteName)
 	if err == nil {
 		return true, nil
@@ -194,7 +207,7 @@ func (g *GitCli) remoteExists(remoteName string) (bool, error) {
 	return false, err
 }
 
-func (g *GitCli) ensureRemoteExists(remoteName string) error {
+func (g *CLI) ensureRemoteExists(remoteName string) error {
 	exists, err := g.remoteExists(remoteName)
 	if err != nil {
 		return fmt.Errorf("failed to check remote existence: %w", err)
@@ -205,7 +218,11 @@ func (g *GitCli) ensureRemoteExists(remoteName string) error {
 	return nil
 }
 
-func (g *GitCli) GetRepoDefaultBranch(remoteName string) (string, error) {
+// GetRepoDefaultBranch resolves the default branch from the local
+// remote-tracking HEAD (<remote>/HEAD) without contacting the remote.
+// It returns ("", nil) when that ref is not set and an error when the
+// remote does not exist.
+func (g *CLI) GetRepoDefaultBranch(remoteName string) (string, error) {
 	if err := g.ensureRemoteExists(remoteName); err != nil {
 		return "", err
 	}
@@ -223,7 +240,10 @@ func (g *GitCli) GetRepoDefaultBranch(remoteName string) (string, error) {
 	return branchName, nil
 }
 
-func (g *GitCli) GetRemoteDefaultBranch(remoteName string) (string, error) {
+// GetRemoteDefaultBranch asks the remote for its HEAD with git ls-remote
+// --symref. It returns ("", nil) when the remote HEAD is not a branch and
+// an error when the remote does not exist or cannot be reached.
+func (g *CLI) GetRemoteDefaultBranch(remoteName string) (string, error) {
 	if err := g.ensureRemoteExists(remoteName); err != nil {
 		return "", err
 	}
@@ -255,7 +275,9 @@ func parseRemoteDefaultBranchFromLSRemote(output string) string {
 	return ""
 }
 
-func (g *GitCli) ListLocalBranches() ([]LocalBranch, error) {
+// ListLocalBranches returns every local branch with its upstream, ahead and
+// behind counts, checkout state, and tip commit.
+func (g *CLI) ListLocalBranches() ([]LocalBranch, error) {
 	format := `branch %(refname:short)
 checkedOut %(if)%(HEAD)%(then)true%(else)false%(end)
 commit %(objectname:short)
@@ -357,7 +379,7 @@ func parseTrackInfo(track string) (ahead, behind int) {
 
 // getCommitBySHA retrieves full commit information for a given SHA.
 // Used when parsing worktrees with detached HEAD.
-func (g *GitCli) getCommitBySHA(sha string) (Commit, error) {
+func (g *CLI) getCommitBySHA(sha string) (Commit, error) {
 	// Format: subject<NUL>committer date ISO<NUL>committer name
 	// NUL separators handle multi-line subjects more robustly than line-based parsing
 	format := "%s%x00%cI%x00%cn"
@@ -383,7 +405,9 @@ func (g *GitCli) getCommitBySHA(sha string) (Commit, error) {
 	return NewCommit(sha, subject, committedOn, committedBy), nil
 }
 
-func (g *GitCli) ListRemoteBranches(remoteName string) ([]RemoteBranch, error) {
+// ListRemoteBranches returns the remote-tracking branches of remoteName
+// from local refs; the result is only as current as the last fetch.
+func (g *CLI) ListRemoteBranches(remoteName string) ([]RemoteBranch, error) {
 	format := `ref %(refname:short)
 commit %(objectname:short)
 committedOn %(committerdate:iso-strict)
@@ -438,7 +462,8 @@ func parseRemoteBranchBlock(lines []string) RemoteBranch {
 	return NewRemoteBranch(name, remoteName, commit)
 }
 
-func (g *GitCli) ListRemotes() ([]string, error) {
+// ListRemotes returns the names of the configured remotes.
+func (g *CLI) ListRemotes() ([]string, error) {
 	output, err := g.executeGitCommand("remote")
 	if err != nil {
 		return nil, fmt.Errorf("failed to list remotes: %w", err)
@@ -458,7 +483,9 @@ func (g *GitCli) ListRemotes() ([]string, error) {
 	return remotes, nil
 }
 
-func (g *GitCli) SyncTags(remoteName string) error {
+// SyncTags fetches tags from remoteName, pruning tags the remote deleted.
+// An empty remoteName uses GetDefaultRemote("origin"). Mutating.
+func (g *CLI) SyncTags(remoteName string) error {
 	if remoteName == "" {
 		var err error
 		remoteName, err = g.GetDefaultRemote("origin")
@@ -472,7 +499,10 @@ func (g *GitCli) SyncTags(remoteName string) error {
 	return g.executeMutatingGitCommand("failed to sync tags from remote", args...)
 }
 
-func (g *GitCli) ListTags() ([]Tag, error) {
+// ListTags returns every local tag. Annotated tags carry their tagger
+// metadata and point at the dereferenced commit; lightweight tags carry
+// only the name and commit. It does not fetch; call SyncTags first.
+func (g *CLI) ListTags() ([]Tag, error) {
 	format := `name %(refname:short)
 objecttype %(objecttype)
 objectsha %(objectname)
@@ -580,7 +610,9 @@ func parseTagBlock(lines []string) Tag {
 	return NewTag(name, commit, actualMessage, taggerName, taggerEmail, taggedOn)
 }
 
-func (g *GitCli) BranchExists(branchName string, caseInsensitive bool) (bool, error) {
+// BranchExists reports whether a local branch named branchName exists,
+// ignoring case when caseInsensitive is set.
+func (g *CLI) BranchExists(branchName string, caseInsensitive bool) (bool, error) {
 	branches, err := g.ListLocalBranches()
 	if err != nil {
 		return false, err
@@ -601,7 +633,9 @@ func (g *GitCli) BranchExists(branchName string, caseInsensitive bool) (bool, er
 	return false, nil
 }
 
-func (g *GitCli) RefExists(ref string) (bool, error) {
+// RefExists reports whether ref resolves to an object. A ref that does not
+// resolve is (false, nil); any other git failure is an error.
+func (g *CLI) RefExists(ref string) (bool, error) {
 	_, err := g.executeGitCommand("rev-parse", "--verify", "--quiet", ref)
 	if err == nil {
 		return true, nil
@@ -613,7 +647,9 @@ func (g *GitCli) RefExists(ref string) (bool, error) {
 	return false, err
 }
 
-func (g *GitCli) ListWorktrees() ([]Worktree, error) {
+// ListWorktrees returns every worktree with its checked-out branch, tag, or
+// commit resolved as a WorktreeRef. A bare worktree has a nil Ref.
+func (g *CLI) ListWorktrees() ([]Worktree, error) {
 	branches, err := g.ListLocalBranches()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list branches for worktree lookup: %w", err)
@@ -643,7 +679,7 @@ func (g *GitCli) ListWorktrees() ([]Worktree, error) {
 }
 
 // parseWorktreesFromPorcelain parses the output of `git worktree list --porcelain`
-func (g *GitCli) parseWorktreesFromPorcelain(output string, branchMap map[string]LocalBranch, tagMap map[string]Tag) ([]Worktree, error) {
+func (g *CLI) parseWorktreesFromPorcelain(output string, branchMap map[string]LocalBranch, tagMap map[string]Tag) ([]Worktree, error) {
 	blocks := splitIntoBlocks(output)
 	worktrees := make([]Worktree, 0, len(blocks))
 
@@ -660,7 +696,7 @@ func (g *GitCli) parseWorktreesFromPorcelain(output string, branchMap map[string
 	return worktrees, nil
 }
 
-func (g *GitCli) parseWorktreeBlock(lines []string, branchMap map[string]LocalBranch, tagMap map[string]Tag) (Worktree, error) {
+func (g *CLI) parseWorktreeBlock(lines []string, branchMap map[string]LocalBranch, tagMap map[string]Tag) (Worktree, error) {
 	fields := parseLineFields(lines)
 
 	absolutePath := fields["worktree"]
@@ -687,7 +723,7 @@ func (g *GitCli) parseWorktreeBlock(lines []string, branchMap map[string]LocalBr
 		if tag, ok := tagMap[sha]; ok {
 			worktree.Ref = &tag
 		} else {
-			// TODO: figure out a way to get the commit information without needing a reference to g GitCli
+			// TODO: figure out a way to get the commit information without needing a reference to g CLI
 			commit, err := g.getCommitBySHA(sha)
 			if err != nil {
 				return Worktree{}, fmt.Errorf("failed to get commit for detached worktree: %w", err)
@@ -699,13 +735,18 @@ func (g *GitCli) parseWorktreeBlock(lines []string, branchMap map[string]LocalBr
 	return worktree, nil
 }
 
-func (g *GitCli) CreateWorktreeForNewBranch(newBranchName, worktreeAbsPath string) error {
+// CreateWorktreeForNewBranch creates newBranchName from HEAD and checks it
+// out at worktreeAbsPath in one git worktree add. Mutating.
+func (g *CLI) CreateWorktreeForNewBranch(newBranchName, worktreeAbsPath string) error {
 	g.log.Info("Creating worktree for new branch", "branch", newBranchName, "path", worktreeAbsPath)
 	args := []string{"worktree", "add", "-b", newBranchName, worktreeAbsPath}
 	return g.executeMutatingGitCommand("failed to create worktree for new branch", args...)
 }
 
-func (g *GitCli) CreateWorktreeForNewBranchFromRef(newBranchName, worktreeAbsPath, baseRef string) error {
+// CreateWorktreeForNewBranchFromRef creates newBranchName from baseRef, or
+// from HEAD when baseRef is empty, and checks it out at worktreeAbsPath.
+// Mutating.
+func (g *CLI) CreateWorktreeForNewBranchFromRef(newBranchName, worktreeAbsPath, baseRef string) error {
 	g.log.Info("Creating worktree for new branch from ref", "branch", newBranchName, "path", worktreeAbsPath, "baseRef", baseRef)
 	args := []string{"worktree", "add", "-b", newBranchName, worktreeAbsPath}
 	if baseRef != "" {
@@ -714,20 +755,26 @@ func (g *GitCli) CreateWorktreeForNewBranchFromRef(newBranchName, worktreeAbsPat
 	return g.executeMutatingGitCommand("failed to create worktree for new branch from ref", args...)
 }
 
-func (g *GitCli) CreateWorktreeForExistingBranch(branchName, worktreeAbsPath string) error {
+// CreateWorktreeForExistingBranch checks out the existing branchName at
+// worktreeAbsPath. Mutating.
+func (g *CLI) CreateWorktreeForExistingBranch(branchName, worktreeAbsPath string) error {
 	g.log.Info("Creating worktree for existing branch", "branch", branchName, "path", worktreeAbsPath)
 	args := []string{"worktree", "add", worktreeAbsPath, branchName}
 	return g.executeMutatingGitCommand("failed to create worktree for existing branch", args...)
 }
 
-func (g *GitCli) FetchRemoteBranch(remote, remoteRef, localRef string) error {
+// FetchRemoteBranch fetches remoteRef from remote into the local ref
+// localRef. Mutating.
+func (g *CLI) FetchRemoteBranch(remote, remoteRef, localRef string) error {
 	g.log.Info("Fetching remote branch", "remote", remote, "remoteRef", remoteRef, "localRef", localRef)
 	refSpec := remoteRef + ":" + localRef
 	args := []string{"fetch", remote, refSpec}
 	return g.executeMutatingGitCommand("failed to fetch remote branch", args...)
 }
 
-func (g *GitCli) FetchRemoteTrackingBranch(remoteName, branchName string) error {
+// FetchRemoteTrackingBranch fetches one branch from remoteName and
+// force-updates refs/remotes/<remote>/<branch>, without tags. Mutating.
+func (g *CLI) FetchRemoteTrackingBranch(remoteName, branchName string) error {
 	g.log.Info("Fetching remote tracking branch", "remote", remoteName, "branch", branchName)
 	remoteTrackingRef := fmt.Sprintf("refs/remotes/%s/%s", remoteName, branchName)
 	refSpec := fmt.Sprintf("+refs/heads/%s:%s", branchName, remoteTrackingRef)
@@ -735,13 +782,17 @@ func (g *GitCli) FetchRemoteTrackingBranch(remoteName, branchName string) error 
 	return g.executeMutatingGitCommand("failed to fetch remote tracking branch", args...)
 }
 
-func (g *GitCli) FetchRemote(remoteName string) (string, error) {
+// FetchRemote fetches remoteName with pruning of deleted refs and tags and
+// returns git's output. Mutating.
+func (g *CLI) FetchRemote(remoteName string) (string, error) {
 	g.log.Info("Fetching from remote", "remote", remoteName)
 	args := []string{"fetch", remoteName, "--prune", "--prune-tags", "--tags"}
 	return g.executeMutatingGitCommandWithOutput("failed to fetch from remote", args...)
 }
 
-func (g *GitCli) DeleteBranch(name string, force bool) error {
+// DeleteBranch deletes the local branch name; force deletes it even when
+// it is not fully merged. Mutating.
+func (g *CLI) DeleteBranch(name string, force bool) error {
 	g.log.Info("Deleting branch", "branch", name, "force", force)
 	flag := "-d"
 	if force {
@@ -750,7 +801,8 @@ func (g *GitCli) DeleteBranch(name string, force bool) error {
 	return g.executeMutatingGitCommand("failed to delete branch", "branch", flag, name)
 }
 
-func (g *GitCli) GetStatus(absPath string) (string, error) {
+// GetStatus returns the human-readable git status of the worktree at absPath.
+func (g *CLI) GetStatus(absPath string) (string, error) {
 	g.log.Debug("Getting worktree status", "path", absPath)
 	output, err := g.executeGitCommand("-C", absPath, "status")
 	if err != nil {
@@ -759,7 +811,9 @@ func (g *GitCli) GetStatus(absPath string) (string, error) {
 	return output, nil
 }
 
-func (g *GitCli) IsWorktreeDirty(absPath string) (bool, error) {
+// IsWorktreeDirty reports whether the worktree at absPath has modified,
+// staged, or untracked files.
+func (g *CLI) IsWorktreeDirty(absPath string) (bool, error) {
 	g.log.Debug("Checking worktree dirty state", "path", absPath)
 	output, err := g.executeGitCommand("-C", absPath, "status", "--porcelain")
 	if err != nil {
@@ -768,22 +822,30 @@ func (g *GitCli) IsWorktreeDirty(absPath string) (bool, error) {
 	return output != "", nil
 }
 
-func (g *GitCli) Merge(ref string) (string, error) {
+// Merge merges ref into the current branch with --no-edit and returns
+// git's output. Mutating.
+func (g *CLI) Merge(ref string) (string, error) {
 	g.log.Info("Merging ref", "ref", ref)
 	return g.executeMutatingGitCommandWithOutput("failed to merge", "merge", "--no-edit", ref)
 }
 
-func (g *GitCli) ResetHard(ref string) error {
+// ResetHard moves the current branch to ref and discards every local
+// change. Mutating.
+func (g *CLI) ResetHard(ref string) error {
 	g.log.Info("Resetting to ref", "ref", ref)
 	return g.executeMutatingGitCommand("failed to reset", "reset", "--hard", ref)
 }
 
-func (g *GitCli) PruneWorktrees() error {
+// PruneWorktrees drops worktree metadata whose directory no longer exists.
+// Mutating.
+func (g *CLI) PruneWorktrees() error {
 	g.log.Info("Pruning stale worktree metadata")
 	return g.executeMutatingGitCommand("failed to prune worktrees", "worktree", "prune")
 }
 
-func (g *GitCli) RemoveWorktree(absPath string, force bool) error {
+// RemoveWorktree removes the linked worktree at absPath; force removes it
+// even with uncommitted changes. Mutating.
+func (g *CLI) RemoveWorktree(absPath string, force bool) error {
 	g.log.Info("Removing worktree", "path", absPath, "force", force)
 	args := []string{"worktree", "remove"}
 	if force {

@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newConfigCmd(services commandServices) *cobra.Command {
+func newConfigCmd(_ commandServices) *cobra.Command {
 	var provenance bool
 	cmd := &cobra.Command{
 		Use:   "config",

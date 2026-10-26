@@ -42,11 +42,11 @@ func TestStartIssueWorktree(t *testing.T) {
 				listLocalBranchesFn: func() ([]git.LocalBranch, error) {
 					return []git.LocalBranch{createTestLocalBranch("issue/123-add-auth")}, nil
 				},
-				fetchRemoteTrackingBranchFn: func(remoteName, branchName string) error {
+				fetchRemoteTrackingBranchFn: func(_, _ string) error {
 					t.Error("FetchRemoteTrackingBranch should not be called when an issue branch exists")
 					return nil
 				},
-				createWorktreeForNewBranchFromRefFn: func(newBranchName, worktreeAbsPath, baseRef string) error {
+				createWorktreeForNewBranchFromRefFn: func(_, _, _ string) error {
 					t.Error("CreateWorktreeForNewBranchFromRef should not be called when an issue branch exists")
 					return nil
 				},
@@ -167,7 +167,7 @@ func TestStartIssueWorktree(t *testing.T) {
 				listWorktreesFn: func() ([]git.Worktree, error) {
 					return []git.Worktree{}, nil
 				},
-				createWorktreeForNewBranchFromRefFn: func(newBranchName, worktreeAbsPath, baseRef string) error {
+				createWorktreeForNewBranchFromRefFn: func(newBranchName, worktreeAbsPath, _ string) error {
 					assert.Equal(t, "issue/7-fix-login-crash-when-t", newBranchName)
 					assert.Equal(t, "/workspace/is-7-fix-login-crash-when-the", worktreeAbsPath)
 					return nil
@@ -188,7 +188,7 @@ func TestStartIssueWorktree(t *testing.T) {
 				listWorktreesFn: func() ([]git.Worktree, error) {
 					return []git.Worktree{}, nil
 				},
-				createWorktreeForNewBranchFromRefFn: func(newBranchName, worktreeAbsPath, baseRef string) error {
+				createWorktreeForNewBranchFromRefFn: func(newBranchName, worktreeAbsPath, _ string) error {
 					assert.Equal(t, "issue/456", newBranchName)
 					assert.Equal(t, "/workspace/is-456-anything", worktreeAbsPath)
 					return nil
@@ -237,7 +237,7 @@ func TestStartIssueWorktree(t *testing.T) {
 				listWorktreesFn: func() ([]git.Worktree, error) {
 					return []git.Worktree{}, nil
 				},
-				getRemoteDefaultBranchFn: func(remoteName string) (string, error) {
+				getRemoteDefaultBranchFn: func(_ string) (string, error) {
 					return "", nil
 				},
 			},
@@ -275,7 +275,7 @@ func TestStartIssueWorktree(t *testing.T) {
 				listWorktreesFn: func() ([]git.Worktree, error) {
 					return []git.Worktree{}, nil
 				},
-				createWorktreeForNewBranchFromRefFn: func(newBranchName, worktreeAbsPath, baseRef string) error {
+				createWorktreeForNewBranchFromRefFn: func(_, _, _ string) error {
 					return assert.AnError
 				},
 			},
@@ -332,11 +332,11 @@ func TestStartIssueWorktree_ExistingWorktree(t *testing.T) {
 				listWorktreesFn: func() ([]git.Worktree, error) {
 					return []git.Worktree{createTestWorktree(wtPath, "issue/123-add-auth")}, nil
 				},
-				createWorktreeForNewBranchFromRefFn: func(newBranchName, worktreeAbsPath, baseRef string) error {
+				createWorktreeForNewBranchFromRefFn: func(_, _, _ string) error {
 					t.Error("CreateWorktreeForNewBranchFromRef should not be called when a worktree exists")
 					return nil
 				},
-				createWorktreeForExistingBranchFn: func(branchName, worktreeAbsPath string) error {
+				createWorktreeForExistingBranchFn: func(_, _ string) error {
 					t.Error("CreateWorktreeForExistingBranch should not be called when a worktree exists")
 					return nil
 				},
@@ -365,7 +365,7 @@ func TestStartIssueWorktree_StaleWorktreeEntry(t *testing.T) {
 			pruned = true
 			return nil
 		},
-		createWorktreeForNewBranchFromRefFn: func(newBranchName, worktreeAbsPath, baseRef string) error {
+		createWorktreeForNewBranchFromRefFn: func(newBranchName, worktreeAbsPath, _ string) error {
 			assert.Equal(t, "issue/123-add-auth", newBranchName)
 			assert.Equal(t, "/workspace/is-123-add-auth", worktreeAbsPath)
 			return nil
@@ -390,7 +390,7 @@ func TestStartIssueWorktree_WorktreePathCollision(t *testing.T) {
 		listWorktreesFn: func() ([]git.Worktree, error) {
 			return []git.Worktree{}, nil
 		},
-		createWorktreeForNewBranchFromRefFn: func(newBranchName, worktreeAbsPath, baseRef string) error {
+		createWorktreeForNewBranchFromRefFn: func(_, _, _ string) error {
 			t.Error("CreateWorktreeForNewBranchFromRef should not be called on path collision")
 			return nil
 		},

@@ -294,12 +294,12 @@ func TestExecuteRemove_LayoutFailureStillRemovesByBranch(t *testing.T) {
 
 func TestResolveTarget_ComparesResolvedPaths(t *testing.T) {
 	base := t.TempDir()
-	real := filepath.Join(base, "real")
-	require.NoError(t, os.MkdirAll(filepath.Join(real, "wt-feature"), 0o755))
+	realDir := filepath.Join(base, "real")
+	require.NoError(t, os.MkdirAll(filepath.Join(realDir, "wt-feature"), 0o755))
 	link := filepath.Join(base, "link")
-	require.NoError(t, os.Symlink(real, link))
+	require.NoError(t, os.Symlink(realDir, link))
 
-	resolvedReal, err := filepath.EvalSymlinks(real)
+	resolvedReal, err := filepath.EvalSymlinks(realDir)
 	require.NoError(t, err)
 	worktrees := []git.Worktree{
 		testWorktreeWithBranch(filepath.Join(resolvedReal, "wt-feature"), "feature/add-auth"),

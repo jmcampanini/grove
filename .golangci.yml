@@ -23,10 +23,6 @@ linters:
       locale: US
     gocyclo:
       min-complexity: 15
-    revive:
-      rules:
-        - name: package-comments
-          disabled: true
 
 formatters:
   enable:

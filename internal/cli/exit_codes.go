@@ -2,7 +2,7 @@ package cli
 
 import "github.com/spf13/cobra"
 
-func newExitCodesTopicCmd(services commandServices) *cobra.Command {
+func newExitCodesTopicCmd(_ commandServices) *cobra.Command {
 	return &cobra.Command{
 		Use:   "exit-codes",
 		Short: "Exit codes and error categories",

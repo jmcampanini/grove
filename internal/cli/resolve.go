@@ -13,7 +13,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newResolveCmd(services commandServices) *cobra.Command {
+func newResolveCmd(_ commandServices) *cobra.Command {
 	return &cobra.Command{
 		Use:   "resolve [path]",
 		Short: "Print the absolute path of the primary worktree",

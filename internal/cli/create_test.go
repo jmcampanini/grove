@@ -30,7 +30,7 @@ func TestExecuteCreate(t *testing.T) {
 		{
 			name:   "simple phrase",
 			phrase: "add logging support",
-			gitMock: func(workspaceDir string) *mockGit {
+			gitMock: func(_ string) *mockGit {
 				return &mockGit{}
 			},
 			wantOutput: "wt-add-logging-support",
@@ -38,7 +38,7 @@ func TestExecuteCreate(t *testing.T) {
 		{
 			name:   "special characters",
 			phrase: "fix: handle 404 & 500 errors!",
-			gitMock: func(workspaceDir string) *mockGit {
+			gitMock: func(_ string) *mockGit {
 				return &mockGit{}
 			},
 			wantOutput: "wt-fix-handle-404-500-err",
@@ -46,7 +46,7 @@ func TestExecuteCreate(t *testing.T) {
 		{
 			name:   "mixed casing",
 			phrase: "Add OAuth2 Google Integration",
-			gitMock: func(workspaceDir string) *mockGit {
+			gitMock: func(_ string) *mockGit {
 				return &mockGit{}
 			},
 			wantOutput: "wt-add-oauth2-google-inte",
@@ -54,7 +54,7 @@ func TestExecuteCreate(t *testing.T) {
 		{
 			name:   "long generated branch is capped before worktree naming",
 			phrase: "implement comprehensive user authentication and authorization system with role based access",
-			gitMock: func(workspaceDir string) *mockGit {
+			gitMock: func(_ string) *mockGit {
 				return &mockGit{}
 			},
 			wantOutput: "wt-implement-comprehensiv",
@@ -70,9 +70,9 @@ func TestExecuteCreate(t *testing.T) {
 		{
 			name:   "duplicate branch",
 			phrase: "add logging support",
-			gitMock: func(workspaceDir string) *mockGit {
+			gitMock: func(_ string) *mockGit {
 				return &mockGit{
-					branchExistsFn: func(branchName string, caseInsensitive bool) (bool, error) {
+					branchExistsFn: func(_ string, _ bool) (bool, error) {
 						return true, nil
 					},
 				}
@@ -83,14 +83,14 @@ func TestExecuteCreate(t *testing.T) {
 		{
 			name:           "empty phrase",
 			phrase:         "   ",
-			gitMock:        func(workspaceDir string) *mockGit { return &mockGit{} },
+			gitMock:        func(_ string) *mockGit { return &mockGit{} },
 			wantErr:        true,
 			wantErrContain: "phrase cannot be empty",
 		},
 		{
 			name:   "all special chars slugifies to empty",
 			phrase: "@#$%^&*",
-			gitMock: func(workspaceDir string) *mockGit {
+			gitMock: func(_ string) *mockGit {
 				return &mockGit{}
 			},
 			wantErr:        true,
@@ -99,7 +99,7 @@ func TestExecuteCreate(t *testing.T) {
 		{
 			name:   "worktree path already exists on disk",
 			phrase: "add logging support",
-			gitMock: func(workspaceDir string) *mockGit {
+			gitMock: func(_ string) *mockGit {
 				return &mockGit{}
 			},
 			setupFS: func(t *testing.T, workspaceDir string) {
@@ -135,7 +135,7 @@ func TestExecuteCreate(t *testing.T) {
 			layout: "{{.Space}}/{{.Host}}/{{.Owner}}/{{.Repo}}/{{.Name}}",
 			gitMock: func(_ string) *mockGit {
 				return &mockGit{
-					getDefaultRemoteFn: func(fallback string) (string, error) { return "fork", nil },
+					getDefaultRemoteFn: func(_ string) (string, error) { return "fork", nil },
 					getRemoteURLFn: func(remoteName string) (string, error) {
 						if remoteName != "origin" {
 							return "", fmt.Errorf("unexpected remote %q", remoteName)
@@ -149,7 +149,7 @@ func TestExecuteCreate(t *testing.T) {
 		{
 			name:   "worktree creation error",
 			phrase: "add logging support",
-			gitMock: func(workspaceDir string) *mockGit {
+			gitMock: func(_ string) *mockGit {
 				return &mockGit{
 					createWorktreeForNewBranchFromRefFn: func(_, _, _ string) error {
 						return assert.AnError
@@ -234,7 +234,7 @@ func TestExecuteCreate(t *testing.T) {
 			name:   "reuse with nothing existing",
 			phrase: "add logging support",
 			reuse:  true,
-			gitMock: func(workspaceDir string) *mockGit {
+			gitMock: func(_ string) *mockGit {
 				return &mockGit{}
 			},
 			wantOutput: "wt-add-logging-support",
@@ -243,7 +243,7 @@ func TestExecuteCreate(t *testing.T) {
 			name:   "reuse with branch but no worktree",
 			phrase: "add logging support",
 			reuse:  true,
-			gitMock: func(workspaceDir string) *mockGit {
+			gitMock: func(_ string) *mockGit {
 				return &mockGit{
 					branchExistsFn: func(_ string, _ bool) (bool, error) {
 						return true, nil
@@ -259,7 +259,7 @@ func TestExecuteCreate(t *testing.T) {
 			name:   "reuse with branch but no worktree and create fails",
 			phrase: "add logging support",
 			reuse:  true,
-			gitMock: func(workspaceDir string) *mockGit {
+			gitMock: func(_ string) *mockGit {
 				return &mockGit{
 					branchExistsFn: func(_ string, _ bool) (bool, error) {
 						return true, nil
@@ -279,7 +279,7 @@ func TestExecuteCreate(t *testing.T) {
 			name:   "reuse with branch and orphaned dir on disk",
 			phrase: "add logging support",
 			reuse:  true,
-			gitMock: func(workspaceDir string) *mockGit {
+			gitMock: func(_ string) *mockGit {
 				return &mockGit{
 					branchExistsFn: func(_ string, _ bool) (bool, error) {
 						return true, nil
@@ -300,7 +300,7 @@ func TestExecuteCreate(t *testing.T) {
 			name:   "reuse with ListWorktrees error",
 			phrase: "add logging support",
 			reuse:  true,
-			gitMock: func(workspaceDir string) *mockGit {
+			gitMock: func(_ string) *mockGit {
 				return &mockGit{
 					branchExistsFn: func(_ string, _ bool) (bool, error) {
 						return true, nil
@@ -317,7 +317,7 @@ func TestExecuteCreate(t *testing.T) {
 			name:   "reuse with orphaned dir on disk",
 			phrase: "add logging support",
 			reuse:  true,
-			gitMock: func(workspaceDir string) *mockGit {
+			gitMock: func(_ string) *mockGit {
 				return &mockGit{}
 			},
 			setupFS: func(t *testing.T, workspaceDir string) {

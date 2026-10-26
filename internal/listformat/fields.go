@@ -1,3 +1,4 @@
+// Package listformat shapes values for the tab-separated lists grove feeds to fzf.
 package listformat
 
 import (

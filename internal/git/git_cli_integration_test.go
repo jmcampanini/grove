@@ -37,11 +37,11 @@ func TestGetWorktreeRoot_Integration_FromSubdirectory(t *testing.T) {
 	repo := newTestRepo(t)
 	repo.commit("initial commit")
 
-	// Create a subdirectory and use a GitCli pointing to it
+	// Create a subdirectory and use a CLI pointing to it
 	subdir := filepath.Join(repo.path(), "subdir", "nested")
 	require.NoError(t, os.MkdirAll(subdir, 0755))
 
-	subdirGit := New(context.Background(), false, subdir, testTimeout, nil).(*GitCli)
+	subdirGit := New(context.Background(), false, subdir, testTimeout, nil).(*CLI)
 	root, err := subdirGit.GetWorktreeRoot()
 
 	require.NoError(t, err)
@@ -55,7 +55,7 @@ func TestGetWorktreeRoot_Integration_OutsideRepo(t *testing.T) {
 
 	// Use temp dir that's not a git repo
 	tmpDir := t.TempDir()
-	outsideGit := New(context.Background(), false, tmpDir, testTimeout, nil).(*GitCli)
+	outsideGit := New(context.Background(), false, tmpDir, testTimeout, nil).(*CLI)
 
 	root, err := outsideGit.GetWorktreeRoot()
 
@@ -181,8 +181,8 @@ func TestGetMainWorktreePath_Integration_FromLinkedWorktree(t *testing.T) {
 	worktreePath := filepath.Join(t.TempDir(), "feature-worktree")
 	repo.createWorktree(worktreePath, "feature")
 
-	// Create GitCli pointing to the linked worktree
-	linkedGit := New(context.Background(), false, worktreePath, testTimeout, nil).(*GitCli)
+	// Create CLI pointing to the linked worktree
+	linkedGit := New(context.Background(), false, worktreePath, testTimeout, nil).(*CLI)
 
 	mainPath, err := linkedGit.GetMainWorktreePath()
 
@@ -272,7 +272,7 @@ func TestListLocalBranches_Integration_EmptyRepo(t *testing.T) {
 	runGit(t, dir, "config", "user.email", "test@example.com")
 	runGit(t, dir, "config", "user.name", "Test User")
 
-	git := New(context.Background(), false, dir, testTimeout, nil).(*GitCli)
+	git := New(context.Background(), false, dir, testTimeout, nil).(*CLI)
 	branches, err := git.ListLocalBranches()
 
 	require.NoError(t, err)
@@ -936,7 +936,7 @@ func TestCreateWorktreeForNewBranch_Integration_DryRun(t *testing.T) {
 
 	// Branch should NOT exist
 	// Need a non-dry-run git to check
-	realGit := New(context.Background(), false, repo.path(), testTimeout, nil).(*GitCli)
+	realGit := New(context.Background(), false, repo.path(), testTimeout, nil).(*CLI)
 	exists, err := realGit.BranchExists("dry-run-feature", false)
 	require.NoError(t, err)
 	assert.False(t, exists)
@@ -1011,7 +1011,7 @@ func TestCreateWorktreeForExistingBranch_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify it's on the correct branch
-	worktreeGit := New(context.Background(), false, worktreePath, testTimeout, nil).(*GitCli)
+	worktreeGit := New(context.Background(), false, worktreePath, testTimeout, nil).(*CLI)
 	branch, err := worktreeGit.GetCurrentBranch()
 	require.NoError(t, err)
 	assert.Equal(t, "existing-branch", branch)

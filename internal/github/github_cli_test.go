@@ -2,7 +2,11 @@ package github
 
 import (
 	"context"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,9 +21,9 @@ func TestNew(t *testing.T) {
 
 	require.NotNil(t, gh)
 
-	// Verify it implements the interface (checked at compile time by var _ GitHub = &GitHubCli{})
-	_, ok := gh.(*GitHubCli)
-	assert.True(t, ok, "expected *GitHubCli")
+	// Verify it implements the interface (checked at compile time by var _ GitHub = &CLI{})
+	_, ok := gh.(*CLI)
+	assert.True(t, ok, "expected *CLI")
 }
 
 func TestDefaultPRLimit(t *testing.T) {
@@ -30,104 +34,184 @@ func TestDefaultIssueLimit(t *testing.T) {
 	assert.Equal(t, 20, DefaultIssueLimit)
 }
 
-// skipIfGhNotAvailable skips the test if gh CLI is not installed or not authenticated.
-func skipIfGhNotAvailable(t *testing.T) {
-	t.Helper()
-
+// TestGhOnPath fails, rather than skipping, when gh is missing. The README
+// lists gh as a required external program, and the other tests in this
+// package run a fake gh, so this is the check that a runner without gh does
+// not pass the suite.
+func TestGhOnPath(t *testing.T) {
 	if _, err := exec.LookPath("gh"); err != nil {
-		t.Skip("gh CLI not available")
-	}
-
-	// Check if authenticated
-	cmd := exec.Command("gh", "auth", "status")
-	if err := cmd.Run(); err != nil {
-		t.Skip("gh CLI not authenticated")
+		t.Fatalf("gh is a required external program: %v", err)
 	}
 }
 
-// skipIfNotInGitRepo skips the test if not running in a git repository.
-func skipIfNotInGitRepo(t *testing.T) {
-	t.Helper()
+func TestCLIGetIssue(t *testing.T) {
+	argsPath := installRecordingGh(t, 0, `{
+		"author": {"login": "alice"},
+		"comments": [{"author": {"login": "bob"}, "body": "Reproduced."}],
+		"number": 17,
+		"state": "OPEN",
+		"title": "Fix login crash"
+	}`)
+	gh := New(context.Background(), t.TempDir(), testTimeout, nil, nil)
 
-	cmd := exec.Command("git", "rev-parse", "--git-dir")
-	if err := cmd.Run(); err != nil {
-		t.Skip("not in a git repository")
-	}
-}
+	issue, err := gh.GetIssue(17)
 
-// Integration tests - these require gh to be installed and authenticated,
-// and require running in a git repository with a GitHub remote.
-
-func TestGitHubCli_GetPullRequest_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
-	skipIfGhNotAvailable(t)
-	skipIfNotInGitRepo(t)
-
-	// This test requires a known PR number in the repository.
-	// Skip if we can't determine a valid PR to test against.
-	t.Skip("integration test requires a known PR number - run manually with a specific PR")
-}
-
-func TestGitHubCli_GetPullRequestByBranch_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
-	skipIfGhNotAvailable(t)
-	skipIfNotInGitRepo(t)
-
-	gh := New(context.Background(), ".", testTimeout, nil, nil)
-
-	// Test with a branch that likely doesn't have a PR
-	pr, err := gh.GetPullRequestByBranch("nonexistent-branch-12345")
 	require.NoError(t, err)
-	assert.Nil(t, pr, "expected nil for nonexistent branch")
+	assert.Equal(t, 17, issue.Number)
+	assert.Equal(t, "Fix login crash", issue.Title)
+	assert.Equal(t, []IssueComment{{AuthorLogin: "bob", Body: "Reproduced."}}, issue.Comments)
+	args := recordedArgs(t, argsPath)
+	assert.Equal(t, []string{"issue", "view", "17"}, args[:3])
+	assert.Contains(t, args, "--json")
 }
 
-func TestGitHubCli_GetIssue_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
-	skipIfGhNotAvailable(t)
-	skipIfNotInGitRepo(t)
+func TestCLIGetIssueFailure(t *testing.T) {
+	installRecordingGh(t, 1, "")
+	gh := New(context.Background(), t.TempDir(), testTimeout, nil, nil)
 
-	// This test requires a known issue number in the repository.
-	// Skip if we can't determine a valid issue to test against.
-	t.Skip("integration test requires a known issue number - run manually with a specific issue")
+	_, err := gh.GetIssue(17)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "issue #17")
 }
 
-func TestGitHubCli_ListIssues_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
+func TestCLIGetPullRequest(t *testing.T) {
+	argsPath := installRecordingGh(t, 0, `{
+		"author": {"login": "alice"},
+		"files": [{"additions": 3, "deletions": 1, "path": "main.go"}],
+		"headRefName": "feature/login",
+		"isDraft": false,
+		"number": 42,
+		"state": "OPEN",
+		"title": "Fix login"
+	}`)
+	gh := New(context.Background(), t.TempDir(), testTimeout, nil, nil)
+
+	pr, err := gh.GetPullRequest(42)
+
+	require.NoError(t, err)
+	assert.Equal(t, 42, pr.Number)
+	assert.Equal(t, "feature/login", pr.BranchName)
+	assert.Equal(t, []PullRequestFile{{Additions: 3, Deletions: 1, Path: "main.go"}}, pr.Files)
+	args := recordedArgs(t, argsPath)
+	assert.Equal(t, []string{"pr", "view", "42"}, args[:3])
+	assert.Contains(t, flagValue(args, "--json"), "files")
+}
+
+func TestCLIGetPullRequestByBranch(t *testing.T) {
+	tests := []struct {
+		name       string
+		response   string
+		wantNumber int
+	}{
+		{
+			name:     "no pull request for the branch",
+			response: "[]",
+		},
+		{
+			name:       "pull request found",
+			response:   `[{"headRefName": "feature/login", "isDraft": false, "number": 42, "state": "MERGED", "title": "Fix login"}]`,
+			wantNumber: 42,
+		},
 	}
-	skipIfGhNotAvailable(t)
-	skipIfNotInGitRepo(t)
 
-	gh := New(context.Background(), ".", testTimeout, nil, nil)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			argsPath := installRecordingGh(t, 0, tt.response)
+			gh := New(context.Background(), t.TempDir(), testTimeout, nil, nil)
 
-	// List open issues (may return empty list, which is fine)
+			pr, err := gh.GetPullRequestByBranch("feature/login")
+
+			require.NoError(t, err)
+			if tt.wantNumber == 0 {
+				assert.Nil(t, pr)
+			} else {
+				require.NotNil(t, pr)
+				assert.Equal(t, tt.wantNumber, pr.Number)
+				assert.Equal(t, PRStateMerged, pr.State)
+			}
+			args := recordedArgs(t, argsPath)
+			assert.Equal(t, []string{"pr", "list"}, args[:2])
+			assert.Equal(t, "feature/login", flagValue(args, "--head"))
+			assert.Equal(t, "all", flagValue(args, "--state"))
+			assert.Equal(t, "1", flagValue(args, "--limit"))
+		})
+	}
+}
+
+func TestCLIListIssues(t *testing.T) {
+	argsPath := installRecordingGh(t, 0, `[
+		{"author": {"login": "alice"}, "number": 17, "state": "OPEN", "title": "Fix login crash"},
+		{"author": {"login": "bob"}, "number": 18, "state": "OPEN", "title": "Add logout"}
+	]`)
+	gh := New(context.Background(), t.TempDir(), testTimeout, nil, nil)
+
 	issues, err := gh.ListIssues(IssueQuery{State: IssueStateOpen}, DefaultIssueLimit)
-	require.NoError(t, err)
 
-	// Verify limit is respected
-	assert.LessOrEqual(t, len(issues), DefaultIssueLimit)
+	require.NoError(t, err)
+	require.Len(t, issues, 2)
+	assert.Equal(t, 17, issues[0].Number)
+	assert.Equal(t, 18, issues[1].Number)
+	args := recordedArgs(t, argsPath)
+	assert.Equal(t, []string{"issue", "list"}, args[:2])
+	assert.Equal(t, "is:issue is:open", flagValue(args, "--search"))
+	assert.Equal(t, "20", flagValue(args, "--limit"))
 }
 
-func TestGitHubCli_ListPullRequests_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
-	skipIfGhNotAvailable(t)
-	skipIfNotInGitRepo(t)
+func TestCLIListPullRequests(t *testing.T) {
+	argsPath := installRecordingGh(t, 0, `[
+		{"headRefName": "feature/login", "isDraft": false, "number": 42, "state": "OPEN", "title": "Fix login"}
+	]`)
+	gh := New(context.Background(), t.TempDir(), testTimeout, nil, nil)
 
-	gh := New(context.Background(), ".", testTimeout, nil, nil)
-
-	// List open PRs (may return empty list, which is fine)
 	prs, err := gh.ListPullRequests(PRQuery{State: PRStateOpen}, DefaultPRLimit)
-	require.NoError(t, err)
-	assert.NotNil(t, prs, "expected non-nil slice (even if empty)")
 
-	// Verify limit is respected
-	assert.LessOrEqual(t, len(prs), DefaultPRLimit)
+	require.NoError(t, err)
+	require.Len(t, prs, 1)
+	assert.Equal(t, 42, prs[0].Number)
+	assert.Equal(t, PRStateOpen, prs[0].State)
+	args := recordedArgs(t, argsPath)
+	assert.Equal(t, []string{"pr", "list"}, args[:2])
+	assert.Equal(t, "is:pr is:open draft:false", flagValue(args, "--search"))
+	assert.Equal(t, "20", flagValue(args, "--limit"))
+}
+
+// installRecordingGh puts a fake gh first on PATH. It records its arguments,
+// one per line, in the returned file, prints response on stdout, and exits
+// with exitCode.
+func installRecordingGh(t *testing.T, exitCode int, response string) string {
+	t.Helper()
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args")
+	responsePath := filepath.Join(dir, "response")
+	require.NoError(t, os.WriteFile(responsePath, []byte(response), 0o600))
+	script := `#!/bin/sh
+printf '%s\n' "$@" >"$FAKE_GH_ARGS"
+cat "$FAKE_GH_RESPONSE"
+exit "$FAKE_GH_EXIT"
+`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "gh"), []byte(script), 0o755))
+	t.Setenv("FAKE_GH_ARGS", argsPath)
+	t.Setenv("FAKE_GH_EXIT", strconv.Itoa(exitCode))
+	t.Setenv("FAKE_GH_RESPONSE", responsePath)
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	return argsPath
+}
+
+// recordedArgs returns the arguments the fake gh received.
+func recordedArgs(t *testing.T, path string) []string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	return strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
+}
+
+// flagValue returns the argument that follows flag, or "" when flag is absent.
+func flagValue(args []string, flag string) string {
+	for i, arg := range args {
+		if arg == flag && i+1 < len(args) {
+			return args[i+1]
+		}
+	}
+	return ""
 }

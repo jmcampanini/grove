@@ -8,7 +8,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newNamerWorktreeCmd(services commandServices) *cobra.Command {
+func newNamerWorktreeCmd(_ commandServices) *cobra.Command {
 	return &cobra.Command{
 		Use:   "worktree <phrase>",
 		Short: "Generate a worktree directory name from a phrase",

@@ -1,3 +1,5 @@
+// Grove manages git worktrees: one directory per branch under a configurable
+// root. The command tree lives in internal/cli.
 package main
 
 import (

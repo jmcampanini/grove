@@ -1,5 +1,7 @@
 package github
 
+// GitHub is the set of GitHub operations grove needs. In production the gh
+// executable serves them; tests substitute fakes.
 type GitHub interface {
 	// GetIssue returns a single issue by number.
 	GetIssue(issueNum int) (Issue, error)

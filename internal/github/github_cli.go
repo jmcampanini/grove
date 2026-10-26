@@ -21,8 +21,9 @@ const DefaultIssueLimit = 20
 // DefaultPRLimit is the maximum number of pull requests returned by ListPullRequests.
 const DefaultPRLimit = 20
 
-// GitHubCli provides GitHub operations by executing the gh CLI.
-type GitHubCli struct {
+// CLI implements GitHub by running the gh executable with prompts disabled.
+// Read results are served from the cache when one is configured.
+type CLI struct {
 	cache      *cache.Cache
 	ctx        context.Context
 	log        *clog.Logger
@@ -30,9 +31,9 @@ type GitHubCli struct {
 	workingDir string
 }
 
-var _ GitHub = &GitHubCli{}
+var _ GitHub = &CLI{}
 
-// New creates a GitHubCli that executes gh commands in the specified working
+// New creates a CLI that executes gh commands in the specified working
 // directory. A nil logger falls back to the default logger.
 func New(ctx context.Context, workingDir string, timeout time.Duration, c *cache.Cache, logger *clog.Logger) GitHub {
 	if ctx == nil {
@@ -41,7 +42,7 @@ func New(ctx context.Context, workingDir string, timeout time.Duration, c *cache
 	if logger == nil {
 		logger = clog.Default()
 	}
-	return &GitHubCli{
+	return &CLI{
 		cache:      c,
 		ctx:        ctx,
 		log:        logger.WithPrefix("github"),
@@ -51,7 +52,7 @@ func New(ctx context.Context, workingDir string, timeout time.Duration, c *cache
 }
 
 // executeGhCommand runs a read-only gh command, returning cached results when available.
-func (g *GitHubCli) executeGhCommand(args ...string) (string, error) {
+func (g *CLI) executeGhCommand(args ...string) (string, error) {
 	if g.cache == nil {
 		return g.runGhProcess(args...)
 	}
@@ -71,7 +72,7 @@ func (g *GitHubCli) executeGhCommand(args ...string) (string, error) {
 	return output, nil
 }
 
-func (g *GitHubCli) runGhProcess(args ...string) (string, error) {
+func (g *CLI) runGhProcess(args ...string) (string, error) {
 	g.log.Debug("Executing gh command", "cmd", "gh", "args", args, "workingDir", g.workingDir)
 
 	result, err := process.Run(g.ctx, process.Spec{
@@ -108,14 +109,16 @@ func (g *GitHubCli) runGhProcess(args ...string) (string, error) {
 	return output, nil
 }
 
-func (g *GitHubCli) executeGraphQL(query string) (string, error) {
+func (g *CLI) executeGraphQL(query string) (string, error) {
 	return g.executeGhCommand("api", "graphql", "-f", "query="+query)
 }
 
-func (g *GitHubCli) GetIssue(issueNum int) (Issue, error) {
+// GetIssue fetches one issue through gh issue view, including the body,
+// assignees, milestone, and comments that ListIssues omits.
+func (g *CLI) GetIssue(issueNum int) (Issue, error) {
 	args := []string{
 		"issue", "view", fmt.Sprintf("%d", issueNum),
-		"--json", issueViewJsonFields,
+		"--json", issueViewJSONFields,
 	}
 
 	output, err := g.executeGhCommand(args...)
@@ -131,10 +134,12 @@ func (g *GitHubCli) GetIssue(issueNum int) (Issue, error) {
 	return issue, nil
 }
 
-func (g *GitHubCli) GetPullRequest(prNum int) (PullRequest, error) {
+// GetPullRequest fetches one pull request through gh pr view, including the
+// changed files that ListPullRequests omits.
+func (g *CLI) GetPullRequest(prNum int) (PullRequest, error) {
 	args := []string{
 		"pr", "view", fmt.Sprintf("%d", prNum),
-		"--json", prJsonFields + ",files",
+		"--json", prJSONFields + ",files",
 	}
 
 	output, err := g.executeGhCommand(args...)
@@ -150,7 +155,9 @@ func (g *GitHubCli) GetPullRequest(prNum int) (PullRequest, error) {
 	return pr, nil
 }
 
-func (g *GitHubCli) GetPullRequestActivity(owner, repo string, prNum int) ([]ReviewThread, []TimelineEvent, error) {
+// GetPullRequestActivity fetches the review threads and timeline events of a
+// pull request in one GraphQL query, 100 of each at most.
+func (g *CLI) GetPullRequestActivity(owner, repo string, prNum int) ([]ReviewThread, []TimelineEvent, error) {
 	query := fmt.Sprintf(`{
   repository(owner: %q, name: %q) {
     pullRequest(number: %d) {
@@ -244,12 +251,14 @@ func (g *GitHubCli) GetPullRequestActivity(owner, repo string, prNum int) ([]Rev
 	return parseActivityResponse(g.log, output)
 }
 
-func (g *GitHubCli) GetPullRequestByBranch(branchName string) (*PullRequest, error) {
+// GetPullRequestByBranch returns the newest pull request, in any state, whose
+// head branch is branchName, or nil when there is none.
+func (g *CLI) GetPullRequestByBranch(branchName string) (*PullRequest, error) {
 	args := []string{
 		"pr", "list",
 		"--head", branchName,
 		"--state", "all",
-		"--json", prJsonFields,
+		"--json", prJSONFields,
 		"--limit", "1",
 	}
 
@@ -270,11 +279,13 @@ func (g *GitHubCli) GetPullRequestByBranch(branchName string) (*PullRequest, err
 	return &prs[0], nil
 }
 
-func (g *GitHubCli) ListIssues(query IssueQuery, limit int) ([]Issue, error) {
+// ListIssues runs gh issue list with the search string the query produces,
+// returning at most limit issues.
+func (g *CLI) ListIssues(query IssueQuery, limit int) ([]Issue, error) {
 	args := []string{
 		"issue", "list",
 		"--search", query.ToSearchQuery(),
-		"--json", issueListJsonFields,
+		"--json", issueListJSONFields,
 		"--limit", fmt.Sprintf("%d", limit),
 	}
 
@@ -291,13 +302,15 @@ func (g *GitHubCli) ListIssues(query IssueQuery, limit int) ([]Issue, error) {
 	return issues, nil
 }
 
-func (g *GitHubCli) ListPullRequests(query PRQuery, limit int) ([]PullRequest, error) {
+// ListPullRequests runs gh pr list with the search string the query produces,
+// returning at most limit pull requests.
+func (g *CLI) ListPullRequests(query PRQuery, limit int) ([]PullRequest, error) {
 	searchQuery := query.ToSearchQuery()
 
 	args := []string{
 		"pr", "list",
 		"--search", searchQuery,
-		"--json", prJsonFields,
+		"--json", prJSONFields,
 		"--limit", fmt.Sprintf("%d", limit),
 	}
 

@@ -53,14 +53,14 @@ func TestCheckoutPRWorktree(t *testing.T) {
 				listWorktreesFn: func() ([]git.Worktree, error) {
 					return []git.Worktree{}, nil
 				},
-				branchExistsFn: func(branchName string, caseInsensitive bool) (bool, error) {
+				branchExistsFn: func(_ string, _ bool) (bool, error) {
 					return true, nil
 				},
-				fetchRemoteBranchFn: func(remote, remoteRef, localRef string) error {
+				fetchRemoteBranchFn: func(_, _, _ string) error {
 					t.Error("FetchRemoteBranch should not be called when branch exists")
 					return nil
 				},
-				createWorktreeForExistingBranchFn: func(branchName, worktreeAbsPath string) error {
+				createWorktreeForExistingBranchFn: func(_, _ string) error {
 					return nil
 				},
 			},
@@ -80,7 +80,7 @@ func TestCheckoutPRWorktree(t *testing.T) {
 				listWorktreesFn: func() ([]git.Worktree, error) {
 					return []git.Worktree{}, nil
 				},
-				branchExistsFn: func(branchName string, caseInsensitive bool) (bool, error) {
+				branchExistsFn: func(_ string, _ bool) (bool, error) {
 					return false, nil
 				},
 				fetchRemoteBranchFn: func(remote, remoteRef, localRef string) error {
@@ -111,7 +111,7 @@ func TestCheckoutPRWorktree(t *testing.T) {
 				listWorktreesFn: func() ([]git.Worktree, error) {
 					return []git.Worktree{}, nil
 				},
-				branchExistsFn: func(branchName string, caseInsensitive bool) (bool, error) {
+				branchExistsFn: func(_ string, _ bool) (bool, error) {
 					return false, nil
 				},
 				fetchRemoteBranchFn: func(remote, remoteRef, localRef string) error {
@@ -142,10 +142,10 @@ func TestCheckoutPRWorktree(t *testing.T) {
 				listWorktreesFn: func() ([]git.Worktree, error) {
 					return []git.Worktree{}, nil
 				},
-				branchExistsFn: func(branchName string, caseInsensitive bool) (bool, error) {
+				branchExistsFn: func(_ string, _ bool) (bool, error) {
 					return false, nil
 				},
-				fetchRemoteBranchFn: func(remote, remoteRef, localRef string) error {
+				fetchRemoteBranchFn: func(_, remoteRef, localRef string) error {
 					assert.Equal(t, "refs/pull/456/head", remoteRef)
 					assert.Equal(t, "pr/456", localRef)
 					return nil
@@ -198,10 +198,10 @@ func TestCheckoutPRWorktree(t *testing.T) {
 				listWorktreesFn: func() ([]git.Worktree, error) {
 					return []git.Worktree{}, nil
 				},
-				branchExistsFn: func(branchName string, caseInsensitive bool) (bool, error) {
+				branchExistsFn: func(_ string, _ bool) (bool, error) {
 					return false, nil
 				},
-				fetchRemoteBranchFn: func(remote, remoteRef, localRef string) error {
+				fetchRemoteBranchFn: func(_, _, _ string) error {
 					return assert.AnError
 				},
 			},
@@ -221,13 +221,13 @@ func TestCheckoutPRWorktree(t *testing.T) {
 				listWorktreesFn: func() ([]git.Worktree, error) {
 					return []git.Worktree{}, nil
 				},
-				branchExistsFn: func(branchName string, caseInsensitive bool) (bool, error) {
+				branchExistsFn: func(_ string, _ bool) (bool, error) {
 					return false, nil
 				},
-				fetchRemoteBranchFn: func(remote, remoteRef, localRef string) error {
+				fetchRemoteBranchFn: func(_, _, _ string) error {
 					return nil
 				},
-				createWorktreeForExistingBranchFn: func(branchName, worktreeAbsPath string) error {
+				createWorktreeForExistingBranchFn: func(_, _ string) error {
 					return assert.AnError
 				},
 			},

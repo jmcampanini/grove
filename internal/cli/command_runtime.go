@@ -55,7 +55,7 @@ func loadConfigAt(cmd *cobra.Command, logger *log.Logger, anchor string, mode co
 	}
 
 	loadForWorktree := func(gitDir, worktreeRoot, mainWorktreePath string) (*loadedConfig, error) {
-		paths := config.ConfigPaths(anchor, worktreeRoot, mainWorktreePath, homeDir)
+		paths := config.Paths(anchor, worktreeRoot, mainWorktreePath, homeDir)
 		cfg, report, err := config.Load(paths, flags)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load config: %w", err)

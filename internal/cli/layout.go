@@ -2,7 +2,7 @@ package cli
 
 import "github.com/spf13/cobra"
 
-func newLayoutTopicCmd(services commandServices) *cobra.Command {
+func newLayoutTopicCmd(_ commandServices) *cobra.Command {
 	return &cobra.Command{
 		Use:   "layout",
 		Short: "Where worktrees are placed on disk",

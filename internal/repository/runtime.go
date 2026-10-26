@@ -1,3 +1,5 @@
+// Package repository holds the per-command runtime: the loaded configuration
+// and the git and GitHub clients bound to one repository.
 package repository
 
 import (

@@ -91,6 +91,8 @@ func (n *PullRequestNamer) GenerateWorktreeName(number int, title, branch string
 	return name, nil
 }
 
+// WorktreeLiteralPrefix returns the literal text pull_request.worktree_template
+// starts with before its first field, or "" when it starts with a field.
 func (n *PullRequestNamer) WorktreeLiteralPrefix() string {
 	return n.worktreeLiteralPrefix
 }

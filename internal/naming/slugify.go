@@ -12,6 +12,7 @@ type SlugifyOptions struct {
 	Lowercase bool
 }
 
+// SlugifyOptionsFromConfig derives Slugify options from the naming config.
 func SlugifyOptionsFromConfig(cfg config.NamingConfig) SlugifyOptions {
 	return SlugifyOptions{Lowercase: cfg.Lowercase}
 }

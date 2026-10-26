@@ -8,8 +8,11 @@ import (
 	"time"
 )
 
+// PRState is the state of a pull request. PRStateDraft is grove's own:
+// GitHub reports a draft as OPEN with isDraft set.
 type PRState string
 
+// Pull request states.
 const (
 	PRStateOpen   PRState = "OPEN"
 	PRStateClosed PRState = "CLOSED"
@@ -21,6 +24,7 @@ func (s PRState) String() string {
 	return string(s)
 }
 
+// IsValid reports whether s is one of the known states, PRStateDraft included.
 func (s PRState) IsValid() bool {
 	switch s {
 	case PRStateOpen, PRStateClosed, PRStateMerged, PRStateDraft:
@@ -76,13 +80,16 @@ func (q PRQuery) ToSearchQuery() string {
 	return strings.Join(parts, " ")
 }
 
+// Label is a GitHub label with its hex color.
 type Label struct {
 	Color string `json:"color"`
 	Name  string `json:"name"`
 }
 
+// ReviewState is the state of one pull request review.
 type ReviewState string
 
+// Review states as GitHub reports them.
 const (
 	ReviewStateApproved         ReviewState = "APPROVED"
 	ReviewStateChangesRequested ReviewState = "CHANGES_REQUESTED"
@@ -91,14 +98,19 @@ const (
 	ReviewStatePending          ReviewState = "PENDING"
 )
 
+// Review is one review submitted on a pull request.
 type Review struct {
 	AuthorLogin string
 	State       ReviewState
 	SubmittedAt time.Time
 }
 
+// CheckConclusion is the outcome of a completed status check, in the
+// lowercase form GitHub uses for check runs; commit statuses are mapped
+// onto the same values.
 type CheckConclusion string
 
+// Check conclusions.
 const (
 	CheckConclusionActionRequired CheckConclusion = "action_required"
 	CheckConclusionCancelled      CheckConclusion = "cancelled" //nolint:misspell // Match GitHub's check conclusion value.
@@ -109,8 +121,10 @@ const (
 	CheckConclusionTimedOut       CheckConclusion = "timed_out"
 )
 
+// CheckStatus is the progress state of a status check.
 type CheckStatus string
 
+// Check statuses as GitHub reports them.
 const (
 	CheckStatusCompleted  CheckStatus = "COMPLETED"
 	CheckStatusInProgress CheckStatus = "IN_PROGRESS"
@@ -120,6 +134,8 @@ const (
 	CheckStatusWaiting    CheckStatus = "WAITING"
 )
 
+// StatusCheck is one entry of a pull request's status check rollup. Check
+// runs and commit statuses are both normalized to this shape.
 type StatusCheck struct {
 	Conclusion CheckConclusion
 	DetailURL  string
@@ -127,8 +143,10 @@ type StatusCheck struct {
 	Status     CheckStatus
 }
 
+// TimelineEventType classifies a pull request timeline entry.
 type TimelineEventType string
 
+// Timeline event types grove renders.
 const (
 	TimelineEventClosed          TimelineEventType = "closed"
 	TimelineEventCommented       TimelineEventType = "commented"
@@ -144,6 +162,8 @@ const (
 	TimelineEventReviewed        TimelineEventType = "reviewed"
 )
 
+// PullRequest is a GitHub pull request as gh returns it. Files is populated
+// only by GetPullRequest.
 type PullRequest struct {
 	AuthorLogin       string // May be empty if author's account was deleted
 	AuthorName        string // May be empty if author's account was deleted
@@ -203,8 +223,10 @@ func ParseRepoFromURL(prURL string) (owner, repo string, err error) {
 	return parts[0], parts[1], nil
 }
 
-const prJsonFields = "additions,author,baseRefName,body,changedFiles,comments,createdAt,deletions,headRefName,isCrossRepository,isDraft,labels,number,reviews,state,statusCheckRollup,title,updatedAt,url"
+const prJSONFields = "additions,author,baseRefName,body,changedFiles,comments,createdAt,deletions,headRefName,isCrossRepository,isDraft,labels,number,reviews,state,statusCheckRollup,title,updatedAt,url"
 
+// UnmarshalJSON decodes the gh pr JSON shape, reporting PRStateDraft for an
+// open draft and normalizing the status check rollup to StatusCheck values.
 func (pr *PullRequest) UnmarshalJSON(data []byte) error {
 	type rawReview struct {
 		Author struct {

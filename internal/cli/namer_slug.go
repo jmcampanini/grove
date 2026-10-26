@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newNamerSlugCmd(services commandServices) *cobra.Command {
+func newNamerSlugCmd(_ commandServices) *cobra.Command {
 	return &cobra.Command{
 		Use:   "slug <phrase>",
 		Short: "Slugify a phrase using the configured naming settings",

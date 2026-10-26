@@ -83,7 +83,7 @@ printf '[{"headRefName":"feature/test","isDraft":false,"number":42,"state":"%s",
 	assert.Equal(t, 2, strings.Count(string(logData), "feature/test"))
 }
 
-func TestPruneCommandProcess(t *testing.T) {
+func TestPruneCommandProcess(_ *testing.T) {
 	if os.Getenv("GROVE_PRUNE_COMMAND_PROCESS") != "1" {
 		return
 	}
