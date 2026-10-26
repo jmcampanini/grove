@@ -4,6 +4,7 @@ go 1.27.3
 
 require (
 	charm.land/bubbles/v2 v2.2.1
+	charm.land/bubbletea/v2 v2.0.8
 	charm.land/glamour/v2 v2.0.1
 	charm.land/huh/v2 v2.0.3
 	charm.land/lipgloss/v2 v2.0.6
@@ -20,7 +21,6 @@ require (
 )
 
 require (
-	charm.land/bubbletea/v2 v2.0.8 // indirect
 	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/alecthomas/chroma/v2 v2.27.0 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect

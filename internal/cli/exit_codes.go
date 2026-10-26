@@ -3,25 +3,36 @@ package cli
 import "github.com/spf13/cobra"
 
 func newExitCodesTopicCmd(_ commandServices) *cobra.Command {
-	return &cobra.Command{
-		Use:   "exit-codes",
-		Short: "Exit codes and error categories",
-		Args:  cobra.NoArgs,
-		// Help topics need a RunE so Cobra validates Args instead of
-		// silently ignoring operands on non-runnable commands.
-		RunE: runHelpTopic,
-		Long: `Grove uses the conventional two-value exit scheme:
+	return newHelpTopicCmd("exit-codes", "Exit statuses and the failure line",
+		`Grove exits with one of these statuses:
 
   0  success
-  1  any error (bad arguments, git failures, config errors, I/O, etc.)
+  1  any failure that is not a usage error: git or gh failed, the
+     configuration is invalid, a path or branch already exists, a prompt
+     cannot run, a file cannot be read or written
+  2  usage error: an unknown command, flag, or operand, a missing or extra
+     operand, an operand that fails its grammar (such as a pull request
+     number that is not a positive integer), an invalid flag value, or
+     flags that cannot be combined (such as --debug with --quiet)
 
-Error detail is reported on stderr. When an error is not self-explanatory,
-inspect the log file at $XDG_STATE_HOME/grove/grove.log
-(~/.local/state/grove/grove.log when XDG_STATE_HOME is unset).
+A failure prints exactly one line on stderr, without usage text:
 
-An unknown command or an operand on a command group fails with status 1 and
-'unknown command "x" for "grove ..."' on stderr. 'grove help <unknown>' is
-not an error: it prints 'Unknown help topic' and the root usage on stdout
-and exits 0.`,
-	}
+  grove: <message>
+
+When the message is not self-explanatory, inspect the log file at
+$XDG_STATE_HOME/grove/grove.log (~/.local/state/grove/grove.log when
+XDG_STATE_HOME is unset).
+
+These outcomes keep status 0:
+
+  - grove pr preview --fzf and grove issue preview --fzf print a failure
+    that occurs after the invocation was accepted as "grove: <message>"
+    on stdout, so an fzf preview pane shows it. A rejected invocation
+    still exits 2, and a failure to write that line exits 1.
+  - Declining a prompt: grove sync prints "Sync aborted." and grove prune
+    prints "Aborted." or nothing, both on stdout.
+  - A bare command group (grove pr, grove issue, grove cache, grove namer)
+    prints its help.
+  - grove help <unknown> prints "Unknown help topic" and the root usage on
+    stdout.`)
 }

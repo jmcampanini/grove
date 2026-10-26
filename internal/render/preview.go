@@ -6,14 +6,13 @@ import (
 	"os"
 	"strconv"
 
-	"charm.land/lipgloss/v2"
 	"charm.land/log/v2"
 	"github.com/charmbracelet/colorprofile"
 	"golang.org/x/term"
 )
 
 // Theme is the per-execution color state for preview rendering,
-// resolved from the --color flag and the injected streams.
+// resolved from the --color mode and the injected streams.
 type Theme struct {
 	hasDarkBackground bool
 	profile           colorprofile.Profile
@@ -46,39 +45,15 @@ func DetectPreviewWidth(out io.Writer) int {
 }
 
 // ResolvePreviewTheme derives the color profile and background for one
-// execution from the --color mode and the injected streams. Streams that are
-// not terminals get the no-color profile and the dark-background default.
-func ResolvePreviewTheme(mode string, in io.Reader, out io.Writer) (Theme, error) {
-	var profile colorprofile.Profile
-	switch mode {
-	case "auto":
-		profile = colorprofile.Detect(out, os.Environ())
-	case "always":
-		profile = colorprofile.ANSI256
-	case "never":
-		profile = colorprofile.NoTTY
-	default:
-		return Theme{}, fmt.Errorf("invalid color mode %q; valid modes: auto, always, never", mode)
-	}
-
+// execution from the --color mode and the injected streams. The profile
+// follows ResolveProfile for out; the background follows HasDarkBackground,
+// so a stream that is not a terminal gets no color and the dark default.
+func ResolvePreviewTheme(mode ColorMode, in io.Reader, out io.Writer) Theme {
+	profile := ResolveProfile(mode, out)
 	return Theme{
-		hasDarkBackground: detectPreviewHasDarkBackground(profile, in, out),
+		hasDarkBackground: HasDarkBackground(profile, in, out),
 		profile:           profile,
-	}, nil
-}
-
-func detectPreviewHasDarkBackground(profile colorprofile.Profile, in io.Reader, out io.Writer) bool {
-	if dark, ok := DetectDarkBackgroundFromEnv(); ok {
-		return dark
 	}
-	inFile, inOK := in.(*os.File)
-	outFile, outOK := out.(*os.File)
-	canQuery := inOK && outOK &&
-		term.IsTerminal(int(inFile.Fd())) && term.IsTerminal(int(outFile.Fd()))
-	if profile <= colorprofile.ASCII || !canQuery {
-		return true
-	}
-	return lipgloss.HasDarkBackground(inFile, outFile)
 }
 
 func (r *Renderer) writePreviewLine(w io.Writer, s string) error {

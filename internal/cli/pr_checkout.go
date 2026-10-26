@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strconv"
 	"strings"
 
 	"charm.land/log/v2"
@@ -21,18 +20,37 @@ func newPRCheckoutCmd(services commandServices) *cobra.Command {
 	return &cobra.Command{
 		Use:   "checkout <number>",
 		Short: "Check out a pull request into a local worktree",
-		Long: `Check out a pull request into a local worktree.
+		Long: `Check out a pull request into a local worktree and print the worktree
+path on stdout.
 
-To start new local work (not from a PR), use 'grove create' instead.`,
-		Args: cobra.ExactArgs(1),
+The local branch is named by pull_request.branch_template (the pull
+request's head branch by default) and the directory by
+pull_request.worktree_template; run grove help naming for the variables.
+When a worktree for the pull request already exists, its path is printed
+and nothing is created. Otherwise the pull request head is fetched from
+the default remote into the local branch when that branch does not exist
+yet, and the worktree is created for it. A merged or closed pull request
+is checked out with a warning on stderr. Nothing prompts.
+
+` + helpWorktreeCreate + `
+
+` + helpGHUncached + `
+
+` + helpFailure + `
+
+To start new local work that has no pull request yet, use grove create.`,
+		Example: `  grove pr checkout 42
+  grove pr list --fzf | fzf --delimiter '\t' --with-nth 3 --accept-nth 1 \
+    | xargs grove pr checkout`,
+		Args: numberArgs("pull request"),
 		RunE: services.runPRCheckout,
 	}
 }
 
 func (services commandServices) runPRCheckout(cmd *cobra.Command, args []string) error {
-	prNum, err := strconv.Atoi(args[0])
+	prNum, err := parseNumberOperand(args[0])
 	if err != nil {
-		return fmt.Errorf("invalid PR number: %s", args[0])
+		return err
 	}
 
 	rt, err := services.loadRuntime(cmd)

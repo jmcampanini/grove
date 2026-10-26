@@ -125,7 +125,7 @@ func TestOutputIssueListFzf(t *testing.T) {
 func TestOutputIssueListTable(t *testing.T) {
 	t.Run("empty list prints message", func(t *testing.T) {
 		var buf bytes.Buffer
-		require.NoError(t, outputIssueListTable(&buf, nil))
+		require.NoError(t, outputIssueListTable(plainWriter(&buf), nil))
 		assert.Contains(t, buf.String(), "No open issues found.")
 	})
 
@@ -135,7 +135,7 @@ func TestOutputIssueListTable(t *testing.T) {
 			issueMatch(123, "Fix login crash", "alice", []github.Label{{Name: "bug"}, {Name: "ui"}, {Name: "a11y"}}, "/workspace/is-123"),
 			issueMatch(456, "Add dark mode", "bob", nil, ""),
 		}
-		require.NoError(t, outputIssueListTable(&buf, matches))
+		require.NoError(t, outputIssueListTable(plainWriter(&buf), matches))
 
 		out := buf.String()
 		assert.Contains(t, out, "123")

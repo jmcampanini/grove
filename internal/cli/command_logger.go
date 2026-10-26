@@ -14,13 +14,13 @@ import (
 
 // commandLogger builds the diagnostic logger for one command execution,
 // writing to the command's stderr at the level selected by the diagnostic
-// flags.
+// flags and with the color profile the --color mode resolves for stderr.
 func commandLogger(cmd *cobra.Command) *log.Logger {
 	level, err := resolveDiagnosticLevel(cmd.Root().PersistentFlags())
 	if err != nil {
 		level = log.InfoLevel
 	}
-	return newDiagnosticLogger(cmd.ErrOrStderr(), level)
+	return newDiagnosticLogger(cmd.ErrOrStderr(), level, colorMode(cmd))
 }
 
 func resolveDiagnosticLevel(flags *pflag.FlagSet) (log.Level, error) {
@@ -46,11 +46,16 @@ func resolveDiagnosticLevel(flags *pflag.FlagSet) (log.Level, error) {
 	}
 }
 
-func newDiagnosticLogger(w io.Writer, level log.Level) *log.Logger {
+// newDiagnosticLogger builds a logger on w. The profile is the one resolved
+// for the terminal behind a Tee, and otherwise the one mode resolves for w
+// itself, so the logger never runs its own detection.
+func newDiagnosticLogger(w io.Writer, level log.Level, mode render.ColorMode) *log.Logger {
 	logger := log.NewWithOptions(w, log.Options{Level: level, ReportTimestamp: true})
+	profile := render.ResolveProfile(mode, w)
 	if tee, ok := w.(*logging.Tee); ok {
-		logger.SetColorProfile(tee.Profile)
+		profile = tee.Profile
 	}
+	logger.SetColorProfile(profile)
 	logger.SetStyles(diagnosticLogStyles())
 	return logger
 }

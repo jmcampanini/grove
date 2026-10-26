@@ -10,14 +10,11 @@ func newPRCmd(services commandServices) *cobra.Command {
 		// Args and RunE make the group a grammar boundary; see runHelpTopic.
 		Args: cobra.NoArgs,
 		RunE: runHelpTopic,
-		Long: `Browse and check out GitHub pull requests into local worktrees.
+		Long: `Browse the open pull requests of the current repository and check one out
+into a local worktree. Every subcommand runs gh, which must already be
+authenticated. A bare grove pr prints this help and exits 0.
 
-Subcommands:
-  checkout  Check out a pull request into a local worktree
-  list      List open pull requests
-  preview   Preview a pull request
-
-To start new local work (not from a PR), use 'grove create' instead.`,
+To start new local work that has no pull request yet, use grove create.`,
 	}
 	cmd.AddCommand(
 		newPRCheckoutCmd(services),

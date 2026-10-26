@@ -12,15 +12,19 @@ import (
 func newCatchupCmd(services commandServices) *cobra.Command {
 	return &cobra.Command{
 		Use:   "catchup",
-		Short: "Merge the latest remote root branch into the current feature branch",
-		Long: `Catchup fetches the remote root branch (e.g., origin/main) and merges it
-into the current feature branch. This keeps your feature branch up to date
-with the latest changes from the main line of development.
+		Short: "Merge the latest remote root branch into the current branch",
+		Long: `Fetch the default remote and merge its root branch (for example
+origin/main) into the current branch, so the branch carries the latest
+changes from the main line. The merge may create a merge commit; git's
+merge output and a "Merged <ref> into <branch>" line go to stdout. A merge
+conflict leaves the worktree mid-merge for you to resolve, as git merge
+would. Nothing prompts.
 
-The root branch is determined by querying the remote's HEAD reference.
+The root branch is the remote's HEAD reference. The worktree must be
+clean: with uncommitted changes the command fails before fetching, so
+commit, stash, or reset first. On the root branch itself use grove sync.
 
-The worktree must be in a clean state (no uncommitted changes). If it is
-dirty, commit, stash, or reset your changes before running catchup.`,
+` + helpFailure,
 		Args:    cobra.NoArgs,
 		RunE:    services.runCatchup,
 		GroupID: "git",

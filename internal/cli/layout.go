@@ -3,12 +3,8 @@ package cli
 import "github.com/spf13/cobra"
 
 func newLayoutTopicCmd(_ commandServices) *cobra.Command {
-	return &cobra.Command{
-		Use:   "layout",
-		Short: "Where worktrees are placed on disk",
-		Args:  cobra.NoArgs,
-		RunE:  runHelpTopic,
-		Long: `Grove runs inside a git repository: the primary worktree (the clone) or
+	return newHelpTopicCmd("layout", "Where worktrees are placed on disk",
+		`Grove runs inside a git repository: the primary worktree (the clone) or
 any linked worktree, at any depth. The primary worktree can live anywhere.
 New worktrees are placed under worktree.root at the path rendered by
 worktree.layout.
@@ -33,7 +29,7 @@ use it. The expanded root must be absolute.
 
 Layout: a Go template rendered relative to the root. Variables:
 
-  {{.Space}}  the space: worktree.space, or the --space flag
+  {{.Space}}  the space: worktree.space, or the global --space flag
   {{.Host}}   the origin remote's host, e.g. github.com
   {{.Owner}}  the origin remote's owner; nested groups keep their slashes
   {{.Repo}}   the origin remote's repository name without .git
@@ -47,12 +43,11 @@ each worktree has its own path, and the rendered layout must be relative
 and must not contain "..".
 
 Space: one directory segment that partitions worktrees by who created them.
-It defaults to "grove"; launchers pass --space claude, --space codex, or
---space pi so their worktrees sit apart from yours. Space only decides
-where a new worktree goes. Every command still operates on all worktrees of
-the repository, wherever they are.
+It defaults to "grove"; a launcher such as claude, codex, or pi sets its
+own space so its worktrees sit apart from yours. Space only decides where
+a new worktree goes. Every command still operates on all worktrees of the
+repository, wherever they are.
 
 Worktrees created before a layout change stay where they are; git tracks
-them, so grove keeps listing, syncing, and pruning them.`,
-	}
+them, so grove keeps listing, syncing, and pruning them.`)
 }

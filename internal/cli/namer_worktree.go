@@ -17,7 +17,9 @@ The branch name is generated first (see grove namer branch); its slug, with
 the first matching naming.strip_prefixes entry removed, is then rendered
 through local_branch.worktree_template as {{.BranchSlug}} and capped at
 naming.max_length. The global --worktree-template flag replaces the
-template for one invocation.`,
+template for one invocation. Nothing is created and nothing prompts.
+
+` + helpFailure,
 		Args: cobra.ExactArgs(1),
 		RunE: runNamerWorktree,
 	}

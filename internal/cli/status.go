@@ -19,8 +19,15 @@ func newStatusCmd(services commandServices) *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
 		Short: "Show worktree status dashboard",
-		Long: `Status shows a rich dashboard of all worktrees with branch tracking,
-dirty state, and PR information for worktrees associated with pull requests.`,
+		Long: `Show every worktree of the current repository as a styled table on
+stdout: name, branch, dirty state, tracking (ahead and behind counts), kind
+(PR or local), and for a branch with a pull request its number, state,
+checks, reviews, and line counts. Nothing is modified and nothing prompts.
+The table is not a machine-readable format; use grove list for one.
+
+` + helpGH + `
+
+` + helpFailure,
 		Args:    cobra.NoArgs,
 		GroupID: "worktree",
 		RunE:    services.runStatus,
@@ -49,7 +56,7 @@ func (services commandServices) runStatus(cmd *cobra.Command, _ []string) error 
 		return err
 	}
 
-	return renderStatusTable(cmd.OutOrStdout(), statuses)
+	return renderStatusTable(styledStdout(cmd), statuses)
 }
 
 func gatherStatuses(ctx *worktree.StatusContext) ([]worktree.Status, error) {
@@ -132,7 +139,7 @@ func renderStatusTable(w io.Writer, statuses []worktree.Status) error {
 		Headers("Name", "Branch", "Status", "Tracking", "Kind", "PR Info").
 		Rows(rows...)
 
-	_, err := lipgloss.Fprintln(w, t)
+	_, err := fmt.Fprintln(w, t)
 	return err
 }
 

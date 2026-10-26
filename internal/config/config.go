@@ -102,7 +102,7 @@ type IssueConfig struct {
 // LocalBranchConfig configures local branch naming.
 type LocalBranchConfig struct {
 	BranchTemplate   string `toml:"branch_template"`
-	WorktreeTemplate string `toml:"worktree_template" config:"worktree-template" help:"Override the local branch worktree directory template (local_branch.worktree_template)"`
+	WorktreeTemplate string `toml:"worktree_template" config:"worktree-template" help:"Worktree directory template for this run"`
 }
 
 // NamingConfig configures generated names.
@@ -122,5 +122,5 @@ type PullRequestConfig struct {
 type WorktreeConfig struct {
 	Layout string `toml:"layout"` // Go template rendered under Root; see the layout help topic
 	Root   string `toml:"root"`   // Base directory; $VAR, ${VAR}, and a leading ~ are expanded
-	Space  string `toml:"space" config:"space" help:"Override the space segment of new worktree paths (worktree.space)"`
+	Space  string `toml:"space" config:"space" help:"Space segment of new worktree paths"`
 }

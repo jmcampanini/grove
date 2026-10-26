@@ -2,10 +2,12 @@ package cli
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestHandlePreviewError(t *testing.T) {
@@ -21,7 +23,7 @@ func TestHandlePreviewError(t *testing.T) {
 			fzfMode:    true,
 			name:       "fzf mode prints error to stdout and returns nil",
 			wantErr:    false,
-			wantOutput: "Error: assert.AnError general error for testing\n",
+			wantOutput: "grove: assert.AnError general error for testing\n",
 		},
 		{
 			err:        assert.AnError,
@@ -51,3 +53,21 @@ func TestHandlePreviewError(t *testing.T) {
 		})
 	}
 }
+
+// TestHandlePreviewErrorReportsWriteFailure covers the one failure fzf mode
+// cannot show in the pane: when stdout itself cannot be written, the write
+// error is returned instead of being swallowed.
+func TestHandlePreviewErrorReportsWriteFailure(t *testing.T) {
+	cmd := &cobra.Command{}
+	cmd.SetOut(failingWriter{})
+
+	err := handlePreviewError(cmd, assert.AnError, true)
+
+	require.ErrorIs(t, err, errWriteFailed)
+}
+
+var errWriteFailed = errors.New("write failed")
+
+type failingWriter struct{}
+
+func (failingWriter) Write([]byte) (int, error) { return 0, errWriteFailed }

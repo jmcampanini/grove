@@ -28,9 +28,7 @@ func TestRenderPreviewHandlesAdversarialMarkdown(t *testing.T) {
 		URL:         "https://github.com/owner/repo/pull/83",
 	}
 
-	theme, err := ResolvePreviewTheme("never", strings.NewReader(""), io.Discard)
-	require.NoError(t, err)
-	renderer := New(log.New(io.Discard), theme)
+	renderer := New(log.New(io.Discard), ResolvePreviewTheme(ColorNever, strings.NewReader(""), io.Discard))
 
 	var buf bytes.Buffer
 	require.NotPanics(t, func() {

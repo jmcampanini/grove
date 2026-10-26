@@ -1,55 +1,51 @@
 package cli
 
 import (
-	"fmt"
-	"strconv"
-
 	"github.com/jmcampanini/grove/internal/github"
 	"github.com/jmcampanini/grove/internal/render"
 	"github.com/spf13/cobra"
 )
 
 func newPRPreviewCmd(services commandServices) *cobra.Command {
-	var colorMode string
 	var fzf bool
 
 	cmd := &cobra.Command{
 		Use:   "preview <number>",
 		Short: "Show pull request details",
-		Long: `Show detailed information about a pull request.
+		Long: `Show a pull request on stdout: title, author, branch, and state, CI
+checks, review status, high-activity files, every changed file with its
+addition and deletion counts, the body rendered as Markdown, and an
+activity timeline. The output is styled per --color and sized to the fzf
+preview pane (FZF_PREVIEW_COLUMNS) or the terminal width; it is not a
+machine-readable format. Nothing is modified.
 
-Displays PR metadata (title, author, branch, state), CI checks, review status,
-high-activity files, all changed files with additions/deletions counts, the PR
-body rendered as markdown, and an activity timeline.
+` + helpGH + `
 
 Security note: Markdown links in the PR body may be rendered as
 clickable terminal hyperlinks. Only open links from PRs/authors you trust.
 
-With --fzf, errors are printed to stdout instead of returning an error code,
-making it suitable for use in fzf preview panes.`,
-		Args: cobra.ExactArgs(1),
+` + helpFzfPreview + `
+
+` + helpFailure,
+		Example: `  grove pr list --fzf | fzf --delimiter '\t' --with-nth 3 \
+    --preview 'grove pr preview --fzf {1}'`,
+		Args: numberArgs("pull request"),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return services.runPRPreview(cmd, args, colorMode, fzf)
+			return services.runPRPreview(cmd, args, fzf)
 		},
 	}
-	cmd.Flags().StringVar(&colorMode, "color", "auto", "Color output: auto, always, never")
-	cmd.Flags().BoolVar(&fzf, "fzf", false, "Print errors to stdout instead of returning error (for fzf preview)")
+	cmd.Flags().BoolVar(&fzf, "fzf", false, "Print a failure on stdout and exit 0 (fzf preview pane mode)")
 	return cmd
 }
 
-func (services commandServices) runPRPreview(cmd *cobra.Command, args []string, colorMode string, fzf bool) error {
+func (services commandServices) runPRPreview(cmd *cobra.Command, args []string, fzf bool) error {
 	handleError := func(err error) error {
 		return handlePreviewError(cmd, err, fzf)
 	}
 
-	theme, err := render.ResolvePreviewTheme(colorMode, cmd.InOrStdin(), cmd.OutOrStdout())
+	prNum, err := parseNumberOperand(args[0])
 	if err != nil {
 		return handleError(err)
-	}
-
-	prNum, err := strconv.Atoi(args[0])
-	if err != nil {
-		return handleError(fmt.Errorf("invalid PR number: %s", args[0]))
 	}
 
 	rt, err := services.loadRuntime(cmd)
@@ -84,6 +80,7 @@ func (services commandServices) runPRPreview(cmd *cobra.Command, args []string, 
 
 	w := cmd.OutOrStdout()
 	width := render.DetectPreviewWidth(w)
+	theme := render.ResolvePreviewTheme(colorMode(cmd), cmd.InOrStdin(), w)
 
 	renderer := render.New(rt.Logger, theme)
 	return renderer.PullRequest(w, pr, fileComments, timeline, width)

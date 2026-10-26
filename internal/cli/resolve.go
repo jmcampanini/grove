@@ -17,12 +17,16 @@ func newResolveCmd(_ commandServices) *cobra.Command {
 	return &cobra.Command{
 		Use:   "resolve [path]",
 		Short: "Print the absolute path of the primary worktree",
-		Long: `Resolve and print the absolute path of the primary worktree.
+		Long: `Print the absolute path of the primary worktree on stdout.
 
 The path argument is a directory inside the primary worktree or any linked
 worktree of a repository, at any depth. When omitted, the current directory
 is used. Scripts use this to run repository-wide commands from the primary
-worktree after starting in a worktree elsewhere on disk.`,
+worktree after starting in a worktree elsewhere on disk. Nothing is
+modified and nothing prompts.
+
+` + helpFailure,
+		Example: `  cd "$(grove resolve)"`,
 		Args:    cobra.MaximumNArgs(1),
 		RunE:    runResolve,
 		GroupID: "utility",
