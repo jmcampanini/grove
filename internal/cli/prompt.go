@@ -43,17 +43,19 @@ func checkPromptTerminal(in io.Reader, drawOn io.Writer, guidance string) error 
 // runPrompt checks the terminal a prompt flow needs, then runs the form with
 // the color profile the --color mode resolves for the stream it draws on.
 // The profile never drops below ASCII: the no-color profile would also strip
-// the cursor control the prompt is made of.
+// the cursor control the prompt is made of. The accessible mode styles its
+// titles too, so its output goes through the writer the mode selects.
 func runPrompt(form *huh.Form, mode render.ColorMode, guidance string) error {
 	in, drawOn := promptStreams()
 	if err := checkPromptTerminal(in, drawOn, guidance); err != nil {
 		return err
 	}
-	if os.Getenv("TERM") != "dumb" {
-		profile := max(render.ResolveProfile(mode, drawOn), colorprofile.ASCII)
-		// WithProgramOptions replaces huh's defaults, so the output stream
-		// is set again alongside the profile.
-		form = form.WithProgramOptions(tea.WithOutput(drawOn), tea.WithColorProfile(profile))
+	if os.Getenv("TERM") == "dumb" {
+		return form.WithOutput(render.StyledWriter(mode, drawOn)).Run()
 	}
+	profile := max(render.ResolveProfile(mode, drawOn), colorprofile.ASCII)
+	// WithProgramOptions replaces huh's defaults, so the output stream is
+	// set again alongside the profile.
+	form = form.WithProgramOptions(tea.WithOutput(drawOn), tea.WithColorProfile(profile))
 	return form.Run()
 }

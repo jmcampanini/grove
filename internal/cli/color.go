@@ -41,10 +41,7 @@ func colorMode(cmd *cobra.Command) render.ColorMode {
 	if flag == nil {
 		return render.ColorAuto
 	}
-	if value, ok := flag.Value.(*colorValue); ok {
-		return value.mode
-	}
-	return render.ColorAuto
+	return flag.Value.(*colorValue).mode
 }
 
 // styledStdout returns the command's stdout wrapped for styled output under

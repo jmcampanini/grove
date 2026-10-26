@@ -130,7 +130,9 @@ naming; the layout variables are in grove help layout. A template is
 parsed when a command uses it, and one that names a variable its flow does
 not provide fails that command. A rendered branch name must be non-empty
 and must not start with "-", contain "..", or contain a control character;
-a rendered worktree name follows the space rules above.`,
+a rendered worktree name follows the space rules above.
+
+` + helpFailure,
 		Example: `  grove config > grove.toml
   grove config --provenance`,
 		Args:    cobra.NoArgs,

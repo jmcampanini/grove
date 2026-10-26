@@ -30,7 +30,14 @@ These outcomes keep status 0:
     on stdout, so an fzf preview pane shows it. A rejected invocation
     still exits 2, and a failure to write that line exits 1.
   - Declining a prompt: grove sync prints "Sync aborted." and grove prune
-    prints "Aborted." or nothing, both on stdout.
+    prints "Aborted.", "No worktrees selected.", or nothing, all on
+    stdout.
+  - A log file that cannot be opened: grove warns on stderr (unless
+    --quiet) and runs the command without it.
+  - grove status leaves the dirty and pull request columns of a worktree
+    empty when the git or gh query behind them fails.
+  - grove config and grove namer outside a repository use the global
+    configuration alone.
   - A bare command group (grove pr, grove issue, grove cache, grove namer)
     prints its help.
   - grove help <unknown> prints "Unknown help topic" and the root usage on

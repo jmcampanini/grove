@@ -37,7 +37,6 @@ Truncated names get no hash suffix, so different inputs can collide, and
 grove then reports the existing branch or worktree instead of
 disambiguating.
 
-grove namer branch and grove namer worktree print the names grove create
-would use for a phrase; grove namer slug prints the normalized slug alone,
-without the naming.max_length cap.`)
+The namer commands print the names these rules produce for a phrase
+without creating anything; run grove namer --help.`)
 }

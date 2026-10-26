@@ -91,17 +91,17 @@ func TestExecuteWithFileLoggingAppliesDiagnosticLevelBeforeSetupWarning(t *testi
 		wantWarning bool
 	}{
 		{
-			args:        []string{"exit-codes"},
+			args:        []string{"namer", "slug", "hello"},
 			name:        "default reports setup warning",
 			wantWarning: true,
 		},
 		{
-			args:        []string{"--debug", "exit-codes"},
+			args:        []string{"--debug", "namer", "slug", "hello"},
 			name:        "debug reports setup warning",
 			wantWarning: true,
 		},
 		{
-			args: []string{"--quiet", "exit-codes"},
+			args: []string{"--quiet", "namer", "slug", "hello"},
 			name: "quiet suppresses setup warning",
 		},
 	}

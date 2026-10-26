@@ -23,10 +23,14 @@ func TestExitStatusClassifiesInvocationFailures(t *testing.T) {
 		wantErr string
 	}{
 		{name: "unknown root command", args: []string{"nope"}, wantErr: `unknown command "nope" for "grove"`},
+		{name: "unknown root command with a quote", args: []string{`a"b`}, wantErr: `unknown command "a\"b" for "grove"`},
 		{name: "unknown group command", args: []string{"pr", "nope"}, wantErr: `unknown command "nope" for "grove pr"`},
 		{name: "operand on a help topic", args: []string{"exit-codes", "x"}, wantErr: `unknown command "x" for "grove exit-codes"`},
 		{name: "unknown flag", args: []string{"--bogus"}, wantErr: "unknown flag: --bogus"},
 		{name: "missing operand", args: []string{"checkout"}, wantErr: "accepts 1 arg(s), received 0"},
+		{name: "blank phrase", args: []string{"create", " "}, wantErr: "phrase cannot be empty"},
+		{name: "blank branch", args: []string{"checkout", ""}, wantErr: "branch cannot be empty"},
+		{name: "blank namer phrase", args: []string{"namer", "slug", ""}, wantErr: "phrase cannot be empty"},
 		{name: "extra operand", args: []string{"checkout", "a", "b"}, wantErr: "accepts 1 arg(s), received 2"},
 		{name: "pull request number not numeric", args: []string{"pr", "checkout", "abc"}, wantErr: `invalid pull request number "abc"`},
 		{name: "pull request number not positive", args: []string{"pr", "preview", "--fzf", "0"}, wantErr: `invalid pull request number "0"`},

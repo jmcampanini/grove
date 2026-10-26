@@ -95,7 +95,9 @@ var (
 // dark background. COLORFGBG answers without a query. Otherwise the terminal
 // is queried at most once per process, and only when profile can render
 // color and both streams are terminals; every other case, including a
-// failed query, is treated as dark.
+// failed query, is treated as dark. lipgloss retries a query that got no
+// answer on the other descriptor of the same terminal; its public API
+// offers no single-descriptor query, so that one retry is accepted.
 func HasDarkBackground(profile colorprofile.Profile, in io.Reader, out io.Writer) bool {
 	if dark, ok := DetectDarkBackgroundFromEnv(); ok {
 		return dark

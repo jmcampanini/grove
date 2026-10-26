@@ -3,9 +3,24 @@ package cli
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
+
+// phraseArgs is the positional grammar of the commands that take one
+// phrase or branch name: exactly one operand that is not blank. noun names
+// the operand in the diagnostic, as in `phrase cannot be empty`. The check
+// reads only the operand, so a blank one is rejected before any command
+// work.
+func phraseArgs(noun string) cobra.PositionalArgs {
+	return cobra.MatchAll(cobra.ExactArgs(1), func(_ *cobra.Command, args []string) error {
+		if strings.TrimSpace(args[0]) == "" {
+			return fmt.Errorf("%s cannot be empty", noun)
+		}
+		return nil
+	})
+}
 
 // numberArgs is the positional grammar of the commands that take one issue
 // or pull request number: exactly one operand that is a positive integer.

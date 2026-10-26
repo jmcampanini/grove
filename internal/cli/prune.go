@@ -90,7 +90,17 @@ type prunable struct {
 	path       string
 }
 
+// prunePromptGuidance completes the diagnostic when the prompts cannot run.
+const prunePromptGuidance = "run grove prune in a terminal"
+
 func (services commandServices) runPrune(cmd *cobra.Command, _ []string) error {
+	// The command is interactive only, so the terminal its prompts need is
+	// checked before configuration, git, or gh run.
+	in, drawOn := promptStreams()
+	if err := checkPromptTerminal(in, drawOn, prunePromptGuidance); err != nil {
+		return err
+	}
+
 	rt, err := services.loadRuntime(cmd)
 	if err != nil {
 		return err
@@ -518,7 +528,7 @@ func promptPruneSelection(prunables []prunable, mode render.ColorMode) ([]prunab
 				Value(&selected),
 		),
 	).WithKeyMap(pruneKeyMap())
-	if err := runPrompt(form, mode, "run grove prune in a terminal"); err != nil {
+	if err := runPrompt(form, mode, prunePromptGuidance); err != nil {
 		return nil, err
 	}
 
@@ -545,7 +555,7 @@ func promptPruneConfirm(count int, mode render.ColorMode) (bool, error) {
 				Value(&confirmed),
 		),
 	).WithKeyMap(pruneKeyMap())
-	if err := runPrompt(form, mode, "run grove prune in a terminal"); err != nil {
+	if err := runPrompt(form, mode, prunePromptGuidance); err != nil {
 		return false, err
 	}
 	return confirmed, nil

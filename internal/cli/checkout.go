@@ -42,7 +42,7 @@ request by number, use grove pr checkout.`,
 		Example: `  grove checkout feature/fix-login
   grove checkout origin/feature/fix-login
   grove checkout upstream/hotfix-123`,
-		Args:    cobra.ExactArgs(1),
+		Args:    phraseArgs("branch"),
 		RunE:    services.runCheckout,
 		GroupID: "worktree",
 	}

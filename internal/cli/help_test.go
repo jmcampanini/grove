@@ -2,9 +2,11 @@ package cli
 
 import (
 	"bytes"
+	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/jmcampanini/grove/internal/config"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -50,9 +52,14 @@ func TestRootHelpEndsWithGroupBlock(t *testing.T) {
 	root.SetOut(&out)
 	require.NoError(t, root.Help())
 	assert.Contains(t, out.String(), "Help Topics")
-	for _, topic := range []string{"exit-codes", "layout", "naming"} {
-		assert.Contains(t, out.String(), "\n  "+topic+" ")
+	var topics int
+	for _, child := range root.Commands() {
+		if isHelpTopic(child) {
+			topics++
+			assert.Contains(t, out.String(), "\n  "+child.Name()+" ")
+		}
 	}
+	assert.NotZero(t, topics, "the tree has help topics")
 }
 
 func TestMutuallyExclusiveFlagHelpText(t *testing.T) {
@@ -68,24 +75,20 @@ func TestMutuallyExclusiveFlagHelpText(t *testing.T) {
 	})
 }
 
+// TestConfigHelpDocumentsEveryKey walks the configuration struct so a key
+// added to it must be documented in config --help: each section appears as
+// its TOML table header and each key as a "  key = <default>" line.
 func TestConfigHelpDocumentsEveryKey(t *testing.T) {
 	long := newConfigCmd(commandServices{loadRuntime: loadCommandRuntime}).Long
-	for _, key := range []string{
-		"[git]\n  timeout",
-		"[github]\n  preview_cache_ttl",
-		"[issue]\n  branch_template",
-		"[issue]\n  branch_template = \"issue/{{.Number}}-{{.TitleSlug}}\"",
-		"[local_branch]\n  branch_template = \"feature/{{.PhraseSlug}}\"",
-		"[naming]\n  lowercase = true",
-		"max_length = 30",
-		"strip_prefixes = [\"feature/\", \"fix/\", \"issue/\"]",
-		"[pull_request]\n  branch_template = \"{{.Branch}}\"",
-		"worktree_template = \"pr-{{.Number}}-{{.TitleSlug}}\"",
-		"[worktree]\n  layout = \"{{.Space}}/{{.Host}}/{{.Owner}}/{{.Repo}}/{{.Name}}\"",
-		"root = \"$CODE_DIR/.worktrees\"",
-		"space = \"grove\"",
-	} {
-		assert.Contains(t, long, key)
+	sections := reflect.TypeFor[config.Config]()
+	for i := range sections.NumField() {
+		section := sections.Field(i)
+		table := section.Tag.Get("toml")
+		assert.Containsf(t, long, "\n  ["+table+"]\n", "section %s", table)
+		for j := range section.Type.NumField() {
+			key := section.Type.Field(j).Tag.Get("toml")
+			assert.Containsf(t, long, "\n  "+key+" = ", "key %s.%s", table, key)
+		}
 	}
 	assert.NotContains(t, long, "grove docs")
 }
@@ -129,14 +132,4 @@ func TestEveryApplicationCommandMeetsTheHelpBaseline(t *testing.T) {
 		}
 	}
 	visit(newTestRootCommand())
-}
-
-func TestHelpTopicsAreMarked(t *testing.T) {
-	var topics []string
-	for _, child := range newTestRootCommand().Commands() {
-		if isHelpTopic(child) {
-			topics = append(topics, child.Name())
-		}
-	}
-	assert.Equal(t, []string{"exit-codes", "layout", "naming"}, topics)
 }

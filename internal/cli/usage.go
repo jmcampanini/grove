@@ -57,7 +57,7 @@ func markUsageErrors(root *cobra.Command) {
 
 // unknownCommandText matches the error Cobra's command discovery returns for
 // an unknown first-level command, the one usage error it reports untyped.
-var unknownCommandText = regexp.MustCompile(`^unknown command "[^"]*" for "`)
+var unknownCommandText = regexp.MustCompile(`^unknown command ".*" for "`)
 
 // exitStatus maps the error an execution returned to the process exit
 // status.

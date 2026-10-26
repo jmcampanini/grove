@@ -58,15 +58,16 @@ precedence, and every key.
 Styled output follows --color. auto, the default, colors a stream only
 when that stream is a terminal, TERM is not dumb, and NO_COLOR is empty;
 always and never override both the detection and NO_COLOR. Help, version,
-config, list, and every --fzf format are never styled.
+config, list, and the --fzf output of pr list and issue list are never
+styled.
 
 Logs are appended to $XDG_STATE_HOME/grove/grove.log
 (~/.local/state/grove/grove.log when XDG_STATE_HOME is unset). Logging starts
-after argument validation: --help, --version, and rejected input do not create
-the log file. Diagnostic logging defaults to info. Pass --debug for debug
-logging or --quiet to show only errors. The flags are mutually exclusive and
-do not change stdout. When the log file cannot be opened, grove warns on
-stderr (unless --quiet) and continues without it.
+after argument validation: --help, --version, the help topics, and rejected
+input do not create the log file. Diagnostic logging defaults to info. Pass
+--debug for debug logging or --quiet to show only errors. The flags are
+mutually exclusive and do not change stdout. When the log file cannot be
+opened, grove warns on stderr (unless --quiet) and continues without it.
 
 Only sync and prune prompt, and only in a terminal; every other command,
 including help, version, config, and the help topics, runs without one.
@@ -172,6 +173,11 @@ func executeWithFileLogging(in io.Reader, out, stderr io.Writer, args []string) 
 		// first so conflicting --debug/--quiet never opens the log file.
 		if err := cmd.ValidateFlagGroups(); err != nil {
 			return usageError{err: err}
+		}
+		// Help topics and the help command only print help, so they neither
+		// create the log file nor warn when it cannot be opened.
+		if isHelpTopic(cmd) || cmd.Name() == "help" {
+			return nil
 		}
 
 		opened, err := logging.NewTee(stderr, render.ResolveProfile(colorMode(cmd), stderr))

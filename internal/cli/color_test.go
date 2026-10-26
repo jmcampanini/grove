@@ -22,27 +22,14 @@ func TestColorFlagParsesEveryModeAndRejectsTheRest(t *testing.T) {
 	require.EqualError(t, err, `invalid argument "x" for "--color" flag: valid values are auto, always, never`)
 }
 
-// TestStyledStdoutHonorsColorFlagOnNonTerminal checks the resolution on a
-// buffer, the one destination tests can own: auto and never strip color, and
-// always keeps it even with NO_COLOR set.
-func TestStyledStdoutHonorsColorFlagOnNonTerminal(t *testing.T) {
-	t.Setenv("CLICOLOR_FORCE", "")
-	t.Setenv("FORCE_COLOR", "")
-	t.Setenv("NO_COLOR", "yes")
-	t.Setenv("TTY_FORCE", "")
+// TestStyledStdoutCarriesTheColorFlag checks the wiring from the flag to the
+// styled writer; the resolution rules themselves are tested in render.
+func TestStyledStdoutCarriesTheColorFlag(t *testing.T) {
+	root := newTestRootCommand()
+	require.NoError(t, root.PersistentFlags().Set(colorFlag, "always"))
 
-	for _, tt := range []struct {
-		mode render.ColorMode
-		want colorprofile.Profile
-	}{
-		{mode: render.ColorAuto, want: colorprofile.NoTTY},
-		{mode: render.ColorNever, want: colorprofile.NoTTY},
-		{mode: render.ColorAlways, want: colorprofile.ANSI256},
-	} {
-		root := newTestRootCommand()
-		require.NoError(t, root.PersistentFlags().Set(colorFlag, string(tt.mode)))
-		w, ok := styledStdout(root).(*colorprofile.Writer)
-		require.True(t, ok)
-		assert.Equalf(t, tt.want, w.Profile, "--color=%s", tt.mode)
-	}
+	w, ok := styledStdout(root).(*colorprofile.Writer)
+
+	require.True(t, ok)
+	assert.Equal(t, colorprofile.ANSI256, w.Profile)
 }

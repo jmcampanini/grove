@@ -19,7 +19,7 @@ naming.max_length. A phrase that slugifies to nothing is an error. Nothing
 is created and nothing prompts.
 
 ` + helpFailure,
-		Args: cobra.ExactArgs(1),
+		Args: phraseArgs("phrase"),
 		RunE: runNamerBranch,
 	}
 }

@@ -27,7 +27,8 @@ worktree for the branch already exists.`
 	// helpGH states the gh dependency and the cache the read-only GitHub
 	// commands consult.
 	helpGH = `The command runs gh, which must already be authenticated, and reads the
-gh output cache described in grove cache --help before querying GitHub.`
+gh output cache described in grove cache --help before querying GitHub; a
+miss stores the fresh gh output there.`
 
 	// helpGHUncached states the gh dependency of the commands that bypass
 	// the cache.
@@ -43,6 +44,9 @@ an unknown number or a failed gh call is printed on stdout as
 rejected invocation still exits 2.`
 )
 
+// helpTopicContract states the stream contract every help topic shares.
+const helpTopicContract = `This topic prints on stdout and needs no repository, terminal, or network.`
+
 // newHelpTopicCmd builds a help topic: an application-owned command that
 // does no command work and prints its help whether invoked directly or
 // through grove help.
@@ -50,7 +54,7 @@ func newHelpTopicCmd(use, short, long string) *cobra.Command {
 	return &cobra.Command{
 		Use:         use,
 		Short:       short,
-		Long:        long,
+		Long:        long + "\n\n" + helpTopicContract,
 		Annotations: map[string]string{helpTopicAnnotation: "true"},
 		Args:        cobra.NoArgs,
 		GroupID:     "topics",

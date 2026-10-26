@@ -90,7 +90,7 @@ func resolveGitDir(targetPath string, ctx *resolveContext) (string, error) {
 	g := git.New(ctx.ctx, false, targetPath, ctx.timeout, ctx.logger)
 	worktreeRoot, err := g.GetWorktreeRoot()
 	if err != nil {
-		return "", fmt.Errorf("git error: %w", err)
+		return "", fmt.Errorf("find worktree root: %w", err)
 	}
 
 	if worktreeRoot == "" {

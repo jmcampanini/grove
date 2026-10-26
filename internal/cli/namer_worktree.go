@@ -20,7 +20,7 @@ naming.max_length. The global --worktree-template flag replaces the
 template for one invocation. Nothing is created and nothing prompts.
 
 ` + helpFailure,
-		Args: cobra.ExactArgs(1),
+		Args: phraseArgs("phrase"),
 		RunE: runNamerWorktree,
 	}
 }

@@ -22,7 +22,7 @@ generating complete branch and worktree names. The slug is printed on
 stdout; nothing is created and nothing prompts.
 
 ` + helpFailure,
-		Args: cobra.ExactArgs(1),
+		Args: phraseArgs("phrase"),
 		RunE: runNamerSlug,
 	}
 }

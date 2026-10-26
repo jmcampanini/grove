@@ -54,7 +54,7 @@ To check out an existing pull request, use grove pr checkout.`,
   grove create "add user authentication" --reuse
   grove create "run tests" --space claude
   grove create "run tests" --worktree-template "subagent-{{.BranchSlug}}"`,
-		Args:    cobra.ExactArgs(1),
+		Args:    phraseArgs("phrase"),
 		GroupID: "worktree",
 		RunE:    services.runCreate,
 	}
