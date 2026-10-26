@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/jmcampanini/go-config-loader/configreporter"
 	"github.com/spf13/cobra"
@@ -23,8 +25,8 @@ one sets:
 
   1. Built-in defaults.
   2. $XDG_CONFIG_HOME/grove/config.toml, or ~/.config/grove/config.toml
-     when XDG_CONFIG_HOME is unset or not an absolute path. A relative value
-     is ignored, never resolved against the current directory.
+     when XDG_CONFIG_HOME is unset, empty, or not an absolute path. A
+     relative value is ignored, never resolved against the current directory.
   3. grove.toml in each directory from the home directory down to the parent
      of the main worktree, when the main worktree is under the home
      directory. The current directory is skipped here and loaded at step 6.
@@ -104,9 +106,34 @@ func writeConfigProvenance(w io.Writer, headers []string, rows [][]string) error
 		return err
 	}
 	for _, cells := range append([][]string{headers}, rows...) {
-		if _, err := fmt.Fprintf(w, "# %s\n", strings.Join(cells, "\t")); err != nil {
+		escaped := make([]string, len(cells))
+		for i, cell := range cells {
+			escaped[i] = commentCell(cell)
+		}
+		if _, err := fmt.Fprintf(w, "# %s\n", strings.Join(escaped, "\t")); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// commentCell escapes the bytes a TOML comment cannot carry (control
+// characters and invalid UTF-8), so a row stays one comment line whatever a
+// discovered file path contains. Ordinary paths pass through unchanged.
+func commentCell(cell string) string {
+	var b strings.Builder
+	for i := 0; i < len(cell); {
+		r, size := utf8.DecodeRuneInString(cell[i:])
+		switch {
+		case r == utf8.RuneError && size == 1:
+			fmt.Fprintf(&b, `\x%02x`, cell[i])
+		case r < 0x20 || r == 0x7f:
+			quoted := strconv.QuoteRune(r)
+			b.WriteString(quoted[1 : len(quoted)-1])
+		default:
+			b.WriteRune(r)
+		}
+		i += size
+	}
+	return b.String()
 }

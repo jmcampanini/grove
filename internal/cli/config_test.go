@@ -24,10 +24,15 @@ func TestWriteConfigProvenance(t *testing.T) {
 	err := writeConfigProvenance(&buf, []string{"Path", "Value", "Source"}, [][]string{
 		{"git.timeout", `"5s"`, "<default>"},
 		{"naming.maxlength", "42", "/home/jim/.config/grove/config.toml"},
+		{"worktree.space", `"grove"`, "/home/jim/odd\ndir\x01\xff/grove.toml"},
 	})
 	require.NoError(t, err)
 
-	assert.Equal(t, "\n# Provenance\n# Path\tValue\tSource\n# git.timeout\t\"5s\"\t<default>\n# naming.maxlength\t42\t/home/jim/.config/grove/config.toml\n", buf.String())
+	assert.Equal(t, "\n# Provenance\n"+
+		"# Path\tValue\tSource\n"+
+		"# git.timeout\t\"5s\"\t<default>\n"+
+		"# naming.maxlength\t42\t/home/jim/.config/grove/config.toml\n"+
+		`# worktree.space	"grove"	/home/jim/odd\ndir\x01\xff/grove.toml`+"\n", buf.String())
 }
 
 func TestConfigCommandOutsideRepoRoundTrips(t *testing.T) {
