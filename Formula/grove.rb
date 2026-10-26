@@ -5,6 +5,8 @@ class Grove < Formula
   head "https://github.com/jmcampanini/grove.git", branch: "main"
 
   depends_on "go" => :build
+  depends_on "gh"
+  depends_on "git"
 
   def install
     ldflags = %W[
