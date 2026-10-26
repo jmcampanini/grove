@@ -12,8 +12,10 @@ func newExitCodesTopicCmd(_ commandServices) *cobra.Command {
      cannot run, a file cannot be read or written
   2  usage error: an unknown command, flag, or operand, a missing or extra
      operand, an operand that fails its grammar (such as a pull request
-     number that is not a positive integer), an invalid flag value, or
-     flags that cannot be combined (such as --debug with --quiet)
+     number that is not a positive integer), a flag value the flag cannot
+     parse (such as --color=sometimes), or flags that cannot be combined
+     (such as --debug with --quiet). A flag value the configuration
+     rejects, such as --space a/b, is a configuration failure and exits 1.
 
 A failure prints exactly one line on stderr, without usage text:
 

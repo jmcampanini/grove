@@ -96,8 +96,7 @@ const prunePromptGuidance = "run grove prune in a terminal"
 func (services commandServices) runPrune(cmd *cobra.Command, _ []string) error {
 	// The command is interactive only, so the terminal its prompts need is
 	// checked before configuration, git, or gh run.
-	in, drawOn := promptStreams()
-	if err := checkPromptTerminal(in, drawOn, prunePromptGuidance); err != nil {
+	if err := checkPromptTerminal(os.Stdin, promptOutput(), prunePromptGuidance); err != nil {
 		return err
 	}
 

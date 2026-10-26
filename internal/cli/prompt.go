@@ -11,21 +11,23 @@ import (
 	"github.com/jmcampanini/grove/internal/render"
 )
 
-// promptStreams returns the streams a huh prompt flow uses: it reads
-// os.Stdin and draws on os.Stderr, or on os.Stdout in the line-based
-// accessible mode huh selects when TERM=dumb.
-func promptStreams() (in io.Reader, drawOn io.Writer) {
+// promptOutput returns the stream a huh prompt flow draws on: os.Stderr,
+// or os.Stdout in the line-based accessible mode huh selects when
+// TERM=dumb. Every prompt reads os.Stdin.
+func promptOutput() io.Writer {
 	if os.Getenv("TERM") == "dumb" {
-		return os.Stdin, os.Stdout
+		return os.Stdout
 	}
-	return os.Stdin, os.Stderr
+	return os.Stderr
 }
 
 // checkPromptTerminal fails when a prompt flow cannot run on the given
 // streams: the stream it reads keys from and the stream it draws on must both
 // be terminals, because the prompt owns the cursor and the keyboard while it
 // runs. The accessible mode huh selects when TERM=dumb reads lines and
-// writes plain text, so it needs no terminal. guidance completes the
+// writes plain text, so it needs no terminal. Cursor control is inferred
+// deliberately: the libraries in use offer no probe for it, and TERM=dumb
+// is the one terminal that reports it absent. guidance completes the
 // diagnostic with the way around the prompt.
 func checkPromptTerminal(in io.Reader, drawOn io.Writer, guidance string) error {
 	if os.Getenv("TERM") == "dumb" {
@@ -46,8 +48,8 @@ func checkPromptTerminal(in io.Reader, drawOn io.Writer, guidance string) error 
 // the cursor control the prompt is made of. The accessible mode styles its
 // titles too, so its output goes through the writer the mode selects.
 func runPrompt(form *huh.Form, mode render.ColorMode, guidance string) error {
-	in, drawOn := promptStreams()
-	if err := checkPromptTerminal(in, drawOn, guidance); err != nil {
+	drawOn := promptOutput()
+	if err := checkPromptTerminal(os.Stdin, drawOn, guidance); err != nil {
 		return err
 	}
 	if os.Getenv("TERM") == "dumb" {

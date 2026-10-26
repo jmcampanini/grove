@@ -6,6 +6,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"charm.land/log/v2"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/jmcampanini/grove/internal/logging"
 	"github.com/jmcampanini/grove/internal/render"
 	"github.com/spf13/cobra"
@@ -51,9 +52,11 @@ func resolveDiagnosticLevel(flags *pflag.FlagSet) (log.Level, error) {
 // itself, so the logger never runs its own detection.
 func newDiagnosticLogger(w io.Writer, level log.Level, mode render.ColorMode) *log.Logger {
 	logger := log.NewWithOptions(w, log.Options{Level: level, ReportTimestamp: true})
-	profile := render.ResolveProfile(mode, w)
+	var profile colorprofile.Profile
 	if tee, ok := w.(*logging.Tee); ok {
 		profile = tee.Profile
+	} else {
+		profile = render.ResolveProfile(mode, w)
 	}
 	logger.SetColorProfile(profile)
 	logger.SetStyles(diagnosticLogStyles())
