@@ -176,7 +176,7 @@ func TestConfig_Validate(t *testing.T) {
 	}
 }
 
-func TestConfigPaths(t *testing.T) {
+func TestPaths(t *testing.T) {
 	tests := []struct {
 		name         string
 		cwd          string

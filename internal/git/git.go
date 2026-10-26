@@ -56,7 +56,8 @@ type Commit struct {
 
 var _ WorktreeRef = &Commit{}
 
-// NewCommit builds a Commit from its parts.
+// NewCommit returns a Commit holding the given values as is; it does not
+// consult the repository.
 func NewCommit(sha, subject string, committedOn time.Time, committedBy string) Commit {
 	return Commit{
 		CommittedBy: committedBy,
@@ -143,7 +144,8 @@ type LocalBranch struct {
 
 var _ WorktreeRef = &LocalBranch{}
 
-// NewLocalBranch builds a LocalBranch from its parts.
+// NewLocalBranch returns a LocalBranch holding the given values as is, with
+// commit as its tip; it does not consult the repository.
 func NewLocalBranch(name, upstreamName, worktreeAbsolutePath string, isCheckedOut bool, ahead, behind int, commit Commit) LocalBranch {
 	return LocalBranch{
 		Ahead:                ahead,
@@ -175,7 +177,8 @@ type RemoteBranch struct {
 	RemoteName string // Remote name (e.g., "origin")
 }
 
-// NewRemoteBranch builds a RemoteBranch from its parts.
+// NewRemoteBranch returns a RemoteBranch holding the given values as is, with
+// commit as its tip; it does not consult the repository.
 func NewRemoteBranch(name, remoteName string, commit Commit) RemoteBranch {
 	return RemoteBranch{
 		commit:     commit,

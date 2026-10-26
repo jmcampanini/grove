@@ -723,7 +723,7 @@ func (g *CLI) parseWorktreeBlock(lines []string, branchMap map[string]LocalBranc
 		if tag, ok := tagMap[sha]; ok {
 			worktree.Ref = &tag
 		} else {
-			// TODO: figure out a way to get the commit information without needing a reference to g CLI
+			// TODO: figure out a way to get the commit information without needing the CLI receiver
 			commit, err := g.getCommitBySHA(sha)
 			if err != nil {
 				return Worktree{}, fmt.Errorf("failed to get commit for detached worktree: %w", err)
@@ -829,8 +829,8 @@ func (g *CLI) Merge(ref string) (string, error) {
 	return g.executeMutatingGitCommandWithOutput("failed to merge", "merge", "--no-edit", ref)
 }
 
-// ResetHard moves the current branch to ref and discards every local
-// change. Mutating.
+// ResetHard moves the current branch to ref and discards uncommitted
+// changes to tracked files; untracked files stay. Mutating.
 func (g *CLI) ResetHard(ref string) error {
 	g.log.Info("Resetting to ref", "ref", ref)
 	return g.executeMutatingGitCommand("failed to reset", "reset", "--hard", ref)

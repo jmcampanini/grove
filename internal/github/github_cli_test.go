@@ -62,7 +62,7 @@ func TestCLIGetIssue(t *testing.T) {
 	assert.Equal(t, []IssueComment{{AuthorLogin: "bob", Body: "Reproduced."}}, issue.Comments)
 	args := recordedArgs(t, argsPath)
 	assert.Equal(t, []string{"issue", "view", "17"}, args[:3])
-	assert.Contains(t, args, "--json")
+	assert.Equal(t, issueViewJSONFields, flagValue(args, "--json"))
 }
 
 func TestCLIGetIssueFailure(t *testing.T) {
@@ -159,21 +159,43 @@ func TestCLIListIssues(t *testing.T) {
 }
 
 func TestCLIListPullRequests(t *testing.T) {
-	argsPath := installRecordingGh(t, 0, `[
-		{"headRefName": "feature/login", "isDraft": false, "number": 42, "state": "OPEN", "title": "Fix login"}
-	]`)
-	gh := New(context.Background(), t.TempDir(), testTimeout, nil, nil)
+	tests := []struct {
+		name        string
+		response    string
+		wantNumbers []int
+	}{
+		{
+			name:        "no open pull requests",
+			response:    "[]",
+			wantNumbers: []int{},
+		},
+		{
+			name:        "one open pull request",
+			response:    `[{"headRefName": "feature/login", "isDraft": false, "number": 42, "state": "OPEN", "title": "Fix login"}]`,
+			wantNumbers: []int{42},
+		},
+	}
 
-	prs, err := gh.ListPullRequests(PRQuery{State: PRStateOpen}, DefaultPRLimit)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			argsPath := installRecordingGh(t, 0, tt.response)
+			gh := New(context.Background(), t.TempDir(), testTimeout, nil, nil)
 
-	require.NoError(t, err)
-	require.Len(t, prs, 1)
-	assert.Equal(t, 42, prs[0].Number)
-	assert.Equal(t, PRStateOpen, prs[0].State)
-	args := recordedArgs(t, argsPath)
-	assert.Equal(t, []string{"pr", "list"}, args[:2])
-	assert.Equal(t, "is:pr is:open draft:false", flagValue(args, "--search"))
-	assert.Equal(t, "20", flagValue(args, "--limit"))
+			prs, err := gh.ListPullRequests(PRQuery{State: PRStateOpen}, DefaultPRLimit)
+
+			require.NoError(t, err)
+			require.NotNil(t, prs, "an empty result must still be a non-nil slice")
+			numbers := make([]int, 0, len(prs))
+			for _, pr := range prs {
+				numbers = append(numbers, pr.Number)
+			}
+			assert.Equal(t, tt.wantNumbers, numbers)
+			args := recordedArgs(t, argsPath)
+			assert.Equal(t, []string{"pr", "list"}, args[:2])
+			assert.Equal(t, "is:pr is:open draft:false", flagValue(args, "--search"))
+			assert.Equal(t, "20", flagValue(args, "--limit"))
+		})
+	}
 }
 
 // installRecordingGh puts a fake gh first on PATH. It records its arguments,

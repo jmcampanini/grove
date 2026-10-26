@@ -30,8 +30,10 @@ type LocalBranchNamer struct {
 	worktreeTemplate      *template.Template
 }
 
-// NewLocalBranchNamer parses and validates the local_branch templates, so an
-// invalid template fails here rather than when a name is generated.
+// NewLocalBranchNamer parses the local_branch templates and renders each
+// against sample data, so a template that cannot parse, references an
+// unknown field, or yields an invalid name fails here. A template whose
+// output is invalid only for some inputs fails when the name is generated.
 func NewLocalBranchNamer(localCfg config.LocalBranchConfig, namingCfg config.NamingConfig) (*LocalBranchNamer, error) {
 	branchTemplate, err := parseNameTemplate(
 		"branch_template",

@@ -251,8 +251,8 @@ func (g *CLI) GetPullRequestActivity(owner, repo string, prNum int) ([]ReviewThr
 	return parseActivityResponse(g.log, output)
 }
 
-// GetPullRequestByBranch returns the newest pull request, in any state, whose
-// head branch is branchName, or nil when there is none.
+// GetPullRequestByBranch returns the pull request gh pr list reports first
+// for head branch branchName, in any state, or nil when there is none.
 func (g *CLI) GetPullRequestByBranch(branchName string) (*PullRequest, error) {
 	args := []string{
 		"pr", "list",
