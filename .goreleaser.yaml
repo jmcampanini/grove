@@ -1,0 +1,83 @@
+version: 2
+
+project_name: grove
+
+builds:
+  - id: grove
+    main: .
+    binary: grove
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+      - -buildvcs=false
+    ldflags:
+      - -s -w -X github.com/jmcampanini/grove/internal/cli.Version=v{{ .Version }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: default
+    formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: "{{ .ProjectName }}_{{ .Version }}_checksums.txt"
+  algorithm: sha256
+
+changelog:
+  use: github-native
+
+release:
+  github:
+    owner: jmcampanini
+    name: grove
+  draft: false
+  prerelease: auto
+
+homebrew_casks:
+  - name: grove
+    homepage: https://github.com/jmcampanini/grove
+    description: Git worktree workspace manager
+    binaries:
+      - grove
+    dependencies:
+      - formula: git
+      - formula: gh
+    generate_completions_from_executable:
+      executable: grove
+      args:
+        - completion
+      shells:
+        - bash
+        - zsh
+        - fish
+    directory: Casks
+    commit_msg_template: "Update grove to {{ .Tag }}"
+    commit_author:
+      name: github-actions[bot]
+      email: 41898282+github-actions[bot]@users.noreply.github.com
+    skip_upload: auto
+    repository:
+      owner: jmcampanini
+      name: homebrew-tap
+      branch: main
+      git:
+        url: ssh://git@github.com/jmcampanini/homebrew-tap.git
+        private_key: "{{ envOrDefault \"HOMEBREW_TAP_DEPLOY_KEY\" \"\" }}"
+    hooks:
+      pre:
+        # Homebrew quarantines unsigned macOS binaries; remove the attribute before install-time completion generation executes Grove.
+        install_steps: |
+          on_macos do
+            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/grove"]
+          end

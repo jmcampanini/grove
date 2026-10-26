@@ -5,10 +5,28 @@ Grove manages git worktrees: one directory per branch, placed under a configurab
 
 ## Install
 
-The Homebrew formula builds from the `main` branch HEAD; there is no tagged release.
+Grove is configured to publish versioned binaries for Linux and macOS on amd64 and arm64. Until the first stable release is published, use the HEAD formula or build from source below.
 
 
-### Homebrew (macOS)
+### Versioned releases
+
+After the first stable release, install or upgrade with mise or the shared Homebrew tap:
+
+```sh
+mise use -g github:jmcampanini/grove
+mise upgrade github:jmcampanini/grove
+brew install --cask jmcampanini/tap/grove
+brew upgrade --cask jmcampanini/tap/grove
+```
+
+Or download the archive for your OS and architecture from the [releases page](https://github.com/jmcampanini/grove/releases), extract it, and copy `grove` onto your `PATH`. To upgrade, download the new release and replace the binary. Releases include SHA-256 checksums and GitHub build provenance attestations. On macOS, if a browser download is quarantined, remove the attribute with `xattr -d com.apple.quarantine grove` before running it.
+
+Homebrew installs Git, `gh`, and bash/zsh/fish completions. For archive or mise installs, install Git and [GitHub CLI](https://cli.github.com) separately. Run `gh auth login` before using Grove's GitHub commands.
+
+
+### HEAD formula (macOS alternative)
+
+The existing formula builds the latest `main` commit and remains available independently of versioned releases:
 
 ```sh
 brew tap jmcampanini/grove https://github.com/jmcampanini/grove
@@ -18,21 +36,25 @@ brew install --HEAD jmcampanini/grove/grove
 Upgrade to the latest commit:
 
 ```sh
-brew upgrade --fetch-HEAD grove
+brew upgrade --fetch-HEAD jmcampanini/grove/grove
 ```
+
+The HEAD formula and release cask both install `grove`; keep one installed at a time. To switch to releases after the first stable release, uninstall the HEAD formula with `brew uninstall --formula jmcampanini/grove/grove` before installing the cask.
 
 
 ### From source
 
+Install [mise](https://mise.jdx.dev), Git, and `gh` (`brew install git gh mise` on macOS), then run:
+
 ```sh
-brew install git mise
 git clone https://github.com/jmcampanini/grove
 cd grove
 mise trust
 mise install
 mise run build
-# then copy ./build/grove to a directory on your PATH
 ```
+
+Copy `./build/grove` to a directory on your `PATH`.
 
 
 ## Representative commands
