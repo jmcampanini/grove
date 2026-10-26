@@ -84,7 +84,7 @@ Run these from inside a repository: the clone or any of its worktrees.
 
 ## Configuration
 
-Grove reads `grove.toml` from `$XDG_CONFIG_HOME/grove` (or `~/.config/grove`), from your home directory and each directory below it down to the main worktree, from the current worktree, and from the current directory. `grove config --help` documents the discovery order.
+Grove reads `$XDG_CONFIG_HOME/grove/config.toml` (or `~/.config/grove/config.toml`), then `grove.toml` from your home directory and each directory below it down to the main worktree, from the current worktree, and from the current directory. `grove config --help` documents the discovery order.
 
 ```toml
 [worktree]

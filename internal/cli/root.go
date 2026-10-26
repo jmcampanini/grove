@@ -51,7 +51,7 @@ Common workflows:
   Work on an issue:     grove issue start 17
   See all worktrees:    grove status
 
-Configuration comes from grove.toml files and the --space and
+Configuration comes from TOML files and the --space and
 --worktree-template flags; run grove config --help for the file locations
 and precedence.
 

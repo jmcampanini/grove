@@ -36,7 +36,7 @@ Common commands:
 - grove status: list the repository's worktrees and branch state.
 - grove sync: fetch and hard-reset the current branch to its upstream, discarding local changes after confirmation.
 - grove config: print the effective TOML configuration.
-- grove config --provenance: print field-level configuration sources.
+- grove config --provenance: print the effective TOML configuration with field-level sources appended as comments.
 
 Topic help pages:
 
@@ -47,7 +47,7 @@ Topic help pages:
 
 Grove loads TOML config files from lowest to highest priority. Later files override earlier values.
 
-1. XDG config: ${XDG_CONFIG_HOME}/grove/grove.toml, or ~/.config/grove/grove.toml.
+1. XDG config: ${XDG_CONFIG_HOME}/grove/config.toml, or ~/.config/grove/config.toml.
 2. Ancestor grove.toml files from the home directory toward the main worktree.
 3. The main worktree grove.toml.
 4. The current worktree grove.toml when it differs from the main worktree.
@@ -67,7 +67,7 @@ the same effective configuration from the same files. Steps 2 and 3 follow the
 main worktree, so a worktree placed under worktree.root reads the same
 repository files as the main worktree.
 
-Run grove config to inspect the merged effective configuration. Run grove config --provenance to see which file supplied each value.
+Run grove config to inspect the merged effective configuration. Run grove config --provenance to also see which file supplied each value, appended after the TOML as comment lines so the output still loads.
 
 Some values can also be set with global CLI flags, which take priority over all config files:
 

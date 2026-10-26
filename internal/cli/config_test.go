@@ -21,47 +21,57 @@ func TestConfigCommandHasProvenanceFlags(t *testing.T) {
 
 func TestWriteConfigProvenance(t *testing.T) {
 	var buf bytes.Buffer
-	err := writeConfigProvenance(&buf, []string{"Path", "Source"}, [][]string{
-		{"git.timeout", "<default>"},
-		{"github.preview_cache_ttl", "/tmp/grove.toml"},
+	err := writeConfigProvenance(&buf, []string{"Path", "Value", "Source"}, [][]string{
+		{"git.timeout", `"5s"`, "<default>"},
+		{"naming.maxlength", "42", "/home/jim/.config/grove/config.toml"},
 	})
 	require.NoError(t, err)
 
-	assert.Equal(t, "Path\tSource\ngit.timeout\t<default>\ngithub.preview_cache_ttl\t/tmp/grove.toml\n", buf.String())
+	assert.Equal(t, "\n# Provenance\n# Path\tValue\tSource\n# git.timeout\t\"5s\"\t<default>\n# naming.maxlength\t42\t/home/jim/.config/grove/config.toml\n", buf.String())
 }
 
 func TestConfigCommandOutsideRepoRoundTrips(t *testing.T) {
-	isolatedConfigHome(t, "[naming]\nmax_length = 42\n")
-	workDir := tempDirResolved(t)
-	t.Chdir(workDir)
+	tests := []struct {
+		name           string
+		args           []string
+		wantProvenance bool
+	}{
+		{name: "default report", args: []string{"config"}},
+		{name: "provenance appended", args: []string{"config", "--provenance"}, wantProvenance: true},
+		{name: "sources alias", args: []string{"config", "--sources"}, wantProvenance: true},
+	}
 
-	var out, errOut bytes.Buffer
-	root := NewRootCommand(strings.NewReader(""), &out, &errOut)
-	root.SetArgs([]string{"config"})
-	require.NoError(t, root.ExecuteContext(context.Background()), errOut.String())
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			configPath := isolatedConfigHome(t, "[naming]\nmax_length = 42\n")
+			workDir := tempDirResolved(t)
+			t.Chdir(workDir)
 
-	roundTripPath := filepath.Join(workDir, "roundtrip.toml")
-	require.NoError(t, os.WriteFile(roundTripPath, out.Bytes(), 0o644))
-	reloaded, _, err := config.Load([]string{roundTripPath}, nil)
-	require.NoError(t, err)
+			var out, errOut bytes.Buffer
+			root := NewRootCommand(strings.NewReader(""), &out, &errOut)
+			root.SetArgs(tt.args)
+			require.NoError(t, root.ExecuteContext(context.Background()), errOut.String())
 
-	want, _, err := loadReportingConfig(newTestRoot(), workDir)
-	require.NoError(t, err)
-	assert.Equal(t, want, reloaded, "config output should round-trip to the effective config")
-	assert.Equal(t, 42, reloaded.Naming.MaxLength)
-}
+			roundTripPath := filepath.Join(workDir, "roundtrip.toml")
+			require.NoError(t, os.WriteFile(roundTripPath, out.Bytes(), 0o644))
+			reloaded, _, err := config.Load([]string{roundTripPath}, nil)
+			require.NoError(t, err)
+			want, _, err := loadReportingConfig(newTestRoot(), workDir)
+			require.NoError(t, err)
+			assert.Equal(t, want, reloaded, "config output should round-trip to the effective config")
+			assert.Equal(t, 42, reloaded.Naming.MaxLength)
 
-func TestConfigCommandProvenanceNamesSourceFile(t *testing.T) {
-	configPath := isolatedConfigHome(t, "[naming]\nmax_length = 42\n")
-	workDir := tempDirResolved(t)
-	t.Chdir(workDir)
-
-	var out, errOut bytes.Buffer
-	root := NewRootCommand(strings.NewReader(""), &out, &errOut)
-	root.SetArgs([]string{"config", "--provenance"})
-	require.NoError(t, root.ExecuteContext(context.Background()), errOut.String())
-
-	assert.Contains(t, out.String(), configPath)
+			if !tt.wantProvenance {
+				assert.NotContains(t, out.String(), "# Provenance")
+				return
+			}
+			report, provenance, found := strings.Cut(out.String(), "\n\n# Provenance\n")
+			require.True(t, found, "provenance should follow the TOML after a blank line")
+			assert.Contains(t, report, "max_length = 42")
+			assert.True(t, strings.HasPrefix(provenance, "# Path\tValue\tSource\n"), provenance)
+			assert.Contains(t, provenance, "# naming.maxlength\t42\t"+configPath+"\n")
+		})
+	}
 }
 
 func TestConfigCommandSpaceFlagOverridesFile(t *testing.T) {

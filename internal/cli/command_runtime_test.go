@@ -59,7 +59,7 @@ func isolatedConfigHome(t *testing.T, content string) string {
 	homeDir := tempDirResolved(t)
 	configDir := filepath.Join(homeDir, ".config", "grove")
 	require.NoError(t, os.MkdirAll(configDir, 0o755))
-	configPath := filepath.Join(configDir, "grove.toml")
+	configPath := filepath.Join(configDir, "config.toml")
 	require.NoError(t, os.WriteFile(configPath, []byte(content), 0o644))
 
 	t.Setenv("HOME", homeDir)
