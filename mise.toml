@@ -90,19 +90,10 @@ run = [
 [tasks.release]
 description = "Build and publish the release for the checked-out tag (Release workflow only)."
 run = '''
-if [ "${GITHUB_ACTIONS:-}" != "true" ] || [ "${GITHUB_WORKFLOW:-}" != "Release" ] || [ "${GITHUB_REF_TYPE:-}" != "tag" ] || [ "${GITHUB_EVENT_NAME:-}" != "push" ]; then
-  echo "release publishes artifacts and runs only from the Release workflow on a pushed tag; use 'mise run release-snapshot' locally"
+if [ "${GITHUB_ACTIONS:-}" != "true" ] || [ "${GITHUB_WORKFLOW:-}" != "Release" ] || [ "${GITHUB_REF_TYPE:-}" != "tag" ]; then
+  echo "release publishes artifacts and runs only from the Release workflow on a tag; use 'mise run release-snapshot' locally"
   exit 1
 fi
-case "${GITHUB_REF_NAME:-}" in
-  *-*) ;;
-  *)
-    if [ -z "${HOMEBREW_TAP_DEPLOY_KEY:-}" ]; then
-      echo "stable releases require HOMEBREW_TAP_DEPLOY_KEY to publish the Homebrew cask"
-      exit 1
-    fi
-    ;;
-esac
 goreleaser release --clean
 '''
 
