@@ -18,7 +18,8 @@ func newConfigCmd(_ commandServices) *cobra.Command {
 		Use:   "config",
 		Short: "Print current configuration in TOML format",
 		Long: `Print the effective configuration as TOML on stdout after applying every
-layer. Nothing is modified.
+layer. Nothing is modified, nothing prompts, and the output is never
+styled, whatever --color says.
 
 Values load in this order, and a later layer replaces any value an earlier
 one sets:
@@ -44,7 +45,7 @@ optional: a missing path or a directory at a candidate path is skipped, and
 symbolic links are followed. A file that exists but cannot be read or
 parsed, or that contains a key grove does not recognize, fails the command.
 The merged result is validated after the last layer; an invalid result
-fails the command. grove docs lists the schema and validation rules.
+fails the command.
 
 Outside a repository, this command still works: it loads the defaults, the
 step 2 file, and grove.toml in each directory from the home directory down
@@ -55,9 +56,7 @@ reads the same repository files as the main worktree; only step 5 is
 specific to it.
 
 By default the output is the merged TOML and nothing else; it reloads as a
-grove.toml:
-
-  grove config > grove.toml
+grove.toml.
 
 --provenance (alias --sources) appends field-level provenance after the
 TOML: a blank line, a "# Provenance" line, then a tab-separated table with
@@ -65,14 +64,84 @@ Path, Value, and Source columns and one row per field, every line prefixed
 with "# ". The output stays valid TOML and still reloads. Source is
 <default>, the absolute path of the file that last set the value, or
 <pflag> for a flag. Nothing is redacted; the configuration holds no secret
-fields.`,
+fields.
+
+Keys, shown with their defaults:
+
+  [git]
+  timeout = "5s"
+    Deadline for each git and gh command; zero or positive. Zero sets no
+    deadline, but interrupting grove still cancels the command. Captured
+    stdout and stderr are each capped at 8 MiB, and both programs run with
+    their interactive prompts disabled.
+
+  [github]
+  preview_cache_ttl = "5m"
+    How long cached gh output stays valid for pr list, pr preview, issue
+    list, issue preview, and status; zero or positive. Zero disables the
+    cache. Run grove cache --help for the directory.
+
+  [issue]
+  branch_template = "issue/{{.Number}}-{{.TitleSlug}}"
+    Branch name for grove issue start; non-empty, and it must render
+    {{.Number}} directly because issue matching needs the whole number.
+  worktree_template = "is-{{.Number}}-{{.TitleSlug}}"
+    Worktree directory name for grove issue start; non-empty.
+
+  [local_branch]
+  branch_template = "feature/{{.PhraseSlug}}"
+    Branch name for grove create; non-empty.
+  worktree_template = "wt-{{.BranchSlug}}"
+    Worktree directory name for grove create and grove checkout;
+    non-empty. The --worktree-template flag replaces it for one invocation.
+
+  [naming]
+  lowercase = true
+    Lowercase every slug variable.
+  max_length = 30
+    Cap on each rendered branch and worktree name; zero or positive. Zero
+    disables the cap.
+  strip_prefixes = ["feature/", "fix/", "issue/"]
+    Prefixes removed from a branch name before it becomes {{.BranchSlug}};
+    the first match wins.
+
+  [pull_request]
+  branch_template = "{{.Branch}}"
+    Local branch name for grove pr checkout; non-empty and exempt from
+    naming.max_length so it matches the remote branch.
+  worktree_template = "pr-{{.Number}}-{{.TitleSlug}}"
+    Worktree directory name for grove pr checkout; non-empty.
+
+  [worktree]
+  layout = "{{.Space}}/{{.Host}}/{{.Owner}}/{{.Repo}}/{{.Name}}"
+    Go template rendered relative to root; non-empty, must use {{.Name}},
+    and must render a relative path without "..".
+  root = "$CODE_DIR/.worktrees"
+    Directory that holds new worktrees; non-empty. $VAR, ${VAR}, and a
+    leading ~ expand when a command places a worktree, an unset or empty
+    variable fails that command, and the result must be absolute.
+  space = "grove"
+    One path segment that partitions worktrees by creator: non-empty, no
+    slash, not "." or "..", not starting with "-", no control characters.
+    The --space flag replaces it for one invocation.
+
+The template variables of each flow and the slug rules are in grove help
+naming; the layout variables are in grove help layout. A template is
+parsed when a command uses it, and one that names a variable its flow does
+not provide fails that command. A rendered branch name must be non-empty
+and must not start with "-", contain "..", or contain a control character;
+a rendered worktree name follows the space rules above.
+
+` + helpFailure,
+		Example: `  grove config > grove.toml
+  grove config --provenance`,
 		Args:    cobra.NoArgs,
 		GroupID: "config",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runConfig(cmd, provenance)
 		},
 	}
-	cmd.Flags().BoolVar(&provenance, "provenance", false, "Append field-level configuration provenance as TOML comments")
+	cmd.Flags().BoolVar(&provenance, "provenance", false, "Append the source of each value as TOML comments")
 	cmd.Flags().BoolVar(&provenance, "sources", false, "Alias for --provenance")
 	return cmd
 }

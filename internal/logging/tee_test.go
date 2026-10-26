@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"charm.land/log/v2"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -103,7 +104,7 @@ func TestNewTee_CreatesPrivateFileAndDirectory(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 
 	var terminal bytes.Buffer
-	tee, err := NewTee(&terminal)
+	tee, err := NewTee(&terminal, colorprofile.NoTTY)
 	require.NoError(t, err)
 	defer func() { _ = tee.Close() }()
 
@@ -126,13 +127,13 @@ func TestNewTee_AppendsAcrossCycles(t *testing.T) {
 
 	var terminal bytes.Buffer
 
-	first, err := NewTee(&terminal)
+	first, err := NewTee(&terminal, colorprofile.NoTTY)
 	require.NoError(t, err)
 	_, err = first.Write([]byte("first\n"))
 	require.NoError(t, err)
 	require.NoError(t, first.Close())
 
-	second, err := NewTee(&terminal)
+	second, err := NewTee(&terminal, colorprofile.NoTTY)
 	require.NoError(t, err)
 	_, err = second.Write([]byte("second\n"))
 	require.NoError(t, err)
@@ -150,7 +151,7 @@ func TestNewTee_FailureReturnsError(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 
 	var terminal bytes.Buffer
-	_, err := NewTee(&terminal)
+	_, err := NewTee(&terminal, colorprofile.NoTTY)
 	require.Error(t, err)
 	assert.Empty(t, terminal.String())
 }
@@ -199,7 +200,7 @@ func TestNewTee_Integration_LogReachesFile(t *testing.T) {
 	path := filepath.Join(stateDir, "grove", "grove.log")
 
 	var terminal bytes.Buffer
-	tee, err := NewTee(&terminal)
+	tee, err := NewTee(&terminal, colorprofile.NoTTY)
 	require.NoError(t, err)
 	defer func() { _ = tee.Close() }()
 

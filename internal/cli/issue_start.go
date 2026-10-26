@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strconv"
 	"strings"
 
 	"charm.land/log/v2"
@@ -21,24 +20,38 @@ func newIssueStartCmd(services commandServices) *cobra.Command {
 	return &cobra.Command{
 		Use:   "start <number>",
 		Short: "Create a branch and worktree to work on an issue",
-		Long: `Create a new branch and worktree to start work on a GitHub issue.
+		Long: `Create a branch and worktree to work on a GitHub issue and print the
+worktree path on stdout.
 
-The branch is named from the issue via issue.branch_template. If a worktree
-already exists for the issue, its path is printed and nothing new is created.
-If a branch for the issue already exists (matched by issue number), it is
-checked out into a new worktree as-is. Otherwise a new branch is created from
-the latest primary branch of the default remote (fetched first).
+The branch is named by issue.branch_template and the directory by
+issue.worktree_template; run grove help naming for the variables. When a
+worktree for the issue already exists, its path is printed and nothing is
+created. When a local branch for the issue already exists (matched by
+issue number), it is checked out into a new worktree as is, with a warning
+on stderr. Otherwise the default remote is fetched and a new branch is
+created from its latest primary branch. A stale worktree entry for the
+issue is pruned from git first. A closed issue is started with a warning
+on stderr. Nothing prompts.
 
-To check out an existing pull request instead, use 'grove pr checkout'.`,
-		Args: cobra.ExactArgs(1),
+` + helpWorktreeCreate + `
+
+` + helpGHUncached + `
+
+` + helpFailure + `
+
+To check out an existing pull request instead, use grove pr checkout.`,
+		Example: `  grove issue start 17
+  grove issue list --fzf | fzf --delimiter '\t' --with-nth 3 --accept-nth 1 \
+    | xargs grove issue start`,
+		Args: numberArgs("issue"),
 		RunE: services.runIssueStart,
 	}
 }
 
 func (services commandServices) runIssueStart(cmd *cobra.Command, args []string) error {
-	issueNum, err := strconv.Atoi(args[0])
+	issueNum, err := parseNumberOperand(args[0])
 	if err != nil {
-		return fmt.Errorf("invalid issue number: %s", args[0])
+		return err
 	}
 
 	rt, err := services.loadRuntime(cmd)

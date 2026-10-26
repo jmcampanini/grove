@@ -20,14 +20,10 @@ func newNamerCmd(services commandServices) *cobra.Command {
 		Args: cobra.NoArgs,
 		RunE: runHelpTopic,
 		Long: `Generate branch and worktree names from a phrase with the configured
-local_branch templates and naming settings. Each subcommand prints one name
-on stdout and creates nothing; git is only queried to locate configuration
-files, so the commands also work outside a repository.
-
-Subcommands:
-  branch    Generate a branch name from a phrase
-  slug      Slugify a phrase using the configured naming settings
-  worktree  Generate a worktree directory name from a phrase`,
+local_branch templates and naming settings (run grove help naming for the
+rules). Each subcommand prints one name on stdout and creates nothing; git
+is only queried to locate configuration files, so the commands also work
+outside a repository. A bare grove namer prints this help and exits 0.`,
 	}
 
 	cmd.AddCommand(

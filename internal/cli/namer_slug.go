@@ -18,8 +18,11 @@ func newNamerSlugCmd(_ commandServices) *cobra.Command {
 settings.
 
 The raw slug is not capped by naming.max_length; the cap applies only when
-generating complete branch and worktree names.`,
-		Args: cobra.ExactArgs(1),
+generating complete branch and worktree names. The slug is printed on
+stdout; nothing is created and nothing prompts.
+
+` + helpFailure,
+		Args: phraseArgs("phrase"),
 		RunE: runNamerSlug,
 	}
 }

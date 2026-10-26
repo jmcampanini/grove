@@ -21,20 +21,24 @@ func newIssueListCmd(services commandServices) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List open issues",
-		Long: `List open issues for the current repository.
+		Long: `List the open issues of the current repository on stdout. Nothing is
+modified and nothing prompts.
 
-By default, outputs a formatted table with issue details.
+By default the output is a styled table: number, title, author, labels, a
+Local checkmark when a worktree exists for the issue, and when it was
+updated. With --fzf each line is <number>\t<searchable>\t<display>, a
+machine-readable format that is never styled, whatever --color says.
 
-With --fzf, outputs tab-separated format suitable for fzf integration:
-  <number>\t<searchable>\t<display>
+` + helpGH + `
 
-The "Local" column shows a checkmark when a worktree exists for the issue.`,
-		Args: cobra.NoArgs,
+` + helpFailure,
+		Example: `  grove issue list --fzf | fzf --delimiter '\t' --with-nth 3 --accept-nth 1`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return services.runIssueList(cmd, fzf)
 		},
 	}
-	cmd.Flags().BoolVar(&fzf, "fzf", false, "Output in fzf-compatible format")
+	cmd.Flags().BoolVar(&fzf, "fzf", false, "Print <number>\\t<searchable>\\t<display> lines for fzf")
 	return cmd
 }
 
@@ -72,7 +76,7 @@ func (services commandServices) runIssueList(cmd *cobra.Command, fzf bool) error
 	if fzf {
 		return outputIssueListFzf(cmd.OutOrStdout(), matches)
 	}
-	return outputIssueListTable(cmd.OutOrStdout(), matches)
+	return outputIssueListTable(styledStdout(cmd), matches)
 }
 
 // maxListLabels is how many label names the list shows before collapsing the
@@ -153,7 +157,7 @@ func outputIssueListTable(w io.Writer, matches []issue.Match) error {
 		Headers("#", "Title", "Author", "Labels", "Local", "Updated").
 		Rows(rows...)
 
-	_, err := lipgloss.Fprintln(w, t)
+	_, err := fmt.Fprintln(w, t)
 	return err
 }
 

@@ -23,16 +23,29 @@ func newPruneCmd(services commandServices) *cobra.Command {
 	return &cobra.Command{
 		Use:   "prune",
 		Short: "Interactively remove stale worktrees",
-		Long: `Prune identifies worktrees that are likely no longer needed and lets you
-remove them interactively.
+		Long: `Find worktrees that are likely no longer needed, let you select them, and
+delete the selected worktree directories together with their local
+branches.
 
-A worktree is considered prunable if:
-  - Its associated PR has been merged
-  - Its associated PR has been closed
+A worktree is a candidate when:
+  - Its pull request has been merged
+  - Its pull request has been closed
   - Its upstream tracking branch no longer exists on the remote
   - Its directory no longer exists on disk (orphaned)
 
-The main worktree is never prunable.`,
+The main worktree and locked worktrees are never candidates; locked ones
+are listed on stdout and skipped. The command works only interactively:
+a selection prompt and a confirmation prompt read stdin and draw on
+stderr, and both need a terminal (with TERM=dumb they become line-based
+prompts on stdin and stdout instead). Removal is forced, so uncommitted
+changes in a selected worktree are discarded and an unmerged branch is
+deleted. Each selection is checked again right before removal and skipped
+when its state changed. Results go to stdout as a styled table; declining
+a prompt prints nothing or "Aborted." and exits 0.
+
+` + helpGHUncached + `
+
+` + helpFailure,
 		Args:    cobra.NoArgs,
 		GroupID: "worktree",
 		RunE:    services.runPrune,
@@ -77,7 +90,16 @@ type prunable struct {
 	path       string
 }
 
+// prunePromptGuidance completes the diagnostic when the prompts cannot run.
+const prunePromptGuidance = "run grove prune in a terminal"
+
 func (services commandServices) runPrune(cmd *cobra.Command, _ []string) error {
+	// The command is interactive only, so the terminal its prompts need is
+	// checked before configuration, git, or gh run.
+	if err := checkPromptTerminal(os.Stdin, promptOutput(), prunePromptGuidance); err != nil {
+		return err
+	}
+
 	rt, err := services.loadRuntime(cmd)
 	if err != nil {
 		return err
@@ -89,10 +111,10 @@ func (services commandServices) runPrune(cmd *cobra.Command, _ []string) error {
 		MainWorktreePath: rt.MainWorktreePath,
 	}
 
-	return executePrune(cmd.OutOrStdout(), ctx)
+	return executePrune(styledStdout(cmd), ctx, colorMode(cmd))
 }
 
-func executePrune(w io.Writer, ctx *worktree.StatusContext) error {
+func executePrune(w io.Writer, ctx *worktree.StatusContext, mode render.ColorMode) error {
 	statuses, err := gatherPruneStatuses(ctx)
 	if err != nil {
 		return err
@@ -112,7 +134,7 @@ func executePrune(w io.Writer, ctx *worktree.StatusContext) error {
 		return err
 	}
 
-	selected, err := promptPruneSelection(prunables)
+	selected, err := promptPruneSelection(prunables, mode)
 	if err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return nil
@@ -124,7 +146,7 @@ func executePrune(w io.Writer, ctx *worktree.StatusContext) error {
 		return err
 	}
 
-	confirmed, err := promptPruneConfirm(len(selected))
+	confirmed, err := promptPruneConfirm(len(selected), mode)
 	if err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return nil
@@ -486,7 +508,7 @@ func pruneKeyMap() *huh.KeyMap {
 	return km
 }
 
-func promptPruneSelection(prunables []prunable) ([]prunable, error) {
+func promptPruneSelection(prunables []prunable, mode render.ColorMode) ([]prunable, error) {
 	options := make([]huh.Option[int], len(prunables))
 	for i, p := range prunables {
 		label := fmt.Sprintf("%s  %s",
@@ -497,15 +519,15 @@ func promptPruneSelection(prunables []prunable) ([]prunable, error) {
 	}
 
 	var selected []int
-	err := huh.NewForm(
+	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewMultiSelect[int]().
 				Title("Select worktrees to remove").
 				Options(options...).
 				Value(&selected),
 		),
-	).WithKeyMap(pruneKeyMap()).Run()
-	if err != nil {
+	).WithKeyMap(pruneKeyMap())
+	if err := runPrompt(form, mode, prunePromptGuidance); err != nil {
 		return nil, err
 	}
 
@@ -516,14 +538,14 @@ func promptPruneSelection(prunables []prunable) ([]prunable, error) {
 	return result, nil
 }
 
-func promptPruneConfirm(count int) (bool, error) {
+func promptPruneConfirm(count int, mode render.ColorMode) (bool, error) {
 	noun := "worktree"
 	if count > 1 {
 		noun = "worktrees"
 	}
 
 	var confirmed bool
-	err := huh.NewForm(
+	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewConfirm().
 				Title(fmt.Sprintf("Remove %d %s?", count, noun)).
@@ -531,8 +553,8 @@ func promptPruneConfirm(count int) (bool, error) {
 				Negative("No").
 				Value(&confirmed),
 		),
-	).WithKeyMap(pruneKeyMap()).Run()
-	if err != nil {
+	).WithKeyMap(pruneKeyMap())
+	if err := runPrompt(form, mode, prunePromptGuidance); err != nil {
 		return false, err
 	}
 	return confirmed, nil
@@ -619,7 +641,7 @@ func renderPruneResults(w io.Writer, results []pruneResult) error {
 		}).
 		Rows(rows...)
 
-	if _, err := lipgloss.Fprintln(w, t); err != nil {
+	if _, err := fmt.Fprintln(w, t); err != nil {
 		return err
 	}
 
@@ -630,7 +652,7 @@ func renderPruneResults(w io.Writer, results []pruneResult) error {
 	if failed > 0 {
 		summary += ", " + failStyle.Render(fmt.Sprintf("%d failed", failed))
 	}
-	if _, err := lipgloss.Fprintln(w, summary); err != nil {
+	if _, err := fmt.Fprintln(w, summary); err != nil {
 		return err
 	}
 

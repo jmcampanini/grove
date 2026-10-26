@@ -19,17 +19,17 @@ func newListCmd(services commandServices) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List all worktrees",
-		Long: `List every worktree of the current repository, wherever it is on disk.
+		Long: `List every worktree of the current repository, wherever it is on disk,
+on stdout: the main worktree first, then the others sorted by path.
+Nothing is modified and nothing prompts.
 
-By default, outputs one absolute path per line to stdout.
+By default the output is one absolute path per line. With --fzf each line
+is <path>\t<display>, where display is the kind (local branch, tag, or
+detached), the worktree name, and the branch, tag, or short commit. Both
+formats are machine-readable and never styled, whatever --color says.
 
-With --fzf, outputs tab-separated format suitable for fzf integration:
-  <path>\t<display>
-
-Example with fzf:
-  grove list --fzf | fzf --delimiter '\t' --with-nth 2 --accept-nth 1
-
-Or for older fzf versions:
+` + helpFailure,
+		Example: `  grove list --fzf | fzf --delimiter '\t' --with-nth 2 --accept-nth 1
   grove list --fzf | fzf --delimiter '\t' --with-nth 2 | cut -f1`,
 		Args:    cobra.NoArgs,
 		GroupID: "worktree",
@@ -37,7 +37,7 @@ Or for older fzf versions:
 			return services.runList(cmd, fzf)
 		},
 	}
-	cmd.Flags().BoolVar(&fzf, "fzf", false, "Output in fzf-compatible format")
+	cmd.Flags().BoolVar(&fzf, "fzf", false, "Print <path>\\t<display> lines for fzf")
 	return cmd
 }
 

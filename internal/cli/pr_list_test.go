@@ -247,7 +247,7 @@ func TestOutputPRListTable(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
 
-			err := outputPRListTable(&buf, tt.matches)
+			err := outputPRListTable(plainWriter(&buf), tt.matches)
 			require.NoError(t, err)
 
 			output := buf.String()

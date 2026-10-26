@@ -10,6 +10,7 @@ import (
 
 	"github.com/jmcampanini/grove/internal/git"
 	"github.com/jmcampanini/grove/internal/github"
+	"github.com/jmcampanini/grove/internal/render"
 	"github.com/jmcampanini/grove/internal/worktree"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -227,7 +228,7 @@ func TestExecutePruneFailsBeforePromptWhenGitHubUnavailable(t *testing.T) {
 		MainWorktreePath: filepath.Join(filepath.Dir(path), "main"),
 	}
 
-	err := executePrune(&bytes.Buffer{}, ctx)
+	err := executePrune(&bytes.Buffer{}, ctx, render.ColorAuto)
 	require.ErrorContains(t, err, `failed to get PR state for branch "feature/test": gh unavailable`)
 }
 
@@ -257,7 +258,7 @@ func TestExecutePruneReportsLockedWorktree(t *testing.T) {
 	}
 
 	var output bytes.Buffer
-	require.NoError(t, executePrune(&output, ctx))
+	require.NoError(t, executePrune(&output, ctx, render.ColorAuto))
 	assert.Zero(t, ghCalls)
 	assert.Contains(t, output.String(), "Locked worktrees excluded from prune:")
 	assert.Contains(t, output.String(), filepath.Base(path)+"  feature/test  (locked)")
@@ -646,7 +647,7 @@ func TestExecuteRemovals(t *testing.T) {
 			}
 
 			var buf bytes.Buffer
-			err := executeRemovals(&buf, mock, tt.prunables, revalidate)
+			err := executeRemovals(plainWriter(&buf), mock, tt.prunables, revalidate)
 
 			if tt.wantErr {
 				require.Error(t, err)

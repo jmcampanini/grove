@@ -73,7 +73,7 @@ Run these from inside a repository: the clone or any of its worktrees.
 | `grove sync` | Fetch and hard-reset the current branch to its remote tracking branch. |
 | `grove prune` | Interactively remove worktrees that are likely no longer needed. |
 
-`grove --help`, each command's `--help`, and the help topics `grove help layout` and `grove help exit-codes` are the canonical reference; `grove docs` supplements them.
+`grove --help`, each command's `--help`, and the help topics `grove help layout`, `grove help naming`, and `grove help exit-codes` are the canonical reference.
 
 
 ## Required external programs

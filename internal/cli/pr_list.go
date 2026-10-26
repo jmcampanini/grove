@@ -21,20 +21,25 @@ func newPRListCmd(services commandServices) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List open pull requests",
-		Long: `List open pull requests for the current repository.
+		Long: `List the open pull requests of the current repository on stdout.
+Nothing is modified and nothing prompts.
 
-By default, outputs a formatted table with PR details.
+By default the output is a styled table: number, title, author, branch,
+state, a Local checkmark when a worktree exists for the pull request, and
+when it was updated. With --fzf each line is
+<number>\t<searchable>\t<display>, a machine-readable format that is never
+styled, whatever --color says.
 
-With --fzf, outputs tab-separated format suitable for fzf integration:
-  <number>\t<searchable>\t<display>
+` + helpGH + `
 
-The "Local" column shows a checkmark when a worktree exists for the PR.`,
-		Args: cobra.NoArgs,
+` + helpFailure,
+		Example: `  grove pr list --fzf | fzf --delimiter '\t' --with-nth 3 --accept-nth 1`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return services.runPRList(cmd, fzf)
 		},
 	}
-	cmd.Flags().BoolVar(&fzf, "fzf", false, "Output in fzf-compatible format")
+	cmd.Flags().BoolVar(&fzf, "fzf", false, "Print <number>\\t<searchable>\\t<display> lines for fzf")
 	return cmd
 }
 
@@ -72,7 +77,7 @@ func (services commandServices) runPRList(cmd *cobra.Command, fzf bool) error {
 	if fzf {
 		return outputPRListFzf(cmd.OutOrStdout(), matches)
 	}
-	return outputPRListTable(cmd.OutOrStdout(), matches)
+	return outputPRListTable(styledStdout(cmd), matches)
 }
 
 func outputPRListTable(w io.Writer, matches []pr.Match) error {
@@ -127,7 +132,7 @@ func outputPRListTable(w io.Writer, matches []pr.Match) error {
 		Headers("#", "Title", "Author", "Branch", "State", "Local", "Updated").
 		Rows(rows...)
 
-	_, err := lipgloss.Fprintln(w, t)
+	_, err := fmt.Fprintln(w, t)
 	return err
 }
 

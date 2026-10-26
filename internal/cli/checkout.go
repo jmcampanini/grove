@@ -20,22 +20,29 @@ func newCheckoutCmd(services commandServices) *cobra.Command {
 	return &cobra.Command{
 		Use:   "checkout <branch>",
 		Short: "Check out an existing branch into a new worktree",
-		Long: `Check out an existing local or remote branch into a new worktree.
+		Long: `Check out an existing local or remote branch into a new worktree and
+print the worktree path on stdout.
 
-For local branches, specify the branch name directly:
-  grove checkout feature/fix-login
-  grove checkout my-experiment
+A plain branch name must exist locally. When the first path segment names
+a configured git remote, as in origin/feature/fix-login, the rest is the
+branch on that remote: it is fetched into a local branch of the same name
+when that branch does not exist yet. A branch that already has a worktree
+fails the command instead of creating a second one. Nothing prompts.
 
-For remote branches, prefix with the remote name:
+The directory is named by local_branch.worktree_template from the branch
+name; run grove help naming for the variables. The global
+--worktree-template flag replaces the template for one invocation.
+
+` + helpWorktreeCreate + `
+
+` + helpFailure + `
+
+To start new work on a new branch, use grove create. To check out a pull
+request by number, use grove pr checkout.`,
+		Example: `  grove checkout feature/fix-login
   grove checkout origin/feature/fix-login
-  grove checkout upstream/hotfix-123
-
-The first path segment is checked against known git remotes. If it matches
-a remote, the branch is fetched from that remote and a worktree is created.
-
-To start new work (create a new branch), use 'grove create' instead.
-To check out a pull request by number, use 'grove pr checkout' instead.`,
-		Args:    cobra.ExactArgs(1),
+  grove checkout upstream/hotfix-123`,
+		Args:    phraseArgs("branch"),
 		RunE:    services.runCheckout,
 		GroupID: "worktree",
 	}

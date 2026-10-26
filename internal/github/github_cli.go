@@ -85,19 +85,19 @@ func (g *CLI) runGhProcess(args ...string) (string, error) {
 		command := strings.Join(args, " ")
 		switch {
 		case errors.Is(err, process.ErrTimedOut):
-			g.log.Warn("gh command timed out", "args", args, "timeout", g.timeout, "error", err)
+			g.log.Debug("gh command timed out", "args", args, "timeout", g.timeout, "error", err)
 			return "", fmt.Errorf("gh %s timed out after %s: %w", command, g.timeout, err)
 		case errors.Is(err, process.ErrCanceled):
-			g.log.Warn("gh command canceled", "args", args, "error", err)
+			g.log.Debug("gh command canceled", "args", args, "error", err)
 			return "", fmt.Errorf("gh %s canceled: %w", command, err)
 		case errors.Is(err, process.ErrOutputLimitExceeded):
 			var limitErr *process.OutputLimitError
 			if errors.As(err, &limitErr) {
-				g.log.Warn("gh command output limit exceeded", "args", args, "stream", limitErr.Stream, "limit", limitErr.Limit)
+				g.log.Debug("gh command output limit exceeded", "args", args, "stream", limitErr.Stream, "limit", limitErr.Limit)
 				return "", fmt.Errorf("gh %s %s exceeded %d MiB output limit: %w", command, limitErr.Stream, limitErr.Limit/(1024*1024), err)
 			}
 		}
-		g.log.Warn("gh command failed", "args", args, "error", err)
+		g.log.Debug("gh command failed", "args", args, "error", err)
 		if stderr := strings.TrimSpace(string(result.Stderr)); stderr != "" {
 			return "", fmt.Errorf("gh %s failed: %w: %s", command, err, stderr)
 		}

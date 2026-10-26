@@ -11,10 +11,13 @@ func newCacheClearCmd(_ commandServices) *cobra.Command {
 	return &cobra.Command{
 		Use:   "clear",
 		Short: "Remove all cached data",
-		Long: `Remove every entry in the grove cache directory and print "Cache cleared."
-on stdout. A missing cache directory is not an error. When an entry cannot
-be removed, the remaining entries are still tried and the command fails
-with exit status 1.`,
+		Long: `Delete every entry under the grove cache directory (run grove cache --help
+for its location) and print "Cache cleared." on stdout. The directory
+itself is kept, and a missing directory is not an error. When an entry
+cannot be removed, the remaining entries are still tried and the command
+fails. Nothing prompts.
+
+` + helpFailure,
 		Args: cobra.NoArgs,
 		RunE: runCacheClear,
 	}
@@ -31,6 +34,6 @@ func runCacheClear(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Cache cleared.")
-	return nil
+	_, err = fmt.Fprintln(cmd.OutOrStdout(), "Cache cleared.")
+	return err
 }

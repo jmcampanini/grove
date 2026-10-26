@@ -33,9 +33,9 @@ func (t *teeWriter) Write(p []byte) (n int, err error) {
 // Tee forwards diagnostic writes to a terminal writer while appending an
 // ANSI-stripped copy to the grove log file.
 type Tee struct {
-	// Profile is the color profile of the terminal writer, captured at
-	// construction so loggers writing through the tee can keep the
-	// terminal's native color support.
+	// Profile is the color profile resolved for the terminal writer, carried
+	// so loggers writing through the tee keep the profile the --color mode
+	// selected for stderr instead of detecting one on the tee.
 	Profile colorprofile.Profile
 
 	file *os.File
@@ -69,7 +69,8 @@ func DefaultLogFilePath() string {
 
 // NewTee opens the default log file for appending and returns a Tee that
 // forwards writes to terminal while copying them, ANSI-stripped, to the file.
-func NewTee(terminal io.Writer) (*Tee, error) {
+// profile is the color profile already resolved for terminal.
+func NewTee(terminal io.Writer, profile colorprofile.Profile) (*Tee, error) {
 	filePath := DefaultLogFilePath()
 	if filePath == "" {
 		return nil, errors.New("could not determine log file path: user home directory is unavailable")
@@ -85,7 +86,7 @@ func NewTee(terminal io.Writer) (*Tee, error) {
 	}
 
 	return &Tee{
-		Profile: colorprofile.Detect(terminal, os.Environ()),
+		Profile: profile,
 		file:    f,
 		tee:     &teeWriter{file: f, terminal: terminal},
 	}, nil

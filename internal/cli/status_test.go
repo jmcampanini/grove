@@ -205,7 +205,7 @@ func TestRenderStatusTable(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
-			err := renderStatusTable(&buf, tt.statuses)
+			err := renderStatusTable(plainWriter(&buf), tt.statuses)
 
 			if tt.wantErr {
 				require.Error(t, err)

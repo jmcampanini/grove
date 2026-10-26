@@ -42,6 +42,7 @@ func TestConfigCommandOutsideRepoRoundTrips(t *testing.T) {
 		wantProvenance bool
 	}{
 		{name: "default report", args: []string{"config"}},
+		{name: "forced color stays plain TOML", args: []string{"config", "--color=always"}},
 		{name: "provenance appended", args: []string{"config", "--provenance"}, wantProvenance: true},
 		{name: "sources alias", args: []string{"config", "--sources"}, wantProvenance: true},
 	}

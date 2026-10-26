@@ -9,12 +9,19 @@ import (
 	"github.com/jmcampanini/grove/internal/config"
 
 	"charm.land/log/v2"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/jmcampanini/grove/internal/git"
 	"github.com/spf13/cobra"
 )
 
 func testLogger() *log.Logger {
 	return log.New(io.Discard)
+}
+
+// plainWriter wraps w the way styledStdout wraps a stream that is not a
+// terminal, so table tests assert on text without escape sequences.
+func plainWriter(w io.Writer) io.Writer {
+	return &colorprofile.Writer{Forward: w, Profile: colorprofile.NoTTY}
 }
 
 func newTestRootCommand() *cobra.Command {

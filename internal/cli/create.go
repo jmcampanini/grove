@@ -19,48 +19,48 @@ func newCreateCmd(services commandServices) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create <phrase>",
 		Short: "Create a new branch and worktree from a descriptive phrase",
-		Long: `Create creates a new git branch and worktree from a descriptive phrase.
+		Long: `Create a git branch and worktree from one descriptive phrase (quote it)
+and print the worktree path on stdout.
 
-By default, the new branch is created from the current HEAD. Use --from to
-specify a different starting point (any git ref: branch, tag, or commit SHA).
-Use --from-remote-primary to fetch and start from the latest remote primary
-branch without updating the primary worktree; this is recommended for
-automation.
-Use --reuse to attach to an existing branch/worktree for the phrase instead of
-failing when it already exists.
+By default the new branch starts at the current HEAD. --from starts it at
+any git ref: a branch, a tag, or a commit. --from-remote-primary fetches
+the default remote and starts at its latest primary branch without
+touching the primary worktree, which suits automation. --reuse attaches to
+the branch the phrase names when it already exists, creating only the
+worktree, instead of failing. A branch or worktree that already exists
+fails the command otherwise, and a stale worktree entry found under
+--reuse is pruned from git first.
 
 Creation mode flags are mutually exclusive; choose at most one:
   --from <ref>
   --from-remote-primary
   --reuse
 
-The phrase is converted to branch and worktree names using the configured
-local branch templates. Use the global --worktree-template flag to override
-local_branch.worktree_template for a single invocation. The worktree is
-placed under worktree.root by worktree.layout; the global --space flag
-selects the space segment for one invocation (see grove help layout).
+The branch is named by local_branch.branch_template and the directory by
+local_branch.worktree_template; run grove help naming for the variables.
+The global --worktree-template flag replaces the directory template for
+one invocation. Nothing prompts.
 
-Example:
-  grove create "add user authentication"
-  grove create "fix bug in login"
+` + helpWorktreeCreate + `
+
+` + helpFailure + `
+
+To check out an existing pull request, use grove pr checkout.`,
+		Example: `  grove create "add user authentication"
   grove create "hotfix" --from main
   grove create "backport" --from v1.2.0
   grove create "experiment" --from origin/develop
   grove create "add user authentication" --from-remote-primary
   grove create "add user authentication" --reuse
   grove create "run tests" --space claude
-  grove create "run tests" --worktree-template "subagent-{{.BranchSlug}}"
-
-Note: The create command takes a single quoted string argument.
-
-To check out an existing pull request, use 'grove pr checkout' instead.`,
-		Args:    cobra.ExactArgs(1),
+  grove create "run tests" --worktree-template "subagent-{{.BranchSlug}}"`,
+		Args:    phraseArgs("phrase"),
 		GroupID: "worktree",
 		RunE:    services.runCreate,
 	}
-	cmd.Flags().String("from", "", "git ref (branch, tag, or commit) to create the new branch from (default: HEAD)")
-	cmd.Flags().Bool("from-remote-primary", false, "fetch the default remote's primary branch and create the new branch from it")
-	cmd.Flags().Bool("reuse", false, "reuse existing worktree if one already exists for this phrase")
+	cmd.Flags().String("from", "", "Git ref to start the branch from (default HEAD)")
+	cmd.Flags().Bool("from-remote-primary", false, "Start from the fetched remote primary branch")
+	cmd.Flags().Bool("reuse", false, "Reuse the branch and worktree the phrase names")
 	cmd.MarkFlagsMutuallyExclusive("from", "from-remote-primary", "reuse")
 	return cmd
 }
@@ -121,12 +121,7 @@ func executeCreate(stdout io.Writer, ctx *createContext, phrase string) error {
 
 	branchName, err := namer.GenerateBranchName(phrase)
 	if errors.Is(err, naming.ErrEmptySlug) {
-		return fmt.Errorf(`phrase %q produces an empty branch name after slugification
-
-Please provide a phrase with at least one alphanumeric character.
-Examples:
-  grove create "add user auth"
-  grove create "fix-bug-123"`, phrase)
+		return fmt.Errorf("phrase %q produces an empty branch name after slugification; use a phrase with at least one letter or digit, such as \"add user auth\"", phrase)
 	}
 	if err != nil {
 		return fmt.Errorf("failed to generate branch name: %w", err)

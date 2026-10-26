@@ -15,8 +15,11 @@ func newNamerBranchCmd(_ commandServices) *cobra.Command {
 		Long: `Print the branch name grove create would use for the phrase. The phrase is
 slugified with the naming settings, rendered through
 local_branch.branch_template as {{.PhraseSlug}}, and capped at
-naming.max_length. A phrase that slugifies to nothing is an error.`,
-		Args: cobra.ExactArgs(1),
+naming.max_length. A phrase that slugifies to nothing is an error. Nothing
+is created and nothing prompts.
+
+` + helpFailure,
+		Args: phraseArgs("phrase"),
 		RunE: runNamerBranch,
 	}
 }

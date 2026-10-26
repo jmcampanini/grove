@@ -76,7 +76,7 @@ func loadConfigAt(cmd *cobra.Command, logger *log.Logger, anchor string, mode co
 	worktreeRoot, err := anchorGit.GetWorktreeRoot()
 	if err != nil {
 		if mode == requireRuntime {
-			return nil, fmt.Errorf("git error: %w", err)
+			return nil, fmt.Errorf("find worktree root: %w", err)
 		}
 		logger.Debug("git error during config discovery, treating as no repository", "err", err)
 		worktreeRoot = ""

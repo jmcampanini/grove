@@ -91,17 +91,17 @@ func TestExecuteWithFileLoggingAppliesDiagnosticLevelBeforeSetupWarning(t *testi
 		wantWarning bool
 	}{
 		{
-			args:        []string{"docs"},
+			args:        []string{"namer", "slug", "hello"},
 			name:        "default reports setup warning",
 			wantWarning: true,
 		},
 		{
-			args:        []string{"--debug", "docs"},
+			args:        []string{"--debug", "namer", "slug", "hello"},
 			name:        "debug reports setup warning",
 			wantWarning: true,
 		},
 		{
-			args: []string{"--quiet", "docs"},
+			args: []string{"--quiet", "namer", "slug", "hello"},
 			name: "quiet suppresses setup warning",
 		},
 	}
@@ -267,10 +267,14 @@ func commandChildrenByName(cmd *cobra.Command) map[string]*cobra.Command {
 
 // TestEveryCommandDeclaresItsGrammar checks the declarations the CLI contract
 // requires of a fresh tree: every command below the root has an Args
-// validator, and every group has a RunE, because Cobra prints help for a
-// non-runnable command before it validates operands. The root is left to
-// Cobra, which rejects unknown subcommands there.
+// validator, and every group and help topic has a RunE, because Cobra prints
+// help for a non-runnable command before it validates operands. The root is
+// left to Cobra, which rejects unknown subcommands there.
 func TestEveryCommandDeclaresItsGrammar(t *testing.T) {
+	root := newTestRootCommand()
+	assert.Nil(t, root.Args, "the root leaves Args unset so Cobra rejects unknown commands")
+	assert.True(t, root.DisableSuggestions)
+
 	var visit func(cmd *cobra.Command)
 	visit = func(cmd *cobra.Command) {
 		for _, child := range cmd.Commands() {
@@ -280,12 +284,12 @@ func TestEveryCommandDeclaresItsGrammar(t *testing.T) {
 			path := child.CommandPath()
 			assert.NotNilf(t, child.Args, "%s must declare an Args validator", path)
 			assert.Nilf(t, child.Run, "%s must use RunE, not Run", path)
-			if child.HasSubCommands() {
+			if child.HasSubCommands() || isHelpTopic(child) {
 				assert.NotNilf(t, child.RunE, "%s must have a RunE so Cobra validates its operands", path)
 			}
 			visit(child)
 		}
 	}
 
-	visit(newTestRootCommand())
+	visit(root)
 }

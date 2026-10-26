@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"os"
 	"os/signal"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/jmcampanini/grove/internal/config"
 	"github.com/jmcampanini/grove/internal/logging"
+	"github.com/jmcampanini/grove/internal/render"
 	"github.com/jmcampanini/grove/internal/repository"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -39,28 +39,55 @@ func NewRootCommand(in io.Reader, out, errOut io.Writer) *cobra.Command {
 		DisableSuggestions: true,
 		SilenceErrors:      true,
 		SilenceUsage:       true,
-		Long: `Grove manages git worktrees. It creates a branch and worktree from a
-phrase, a pull request, or an issue, and places each new worktree under
-worktree.root by rendering worktree.layout; run grove help layout for the
-directory structure.
+		Long: `Grove manages git worktrees: one directory per branch, placed under
+worktree.root at the path worktree.layout renders (run grove help layout).
+It creates a branch and worktree from a phrase, a pull request, or an
+issue, and lists, syncs, and prunes the worktrees it finds.
 
-Common workflows:
-  Start new work:       grove create "add user auth"
-  Check out a branch:   grove checkout feature/fix-login
-  Check out a PR:       grove pr checkout 42
-  Work on an issue:     grove issue start 17
-  See all worktrees:    grove status
+Grove runs git for every command that reads or changes a repository, and
+gh for the pr and issue commands, prune, and the pull request column of
+status. gh must already be authenticated: grove disables the interactive
+prompts of both programs. Each git and gh command is subject to
+git.timeout, and its captured stdout and stderr are each capped at 8 MiB;
+exceeding either limit fails the command.
 
 Configuration comes from TOML files and the --space and
---worktree-template flags; run grove config --help for the file locations
-and precedence.
+--worktree-template flags; run grove config --help for the file locations,
+precedence, and every key.
+
+Styled output follows --color. auto, the default, colors a stream only
+when that stream is a terminal, TERM is not dumb, and NO_COLOR is empty;
+always and never override both the detection and NO_COLOR. Help, version,
+config, list, and the --fzf output of pr list and issue list are never
+styled.
 
 Logs are appended to $XDG_STATE_HOME/grove/grove.log
 (~/.local/state/grove/grove.log when XDG_STATE_HOME is unset). Logging starts
-after argument validation: --help, --version, and rejected input do not create
-the log file. Diagnostic logging defaults to info. Pass --debug for debug
-logging or --quiet to show only errors. The flags are mutually exclusive and
-do not change stdout.`,
+after argument validation: --help, --version, the help topics, and rejected
+input do not create the log file. Diagnostic logging defaults to info. Pass
+--debug for debug logging or --quiet to show only errors. The flags are
+mutually exclusive and do not change stdout. When the log file cannot be
+opened, grove warns on stderr (unless --quiet) and continues without it.
+
+Only sync and prune prompt, and only in a terminal; every other command,
+including help, version, config, and the help topics, runs without one.
+
+A failure prints one line on stderr as "grove: <message>" and exits 2 for
+a usage error or 1 otherwise; run grove help exit-codes for the contract.
+
+Common tasks:
+  Start new work:            grove create "add user auth"
+  Check out a branch:        grove checkout feature/fix-login
+  Check out a pull request:  grove pr checkout 42
+  Work on an issue:          grove issue start 17
+  See every worktree:        grove status
+  Remove stale worktrees:    grove prune
+
+Command groups:
+  cache  The on-disk cache of gh output:               grove cache --help
+  issue  GitHub issues and worktrees for them:         grove issue --help
+  namer  Branch and worktree names from a phrase:      grove namer --help
+  pr     GitHub pull requests and worktrees for them:  grove pr --help`,
 		Version: Version,
 	}
 	root.SetIn(in)
@@ -69,6 +96,7 @@ do not change stdout.`,
 
 	registerDiagnosticFlags(root.PersistentFlags())
 	root.MarkFlagsMutuallyExclusive(diagnosticDebugFlag, diagnosticQuietFlag)
+	registerColorFlag(root.PersistentFlags())
 	if err := config.RegisterFlags(root.PersistentFlags()); err != nil {
 		panic(err)
 	}
@@ -87,6 +115,7 @@ do not change stdout.`,
 		&cobra.Group{ID: "issue", Title: "Issue Commands:"},
 		&cobra.Group{ID: "config", Title: "Configuration Commands:"},
 		&cobra.Group{ID: "utility", Title: "Utility Commands:"},
+		&cobra.Group{ID: "topics", Title: "Help Topics (grove help <topic>):"},
 	)
 	root.SetHelpCommandGroupID("config")
 	root.SetCompletionCommandGroupID("config")
@@ -98,19 +127,20 @@ do not change stdout.`,
 		newCheckoutCmd(services),
 		newConfigCmd(services),
 		newCreateCmd(services),
-		newDocsCmd(services),
 		newExitCodesTopicCmd(services),
 		newIssueCmd(services),
+		newLayoutTopicCmd(services),
 		newListCmd(services),
 		newNamerCmd(services),
+		newNamingTopicCmd(services),
 		newPRCmd(services),
 		newPruneCmd(services),
 		newRemoveCmd(services),
 		newResolveCmd(services),
 		newStatusCmd(services),
 		newSyncCmd(services),
-		newLayoutTopicCmd(services),
 	)
+	markUsageErrors(root)
 
 	return root
 }
@@ -142,10 +172,15 @@ func executeWithFileLogging(in io.Reader, out, stderr io.Writer, args []string) 
 		// Cobra checks flag groups after the persistent pre-run; check them
 		// first so conflicting --debug/--quiet never opens the log file.
 		if err := cmd.ValidateFlagGroups(); err != nil {
-			return err
+			return usageError{err: err}
+		}
+		// Help topics and the help command only print help, so they neither
+		// create the log file nor warn when it cannot be opened.
+		if isHelpTopic(cmd) || cmd.Name() == "help" {
+			return nil
 		}
 
-		opened, err := logging.NewTee(stderr)
+		opened, err := logging.NewTee(stderr, render.ResolveProfile(colorMode(cmd), stderr))
 		if err != nil {
 			commandLogger(cmd).Warn("failed to set up file logging", "error", err)
 			return nil
@@ -163,11 +198,13 @@ func executeWithFileLogging(in io.Reader, out, stderr io.Writer, args []string) 
 	return executeRoot(root, args)
 }
 
-// Execute runs the root command on the process streams and returns its exit status.
+// Execute runs the root command on the process streams and returns its exit
+// status: 0 on success, 2 on a usage error, 1 on any other failure. A
+// failure is reported as one "grove: <message>" line on stderr.
 func Execute() int {
-	if err := executeWithFileLogging(os.Stdin, os.Stdout, os.Stderr, os.Args[1:]); err != nil {
-		fmt.Fprintf(os.Stderr, "grove: error: %v\n", err)
-		return 1
+	err := executeWithFileLogging(os.Stdin, os.Stdout, os.Stderr, os.Args[1:])
+	if err != nil {
+		reportFailure(os.Stderr, err)
 	}
-	return 0
+	return exitStatus(err)
 }

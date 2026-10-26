@@ -9,6 +9,7 @@ import (
 
 	"charm.land/huh/v2"
 	"github.com/jmcampanini/grove/internal/git"
+	"github.com/jmcampanini/grove/internal/render"
 	"github.com/spf13/cobra"
 )
 
@@ -17,24 +18,33 @@ func newSyncCmd(services commandServices) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sync",
 		Short: "Sync the current branch to match its remote tracking branch",
-		Long: `Sync fetches from the remote and hard-resets the current branch to match
-its remote tracking branch exactly. This is the worktree equivalent of:
+		Long: `Fetch from the remote and hard-reset the current branch to its remote
+tracking branch, the worktree equivalent of:
 
   git fetch --prune && git reset --hard origin/<branch>
 
-If the worktree has uncommitted changes, you will be prompted before
-they are discarded. Use --force to skip the prompt.`,
+The reset discards every uncommitted change and every local commit the
+tracking branch does not have. When the worktree has uncommitted changes,
+the git status is printed and a confirmation prompt is shown; declining
+prints "Sync aborted." on stdout and exits 0. The prompt reads stdin and
+draws on stderr and needs a terminal on both (with TERM=dumb it becomes a
+line-based prompt on stdin and stdout instead), so a script passes
+--force, which discards the changes without asking. A branch without a
+tracking branch is reported on stdout and left alone.
+
+` + helpFailure,
 		Args:    cobra.NoArgs,
 		GroupID: "git",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return services.runSync(cmd, force)
 		},
 	}
-	cmd.Flags().BoolVar(&force, "force", false, "Skip the dirty-state prompt and discard changes")
+	cmd.Flags().BoolVar(&force, "force", false, "Discard uncommitted changes without prompting")
 	return cmd
 }
 
 type syncContext struct {
+	colorMode render.ColorMode
 	gitClient git.Git
 }
 
@@ -45,6 +55,7 @@ func (services commandServices) runSync(cmd *cobra.Command, force bool) error {
 	}
 
 	ctx := &syncContext{
+		colorMode: colorMode(cmd),
 		gitClient: rt.GitClient,
 	}
 
@@ -90,15 +101,12 @@ func executeSync(w io.Writer, ctx *syncContext, force bool) error {
 	if !exists {
 		remoteBranch := strings.TrimPrefix(upstream, remoteName+"/")
 		return fmt.Errorf(
-			"remote tracking branch %q does not exist on the remote\n\n"+
-				"The branch may have been deleted after merge, or was never pushed.\n"+
-				"To push: git push -u %s %s:%s\n"+
-				"To clean up: grove prune",
+			"remote tracking branch %q does not exist on the remote (deleted after merge, or never pushed); push it with git push -u %s %s:%s or remove the worktree with grove prune",
 			upstream, remoteName, currentBranch, remoteBranch,
 		)
 	}
 
-	if err := checkDirtyAndConfirm(w, ctx.gitClient, force); err != nil {
+	if err := checkDirtyAndConfirm(w, ctx, force); err != nil {
 		if errors.Is(err, errSyncAborted) {
 			_, err = fmt.Fprintln(w, "Sync aborted.")
 			return err
@@ -117,7 +125,8 @@ func executeSync(w io.Writer, ctx *syncContext, force bool) error {
 // errSyncAborted is a sentinel indicating the user declined to proceed.
 var errSyncAborted = errors.New("sync aborted")
 
-func checkDirtyAndConfirm(w io.Writer, gitClient git.Git, force bool) error {
+func checkDirtyAndConfirm(w io.Writer, ctx *syncContext, force bool) error {
+	gitClient := ctx.gitClient
 	worktreeRoot, err := gitClient.GetWorktreeRoot()
 	if err != nil {
 		return fmt.Errorf("failed to get worktree root: %w", err)
@@ -140,7 +149,7 @@ func checkDirtyAndConfirm(w io.Writer, gitClient git.Git, force bool) error {
 		return err
 	}
 
-	confirmed, err := promptSyncConfirm()
+	confirmed, err := promptSyncConfirm(ctx.colorMode)
 	if err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return errSyncAborted
@@ -167,9 +176,9 @@ func findUpstreamForBranch(gitClient git.Git, branchName string) (string, error)
 	return "", nil
 }
 
-func promptSyncConfirm() (bool, error) {
+func promptSyncConfirm(mode render.ColorMode) (bool, error) {
 	var confirmed bool
-	err := huh.NewForm(
+	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewConfirm().
 				Title("Sync will discard all uncommitted changes. Continue?").
@@ -177,8 +186,8 @@ func promptSyncConfirm() (bool, error) {
 				Negative("No").
 				Value(&confirmed),
 		),
-	).Run()
-	if err != nil {
+	)
+	if err := runPrompt(form, mode, "pass --force to discard the uncommitted changes, or run grove sync in a terminal"); err != nil {
 		return false, err
 	}
 	return confirmed, nil

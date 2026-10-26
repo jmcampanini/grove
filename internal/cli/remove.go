@@ -18,7 +18,8 @@ func newRemoveCmd(services commandServices) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "remove <target>",
 		Short: "Remove a worktree and its branch",
-		Long: `Remove removes a worktree and optionally deletes its local branch.
+		Long: `Delete a worktree directory and, unless --keep-branch is passed, its
+local branch, then print what was removed on stdout.
 
 The target can be:
   - An absolute path to a worktree
@@ -27,17 +28,22 @@ The target can be:
     layout); a worktree elsewhere needs its path or branch
   - A branch name (e.g., "feature/my-feature")
 
-By default, removes both the worktree and its local branch.
-Use --keep-branch to preserve the branch after removing the worktree.
+A worktree with uncommitted changes is refused unless --force is passed,
+which discards those changes and force-deletes the branch even when it is
+not merged. Stale worktree entries are pruned from git afterwards. The
+main worktree cannot be removed. Nothing prompts.
 
-The main worktree cannot be removed.`,
+` + helpFailure,
+		Example: `  grove remove wt-my-feature
+  grove remove feature/my-feature --keep-branch
+  grove remove /path/to/worktree --force`,
 		Args:    cobra.ExactArgs(1),
 		GroupID: "worktree",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return services.runRemove(cmd, args, force, keepBranch)
 		},
 	}
-	cmd.Flags().BoolVar(&force, "force", false, "Force removal even with uncommitted changes")
+	cmd.Flags().BoolVar(&force, "force", false, "Discard uncommitted changes and delete an unmerged branch")
 	cmd.Flags().BoolVar(&keepBranch, "keep-branch", false, "Keep the local branch after removing the worktree")
 	return cmd
 }
