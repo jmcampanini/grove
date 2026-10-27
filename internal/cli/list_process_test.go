@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -232,6 +233,27 @@ func TestIssueListOutputFile(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, json.Valid(replaced))
 	assert.Contains(t, string(replaced), `"hasMore":true`)
+}
+
+func TestIssueListFailedReportLeavesTheOutputFile(t *testing.T) {
+	fixture := newListCommandFixture(t)
+	fixture.writePage(t, "start", issuesPageStart)
+	dir := t.TempDir()
+	missing := filepath.Join(dir, "new.jsonl")
+	existing := filepath.Join(dir, "old.jsonl")
+	require.NoError(t, os.WriteFile(existing, []byte("previous\n"), 0o600))
+
+	for _, args := range [][]string{
+		{"issue", "list", "--jsonl", "--limit", "2", "--output-file", missing},
+		{"issue", "list", "--jsonl", "--limit", "2", "--output-file", existing, "--overwrite"},
+	} {
+		root := NewRootCommand(strings.NewReader(""), io.Discard, failingWriter{})
+		err := executeRoot(root, args)
+		require.ErrorIs(t, err, errWriteFailed)
+		assert.Equal(t, exitFailure, exitStatus(err))
+	}
+	assert.NoFileExists(t, missing)
+	assertFileContent(t, existing, "previous\n")
 }
 
 func TestIssueListTableReportsMoreOnStderr(t *testing.T) {

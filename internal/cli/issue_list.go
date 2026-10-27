@@ -23,8 +23,9 @@ func newIssueListCmd(services commandServices) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List open issues",
-		Long: `List the open issues of the current repository on stdout, newest first.
-Nothing is modified and nothing prompts.
+		Long: `List the open issues of the current repository, newest first, on stdout
+or in the --output-file path. Nothing in the repository or on GitHub is
+modified and nothing prompts.
 
 By default the output is a styled table: number, title, author, labels, a
 Local checkmark when a worktree exists for the issue, and when it was
@@ -110,18 +111,19 @@ func (services commandServices) runIssueList(cmd *cobra.Command, flags listFlags
 		records:    issueRecords(matches),
 	}
 
-	switch flags.format() {
-	case listFormatTable:
-		err = outputIssueListTable(styledStdout(cmd), matches)
-	case listFormatFzf:
-		err = outputIssueListFzf(cmd.OutOrStdout(), matches)
-	default:
-		err = writeListPayload(cmd, flags, result, issueRecordColumns)
-	}
-	if err != nil {
+	// Report first, so a failed report fails the run before the output
+	// file is in place.
+	if err := reportMoreRecords(cmd, flags, "issues", result); err != nil {
 		return err
 	}
-	return reportMoreRecords(cmd, flags, "issues", result)
+	switch flags.format() {
+	case listFormatTable:
+		return outputIssueListTable(styledStdout(cmd), matches)
+	case listFormatFzf:
+		return outputIssueListFzf(cmd.OutOrStdout(), matches)
+	default:
+		return writeListPayload(cmd, flags, result, issueRecordColumns)
+	}
 }
 
 // issueRecordColumns are the CSV columns of issueRecord, in order.

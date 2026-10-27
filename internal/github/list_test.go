@@ -291,6 +291,8 @@ func TestCLIListGhFailure(t *testing.T) {
 
 	require.ErrorContains(t, err, "failed to list pull requests: gh api graphql")
 	assert.Equal(t, 1, strings.Count(err.Error(), "failed to list pull requests"), "the prefix appears once: %v", err)
+	assert.Contains(t, err.Error(), "query=...")
+	assert.NotContains(t, err.Error(), "pullRequests(", "the query text stays out of the failure line")
 }
 
 func TestCLIListRepositoryFailure(t *testing.T) {

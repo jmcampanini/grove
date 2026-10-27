@@ -76,7 +76,7 @@ func (g *CLI) runGhProcess(args ...string) (string, error) {
 		Name: "gh",
 	}, g.timeout)
 	if err != nil {
-		command := strings.Join(args, " ")
+		command := commandText(args)
 		switch {
 		case errors.Is(err, process.ErrTimedOut):
 			g.log.Debug("gh command timed out", "args", args, "timeout", g.timeout, "error", err)
@@ -101,6 +101,20 @@ func (g *CLI) runGhProcess(args ...string) (string, error) {
 	output := strings.TrimSpace(string(result.Stdout))
 	g.log.Debug("gh command succeeded", "args", args, "outputLen", len(output))
 	return output, nil
+}
+
+// commandText renders gh arguments for an error message, eliding the text
+// of a GraphQL query, which runs to hundreds of characters and would bury the
+// cause at the end of the failure line. The debug log keeps every argument.
+func commandText(args []string) string {
+	shown := make([]string, len(args))
+	for i, arg := range args {
+		if strings.HasPrefix(arg, "query=") {
+			arg = "query=..."
+		}
+		shown[i] = arg
+	}
+	return strings.Join(shown, " ")
 }
 
 func (g *CLI) executeGraphQL(query string) (string, error) {

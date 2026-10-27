@@ -48,7 +48,7 @@ type listFlags struct {
 
 func (f *listFlags) register(cmd *cobra.Command) {
 	flags := cmd.Flags()
-	flags.BoolVar(&f.fzf, "fzf", false, "Print tab-separated lines for fzf")
+	flags.BoolVar(&f.fzf, "fzf", false, "Print <number>\\t<searchable>\\t<display> lines for fzf")
 	flags.BoolVar(&f.json, "json", false, "Write one JSON object holding the records")
 	flags.BoolVar(&f.jsonl, "jsonl", false, "Write one JSON object per record per line")
 	flags.BoolVar(&f.csv, "csv", false, "Write CSV with a header line")
@@ -251,9 +251,7 @@ func optionalCell(s *string) string {
 
 // writeOutputFile writes the payload under a temporary name next to path
 // and moves it into place only after write, flush, sync, and close all
-// succeed, so a failed run leaves path as it was. Without overwrite the move
-// is a hard link, which fails when path already exists instead of replacing
-// it.
+// succeed, so a failed run leaves path as it was.
 func writeOutputFile(path string, overwrite bool, write func(io.Writer) error) error {
 	tmp, err := createSiblingTemp(path)
 	if err != nil {
@@ -266,28 +264,58 @@ func writeOutputFile(path string, overwrite bool, write func(io.Writer) error) e
 		return fmt.Errorf("failed to write output file %q: %w", path, err)
 	}
 
+	err = publishOutputFile(tmpPath, path, overwrite, os.Link)
+	// The payload is in place once it is published; a temporary name left
+	// behind does not change it.
+	_ = os.Remove(tmpPath)
+	return err
+}
+
+// publishOutputFile moves the finished temporary file to path. With
+// overwrite it renames the file over path. Without it, link gives path a
+// second name for the file, which fails instead of replacing a file that
+// appeared since the command checked. A file system without hard links,
+// such as exFAT or an SMB share, falls back to checking path again and
+// renaming.
+func publishOutputFile(tmpPath, path string, overwrite bool, link func(oldname, newname string) error) error {
 	if overwrite {
 		if err := os.Rename(tmpPath, path); err != nil {
-			_ = os.Remove(tmpPath)
 			return fmt.Errorf("failed to write output file %q: %w", path, err)
 		}
 		return nil
 	}
 
-	err = os.Link(tmpPath, path)
-	// The payload is in place once the link succeeds; a temporary name
-	// left behind does not change it.
-	_ = os.Remove(tmpPath)
+	err := link(tmpPath, path)
 	switch {
+	case err == nil:
+		return nil
 	case errors.Is(err, fs.ErrExist):
 		return fmt.Errorf("output file %q already exists; pass --overwrite to replace it", path)
-	case err != nil:
+	}
+
+	_, statErr := os.Lstat(path)
+	switch {
+	case statErr == nil:
+		return fmt.Errorf("output file %q already exists; pass --overwrite to replace it", path)
+	case !errors.Is(statErr, fs.ErrNotExist):
+		return fmt.Errorf("failed to check output file %q: %w", path, statErr)
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
 		return fmt.Errorf("failed to write output file %q: %w", path, err)
 	}
 	return nil
 }
 
-func writeAndClose(f *os.File, write func(io.Writer) error) error {
+// syncFile is the part of *os.File that writeAndClose uses.
+type syncFile interface {
+	io.WriteCloser
+	Sync() error
+}
+
+// writeAndClose writes the payload to f through a buffer, then flushes,
+// syncs, and closes f. An error from any step is the result, and f is
+// closed either way.
+func writeAndClose(f syncFile, write func(io.Writer) error) error {
 	buffered := bufio.NewWriter(f)
 	err := write(buffered)
 	if err == nil {
@@ -335,8 +363,9 @@ cell and a list is one cell of compact JSON.`
 	helpListOutputFile = `--output-file <path> writes the --json, --jsonl, or --csv output to path
 instead of stdout. It refuses a path that already exists unless
 --overwrite is selected, which replaces the file at path or creates it.
-The output is written to a temporary file in the same directory and moved
-to path only when complete, so a failed run leaves path unchanged.`
+The output is written to a temporary file in the same directory, named
+.<file name>.tmp-<random>, and moved to path only when complete, so a
+failed run leaves path unchanged.`
 )
 
 // helpListScope documents --limit, --all, and --cursor for a list command

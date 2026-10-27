@@ -73,6 +73,43 @@ func TestListRecordColumnsMatchJSONKeys(t *testing.T) {
 	assert.Len(t, prRecord{}.csvRow(), len(prRecordColumns))
 }
 
+func TestEncodeListCSVPullRequests(t *testing.T) {
+	worktree := "/workspace/pr-42"
+	records := []prRecord{
+		{
+			Author:            "alice",
+			BaseBranch:        "main",
+			Branch:            "feature/login",
+			CreatedAt:         time.Date(2026, 7, 3, 9, 0, 0, 0, time.UTC),
+			IsCrossRepository: true,
+			Labels:            []string{"bug"},
+			Number:            42,
+			Title:             "Fix login",
+			UpdatedAt:         time.Date(2026, 7, 4, 9, 0, 0, 0, time.UTC),
+			URL:               "https://github.com/acme/app/pull/42",
+			Worktree:          &worktree,
+		},
+		{
+			BaseBranch: "release",
+			Branch:     "docs",
+			CreatedAt:  time.Date(2026, 7, 1, 9, 0, 0, 0, time.UTC),
+			Labels:     []string{},
+			Number:     40,
+			Title:      "Docs",
+			UpdatedAt:  time.Date(2026, 7, 2, 9, 0, 0, 0, time.UTC),
+			URL:        "https://github.com/acme/app/pull/40",
+		},
+	}
+
+	var buf bytes.Buffer
+	require.NoError(t, encodeListCSV(&buf, records, prRecordColumns, false))
+
+	assert.Equal(t, "number,title,author,branch,baseBranch,isCrossRepository,labels,createdAt,updatedAt,url,worktree\n"+
+		`42,Fix login,alice,feature/login,main,true,"[""bug""]",2026-07-03T09:00:00Z,2026-07-04T09:00:00Z,https://github.com/acme/app/pull/42,/workspace/pr-42`+"\n"+
+		`40,Docs,,docs,release,false,[],2026-07-01T09:00:00Z,2026-07-02T09:00:00Z,https://github.com/acme/app/pull/40,`+"\n",
+		buf.String())
+}
+
 func TestIssueRecords(t *testing.T) {
 	created := time.Date(2026, 7, 1, 9, 0, 0, 0, time.FixedZone("PDT", -7*3600))
 	match := issueMatch(17, "Fix <login> & crash", "alice", nil, "/workspace/is-17")
@@ -283,6 +320,83 @@ func TestWriteOutputFile(t *testing.T) {
 		require.Error(t, writeOutputFile(path, true, writeText("{}\n")))
 		assert.NoFileExists(t, path)
 	})
+}
+
+func TestPublishOutputFileWithoutHardLinks(t *testing.T) {
+	noLinks := func(string, string) error { return errors.ErrUnsupported }
+
+	t.Run("renames into a missing path", func(t *testing.T) {
+		dir := t.TempDir()
+		tmp, path := filepath.Join(dir, ".out.json.tmp-x"), filepath.Join(dir, "out.json")
+		require.NoError(t, os.WriteFile(tmp, []byte("new\n"), 0o600))
+
+		require.NoError(t, publishOutputFile(tmp, path, false, noLinks))
+		assertFileContent(t, path, "new\n")
+		assert.NoFileExists(t, tmp)
+	})
+
+	t.Run("refuses a path that appeared since the check", func(t *testing.T) {
+		dir := t.TempDir()
+		tmp, path := filepath.Join(dir, ".out.json.tmp-x"), filepath.Join(dir, "out.json")
+		require.NoError(t, os.WriteFile(tmp, []byte("new\n"), 0o600))
+		require.NoError(t, os.WriteFile(path, []byte("old\n"), 0o600))
+
+		err := publishOutputFile(tmp, path, false, noLinks)
+		require.ErrorContains(t, err, "already exists; pass --overwrite to replace it")
+		assertFileContent(t, path, "old\n")
+	})
+}
+
+// failingFile is a syncFile whose writes, sync, or close fail.
+type failingFile struct {
+	closed   bool
+	closeErr error
+	syncErr  error
+	writeErr error
+	written  int
+}
+
+func (f *failingFile) Write(p []byte) (int, error) {
+	if f.writeErr != nil {
+		return 0, f.writeErr
+	}
+	f.written += len(p)
+	return len(p), nil
+}
+
+func (f *failingFile) Sync() error { return f.syncErr }
+
+func (f *failingFile) Close() error {
+	f.closed = true
+	return f.closeErr
+}
+
+func TestWriteAndCloseReportsEveryStep(t *testing.T) {
+	failed := errors.New("disk full")
+	writeSmall := func(w io.Writer) error {
+		_, err := io.WriteString(w, "{}\n")
+		return err
+	}
+	tests := []struct {
+		file *failingFile
+		name string
+	}{
+		{name: "flush", file: &failingFile{writeErr: failed}},
+		{name: "sync", file: &failingFile{syncErr: failed}},
+		{name: "close", file: &failingFile{closeErr: failed}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := writeAndClose(tt.file, writeSmall)
+			require.ErrorIs(t, err, failed)
+			assert.True(t, tt.file.closed, "the file is closed after a failure")
+		})
+	}
+
+	file := &failingFile{}
+	require.NoError(t, writeAndClose(file, writeSmall))
+	assert.Equal(t, 3, file.written, "the buffered payload is flushed")
 }
 
 func TestCheckOutputFile(t *testing.T) {

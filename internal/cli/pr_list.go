@@ -22,9 +22,9 @@ func newPRListCmd(services commandServices) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List open pull requests",
-		Long: `List the open pull requests of the current repository on stdout, newest
-first. Draft pull requests are not listed. Nothing is modified and nothing
-prompts.
+		Long: `List the open pull requests of the current repository, newest first, on
+stdout or in the --output-file path. Draft pull requests are not listed.
+Nothing in the repository or on GitHub is modified and nothing prompts.
 
 By default the output is a styled table: number, title, author, branch,
 state, a Local checkmark when a worktree exists for the pull request, and
@@ -117,18 +117,19 @@ func (services commandServices) runPRList(cmd *cobra.Command, flags listFlags) e
 		records:    prRecords(matches),
 	}
 
-	switch flags.format() {
-	case listFormatTable:
-		err = outputPRListTable(styledStdout(cmd), matches)
-	case listFormatFzf:
-		err = outputPRListFzf(cmd.OutOrStdout(), matches)
-	default:
-		err = writeListPayload(cmd, flags, result, prRecordColumns)
-	}
-	if err != nil {
+	// Report first, so a failed report fails the run before the output
+	// file is in place.
+	if err := reportMoreRecords(cmd, flags, "pull requests", result); err != nil {
 		return err
 	}
-	return reportMoreRecords(cmd, flags, "pull requests", result)
+	switch flags.format() {
+	case listFormatTable:
+		return outputPRListTable(styledStdout(cmd), matches)
+	case listFormatFzf:
+		return outputPRListFzf(cmd.OutOrStdout(), matches)
+	default:
+		return writeListPayload(cmd, flags, result, prRecordColumns)
+	}
 }
 
 // prRecordColumns are the CSV columns of prRecord, in order.
