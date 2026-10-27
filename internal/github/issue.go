@@ -3,7 +3,6 @@ package github
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 )
 
@@ -40,35 +39,6 @@ const (
 	IssueStateReasonReopened   IssueStateReason = "REOPENED"
 )
 
-// IssueQuery specifies filters for listing issues.
-type IssueQuery struct {
-	State             IssueState // Defaults to IssueStateOpen if empty
-	UpdatedWithinDays int        // 0 = no filter, uses updated:>= in search
-}
-
-// ToSearchQuery converts the query to a GitHub search string for use with `gh issue list --search`.
-func (q IssueQuery) ToSearchQuery() string {
-	state := q.State
-	if state == "" {
-		state = IssueStateOpen
-	}
-
-	parts := []string{"is:issue"}
-	switch state {
-	case IssueStateOpen:
-		parts = append(parts, "is:open")
-	case IssueStateClosed:
-		parts = append(parts, "is:closed")
-	}
-
-	if q.UpdatedWithinDays > 0 {
-		cutoff := time.Now().AddDate(0, 0, -q.UpdatedWithinDays)
-		parts = append(parts, fmt.Sprintf("updated:>=%s", cutoff.Format("2006-01-02")))
-	}
-
-	return strings.Join(parts, " ")
-}
-
 // IssueComment represents a single comment on an issue.
 type IssueComment struct {
 	AuthorLogin string // May be empty if author's account was deleted
@@ -82,7 +52,7 @@ type Issue struct {
 	Assignees   []string // Assignee logins
 	AuthorLogin string   // May be empty if author's account was deleted
 	Body        string
-	Comments    []IssueComment // Only populated by GetIssue, not ListIssues
+	Comments    []IssueComment // Only populated by GetIssue, not ListOpenIssues
 	CreatedAt   time.Time
 	Labels      []Label
 	Milestone   string // Milestone title, empty if none
@@ -94,12 +64,8 @@ type Issue struct {
 	URL         string
 }
 
-// issueListJSONFields are the fields fetched for issue lists; issueViewJSONFields
-// adds the detail-only fields fetched for a single issue.
-const (
-	issueListJSONFields = "author,createdAt,labels,number,state,title,updatedAt,url"
-	issueViewJSONFields = issueListJSONFields + ",assignees,body,comments,milestone,stateReason"
-)
+// issueViewJSONFields are the gh issue view fields fetched for a single issue.
+const issueViewJSONFields = "assignees,author,body,comments,createdAt,labels,milestone,number,state,stateReason,title,updatedAt,url"
 
 // UnmarshalJSON decodes the gh issue JSON shape, flattening the author,
 // assignee, and milestone objects to their names. An unknown state is an

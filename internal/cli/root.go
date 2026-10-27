@@ -58,8 +58,8 @@ precedence, and every key.
 Styled output follows --color. auto, the default, colors a stream only
 when that stream is a terminal, TERM is not dumb, and NO_COLOR is empty;
 always and never override both the detection and NO_COLOR. Help, version,
-config, list, and the --fzf output of pr list and issue list are never
-styled.
+config, list, and the --fzf, --json, --jsonl, and --csv output of pr list
+and issue list are never styled.
 
 Logs are appended to $XDG_STATE_HOME/grove/grove.log
 (~/.local/state/grove/grove.log when XDG_STATE_HOME is unset). Logging starts

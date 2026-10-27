@@ -17,11 +17,11 @@ type GitHub interface {
 	// Returns nil if no pull request exists for the branch.
 	GetPullRequestByBranch(branchName string) (*PullRequest, error)
 
-	// ListIssues returns a list of issues matching the given query.
-	// Use DefaultIssueLimit for the limit parameter to get the standard number of results.
-	ListIssues(query IssueQuery, limit int) ([]Issue, error)
+	// ListOpenIssues returns the open issues of the repository, newest
+	// first, in the range the request selects.
+	ListOpenIssues(req ListRequest) (IssueList, error)
 
-	// ListPullRequests returns a list of pull requests matching the given query.
-	// Use DefaultPRLimit for the limit parameter to get the standard number of results.
-	ListPullRequests(query PRQuery, limit int) ([]PullRequest, error)
+	// ListOpenPullRequests returns the open pull requests of the repository
+	// that are not drafts, newest first, in the range the request selects.
+	ListOpenPullRequests(req ListRequest) (PullRequestList, error)
 }

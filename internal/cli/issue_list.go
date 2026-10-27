@@ -3,7 +3,9 @@ package cli
 import (
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
+	"time"
 
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
@@ -16,33 +18,64 @@ import (
 )
 
 func newIssueListCmd(services commandServices) *cobra.Command {
-	var fzf bool
+	var flags listFlags
 
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List open issues",
-		Long: `List the open issues of the current repository on stdout. Nothing is
-modified and nothing prompts.
+		Long: `List the open issues of the current repository on stdout, newest first.
+Nothing is modified and nothing prompts.
 
 By default the output is a styled table: number, title, author, labels, a
 Local checkmark when a worktree exists for the issue, and when it was
 updated. With --fzf each line is <number>\t<searchable>\t<display>, a
 machine-readable format that is never styled, whatever --color says.
 
+` + helpListFormats + `
+
+grove defines the record fields from the GitHub GraphQL API. They are the
+--json and --jsonl keys and, in this order, the --csv columns:
+
+  number     issue number
+  title      issue title
+  author     author login, empty when GitHub reports no author
+  labels     list of label names, at most the first 100
+  createdAt  when the issue was opened, RFC 3339 in UTC
+  updatedAt  when the issue was last updated, RFC 3339 in UTC
+  url        issue URL
+  worktree   absolute path of the local worktree for the issue, or null
+             when there is none
+
+With no open issues, the table prints "No open issues found.", --fzf and
+--jsonl print nothing, --csv prints only the header line, or nothing with
+--no-header, and --json prints {"items": [], "hasMore": false,
+"complete": true}.
+
+` + helpListScope("issues") + `
+
+` + helpListOutputFile + `
+
 ` + helpGH + `
 
 ` + helpFailure,
-		Example: `  grove issue list --fzf | fzf --delimiter '\t' --with-nth 3 --accept-nth 1`,
-		Args:    cobra.NoArgs,
+		Example: `  grove issue list --fzf | fzf --delimiter '\t' --with-nth 3 --accept-nth 1
+  grove issue list --json --all | jq -r '.items[].title'
+  grove issue list --csv --limit 100 --output-file issues.csv
+  grove issue list --jsonl --cursor <cursor> >>issues.jsonl`,
+		Args: cobra.MatchAll(cobra.NoArgs, flags.validate),
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return services.runIssueList(cmd, fzf)
+			return services.runIssueList(cmd, flags)
 		},
 	}
-	cmd.Flags().BoolVar(&fzf, "fzf", false, "Print <number>\\t<searchable>\\t<display> lines for fzf")
+	flags.register(cmd)
 	return cmd
 }
 
-func (services commandServices) runIssueList(cmd *cobra.Command, fzf bool) error {
+func (services commandServices) runIssueList(cmd *cobra.Command, flags listFlags) error {
+	if err := flags.checkOutputFile(); err != nil {
+		return err
+	}
+
 	rt, err := services.loadRuntime(cmd)
 	if err != nil {
 		return err
@@ -59,10 +92,9 @@ func (services commandServices) runIssueList(cmd *cobra.Command, fzf bool) error
 		return fmt.Errorf("failed to create issue namer: %w", err)
 	}
 
-	query := github.IssueQuery{State: github.IssueStateOpen}
-	issues, err := gh.ListIssues(query, github.DefaultIssueLimit)
+	list, err := gh.ListOpenIssues(flags.request())
 	if err != nil {
-		return fmt.Errorf("failed to list issues: %w", err)
+		return err
 	}
 
 	worktrees, err := rt.GitClient.ListWorktrees()
@@ -71,12 +103,83 @@ func (services commandServices) runIssueList(cmd *cobra.Command, fzf bool) error
 	}
 
 	matcher := issue.NewMatcher(namer, rt.Logger)
-	matches := matcher.MatchAll(issues, worktrees)
-
-	if fzf {
-		return outputIssueListFzf(cmd.OutOrStdout(), matches)
+	matches := matcher.MatchAll(list.Issues, worktrees)
+	result := listResult[issueRecord]{
+		hasMore:    list.HasMore,
+		nextCursor: list.NextCursor,
+		records:    issueRecords(matches),
 	}
-	return outputIssueListTable(styledStdout(cmd), matches)
+
+	switch flags.format() {
+	case listFormatTable:
+		err = outputIssueListTable(styledStdout(cmd), matches)
+	case listFormatFzf:
+		err = outputIssueListFzf(cmd.OutOrStdout(), matches)
+	default:
+		err = writeListPayload(cmd, flags, result, issueRecordColumns)
+	}
+	if err != nil {
+		return err
+	}
+	return reportMoreRecords(cmd, flags, "issues", result)
+}
+
+// issueRecordColumns are the CSV columns of issueRecord, in order.
+var issueRecordColumns = []string{"number", "title", "author", "labels", "createdAt", "updatedAt", "url", "worktree"}
+
+// issueRecord is one issue of the --json, --jsonl, and --csv output. The
+// field order is the JSON key order and matches issueRecordColumns.
+type issueRecord struct {
+	Number    int       `json:"number"`
+	Title     string    `json:"title"`
+	Author    string    `json:"author"`
+	Labels    []string  `json:"labels"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+	URL       string    `json:"url"`
+	Worktree  *string   `json:"worktree"`
+}
+
+func issueRecords(matches []issue.Match) []issueRecord {
+	records := make([]issueRecord, 0, len(matches))
+	for _, match := range matches {
+		record := issueRecord{
+			Author:    match.Issue.AuthorLogin,
+			CreatedAt: match.Issue.CreatedAt.UTC(),
+			Labels:    labelNames(match.Issue.Labels),
+			Number:    match.Issue.Number,
+			Title:     match.Issue.Title,
+			UpdatedAt: match.Issue.UpdatedAt.UTC(),
+			URL:       match.Issue.URL,
+		}
+		if match.HasWorktree() {
+			record.Worktree = &match.WorktreePath
+		}
+		records = append(records, record)
+	}
+	return records
+}
+
+func (r issueRecord) csvRow() []string {
+	return []string{
+		strconv.Itoa(r.Number),
+		r.Title,
+		r.Author,
+		compactJSONCell(r.Labels),
+		r.CreatedAt.Format(time.RFC3339),
+		r.UpdatedAt.Format(time.RFC3339),
+		r.URL,
+		optionalCell(r.Worktree),
+	}
+}
+
+// labelNames returns the names of the labels, never nil.
+func labelNames(labels []github.Label) []string {
+	names := make([]string, 0, len(labels))
+	for _, l := range labels {
+		names = append(names, l.Name)
+	}
+	return names
 }
 
 // maxListLabels is how many label names the list shows before collapsing the
@@ -102,11 +205,7 @@ func formatIssueLabels(labels []github.Label) string {
 }
 
 func allIssueLabels(labels []github.Label) string {
-	names := make([]string, 0, len(labels))
-	for _, l := range labels {
-		names = append(names, l.Name)
-	}
-	return strings.Join(names, ", ")
+	return strings.Join(labelNames(labels), ", ")
 }
 
 func outputIssueListTable(w io.Writer, matches []issue.Match) error {

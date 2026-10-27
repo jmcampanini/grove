@@ -9,8 +9,8 @@ type mockGitHub struct {
 	getIssueFn               func(issueNum int) (github.Issue, error)
 	getPullRequestByBranchFn func(branchName string) (*github.PullRequest, error)
 	getPullRequestFn         func(prNum int) (github.PullRequest, error)
-	listIssuesFn             func(query github.IssueQuery, limit int) ([]github.Issue, error)
-	listPullRequestsFn       func(query github.PRQuery, limit int) ([]github.PullRequest, error)
+	listOpenIssuesFn         func(req github.ListRequest) (github.IssueList, error)
+	listOpenPullRequestsFn   func(req github.ListRequest) (github.PullRequestList, error)
 }
 
 func (m *mockGitHub) GetIssue(issueNum int) (github.Issue, error) {
@@ -38,18 +38,18 @@ func (m *mockGitHub) GetPullRequestByBranch(branchName string) (*github.PullRequ
 	return nil, nil
 }
 
-func (m *mockGitHub) ListIssues(query github.IssueQuery, limit int) ([]github.Issue, error) {
-	if m.listIssuesFn != nil {
-		return m.listIssuesFn(query, limit)
+func (m *mockGitHub) ListOpenIssues(req github.ListRequest) (github.IssueList, error) {
+	if m.listOpenIssuesFn != nil {
+		return m.listOpenIssuesFn(req)
 	}
-	return nil, nil
+	return github.IssueList{}, nil
 }
 
-func (m *mockGitHub) ListPullRequests(query github.PRQuery, limit int) ([]github.PullRequest, error) {
-	if m.listPullRequestsFn != nil {
-		return m.listPullRequestsFn(query, limit)
+func (m *mockGitHub) ListOpenPullRequests(req github.ListRequest) (github.PullRequestList, error) {
+	if m.listOpenPullRequestsFn != nil {
+		return m.listOpenPullRequestsFn(req)
 	}
-	return nil, nil
+	return github.PullRequestList{}, nil
 }
 
 type mockGit struct {
