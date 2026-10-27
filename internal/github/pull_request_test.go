@@ -2,7 +2,6 @@ package github
 
 import (
 	"encoding/json"
-	"strings"
 	"testing"
 	"time"
 
@@ -82,89 +81,6 @@ func TestPRState_IsValid(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.want, tt.state.IsValid())
-		})
-	}
-}
-
-func TestPRQuery_ToSearchQuery(t *testing.T) {
-	// Helper to get date string for N days ago
-	daysAgo := func(n int) string {
-		return time.Now().AddDate(0, 0, -n).Format("2006-01-02")
-	}
-
-	tests := []struct {
-		name           string
-		query          PRQuery
-		wantContains   []string
-		wantNotContain []string
-	}{
-		{
-			name:         "empty query defaults to open non-draft PRs",
-			query:        PRQuery{},
-			wantContains: []string{"is:pr", "is:open", "draft:false"},
-		},
-		{
-			name:         "explicit open state",
-			query:        PRQuery{State: PRStateOpen},
-			wantContains: []string{"is:pr", "is:open", "draft:false"},
-		},
-		{
-			name:         "draft state",
-			query:        PRQuery{State: PRStateDraft},
-			wantContains: []string{"is:pr", "is:open", "draft:true"},
-		},
-		{
-			name:         "closed state without date filter",
-			query:        PRQuery{State: PRStateClosed},
-			wantContains: []string{"is:pr", "is:closed", "is:unmerged"},
-		},
-		{
-			name:         "closed state with date filter",
-			query:        PRQuery{State: PRStateClosed, ClosedWithinDays: 7},
-			wantContains: []string{"is:pr", "is:closed", "is:unmerged", "closed:>=" + daysAgo(7)},
-		},
-		{
-			name:         "merged state without date filter",
-			query:        PRQuery{State: PRStateMerged},
-			wantContains: []string{"is:pr", "is:merged"},
-		},
-		{
-			name:         "merged state with date filter",
-			query:        PRQuery{State: PRStateMerged, MergedWithinDays: 30},
-			wantContains: []string{"is:pr", "is:merged", "merged:>=" + daysAgo(30)},
-		},
-		{
-			name:         "open state with updated filter",
-			query:        PRQuery{State: PRStateOpen, UpdatedWithinDays: 14},
-			wantContains: []string{"is:pr", "is:open", "draft:false", "updated:>=" + daysAgo(14)},
-		},
-		{
-			name:           "closed date filter ignored for open state",
-			query:          PRQuery{State: PRStateOpen, ClosedWithinDays: 7},
-			wantContains:   []string{"is:pr", "is:open"},
-			wantNotContain: []string{"closed:>="},
-		},
-		{
-			name:           "merged date filter ignored for closed state",
-			query:          PRQuery{State: PRStateClosed, MergedWithinDays: 7},
-			wantContains:   []string{"is:pr", "is:closed"},
-			wantNotContain: []string{"merged:>="},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := tt.query.ToSearchQuery()
-
-			for _, want := range tt.wantContains {
-				assert.True(t, strings.Contains(got, want),
-					"expected query to contain %q, got: %q", want, got)
-			}
-
-			for _, notWant := range tt.wantNotContain {
-				assert.False(t, strings.Contains(got, notWant),
-					"expected query to NOT contain %q, got: %q", notWant, got)
-			}
 		})
 	}
 }

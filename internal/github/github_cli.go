@@ -15,12 +15,6 @@ import (
 	"github.com/jmcampanini/grove/internal/process"
 )
 
-// DefaultIssueLimit is the maximum number of issues returned by ListIssues.
-const DefaultIssueLimit = 20
-
-// DefaultPRLimit is the maximum number of pull requests returned by ListPullRequests.
-const DefaultPRLimit = 20
-
 // CLI implements GitHub by running the gh executable with prompts disabled.
 // Read results are served from the cache when one is configured.
 type CLI struct {
@@ -82,7 +76,7 @@ func (g *CLI) runGhProcess(args ...string) (string, error) {
 		Name: "gh",
 	}, g.timeout)
 	if err != nil {
-		command := strings.Join(args, " ")
+		command := commandText(args)
 		switch {
 		case errors.Is(err, process.ErrTimedOut):
 			g.log.Debug("gh command timed out", "args", args, "timeout", g.timeout, "error", err)
@@ -109,12 +103,26 @@ func (g *CLI) runGhProcess(args ...string) (string, error) {
 	return output, nil
 }
 
+// commandText renders gh arguments for an error message, eliding the text
+// of a GraphQL query, which runs to hundreds of characters and would bury the
+// cause at the end of the failure line. The debug log keeps every argument.
+func commandText(args []string) string {
+	shown := make([]string, len(args))
+	for i, arg := range args {
+		if strings.HasPrefix(arg, "query=") {
+			arg = "query=..."
+		}
+		shown[i] = arg
+	}
+	return strings.Join(shown, " ")
+}
+
 func (g *CLI) executeGraphQL(query string) (string, error) {
 	return g.executeGhCommand("api", "graphql", "-f", "query="+query)
 }
 
 // GetIssue fetches one issue through gh issue view, including the body,
-// assignees, milestone, and comments that ListIssues omits.
+// assignees, milestone, and comments that ListOpenIssues omits.
 func (g *CLI) GetIssue(issueNum int) (Issue, error) {
 	args := []string{
 		"issue", "view", fmt.Sprintf("%d", issueNum),
@@ -135,7 +143,7 @@ func (g *CLI) GetIssue(issueNum int) (Issue, error) {
 }
 
 // GetPullRequest fetches one pull request through gh pr view, including the
-// changed files that ListPullRequests omits.
+// changed files and review details that ListOpenPullRequests omits.
 func (g *CLI) GetPullRequest(prNum int) (PullRequest, error) {
 	args := []string{
 		"pr", "view", fmt.Sprintf("%d", prNum),
@@ -277,54 +285,6 @@ func (g *CLI) GetPullRequestByBranch(branchName string) (*PullRequest, error) {
 	}
 
 	return &prs[0], nil
-}
-
-// ListIssues runs gh issue list with the search string the query produces,
-// returning at most limit issues.
-func (g *CLI) ListIssues(query IssueQuery, limit int) ([]Issue, error) {
-	args := []string{
-		"issue", "list",
-		"--search", query.ToSearchQuery(),
-		"--json", issueListJSONFields,
-		"--limit", fmt.Sprintf("%d", limit),
-	}
-
-	output, err := g.executeGhCommand(args...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list issues: %w", err)
-	}
-
-	var issues []Issue
-	if err := json.Unmarshal([]byte(output), &issues); err != nil {
-		return nil, fmt.Errorf("failed to parse issues: %w", err)
-	}
-
-	return issues, nil
-}
-
-// ListPullRequests runs gh pr list with the search string the query produces,
-// returning at most limit pull requests.
-func (g *CLI) ListPullRequests(query PRQuery, limit int) ([]PullRequest, error) {
-	searchQuery := query.ToSearchQuery()
-
-	args := []string{
-		"pr", "list",
-		"--search", searchQuery,
-		"--json", prJSONFields,
-		"--limit", fmt.Sprintf("%d", limit),
-	}
-
-	output, err := g.executeGhCommand(args...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list pull requests: %w", err)
-	}
-
-	var prs []PullRequest
-	if err := json.Unmarshal([]byte(output), &prs); err != nil {
-		return nil, fmt.Errorf("failed to parse pull requests: %w", err)
-	}
-
-	return prs, nil
 }
 
 type graphQLThreadNode struct {

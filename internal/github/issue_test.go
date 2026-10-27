@@ -2,7 +2,6 @@ package github
 
 import (
 	"encoding/json"
-	"strings"
 	"testing"
 	"time"
 
@@ -108,47 +107,6 @@ func TestIssueUnmarshalJSON(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
-
-func TestIssueQueryToSearchQuery(t *testing.T) {
-	tests := []struct {
-		name       string
-		query      IssueQuery
-		want       string
-		wantPrefix string
-	}{
-		{
-			name:  "default is open",
-			query: IssueQuery{},
-			want:  "is:issue is:open",
-		},
-		{
-			name:  "explicit open",
-			query: IssueQuery{State: IssueStateOpen},
-			want:  "is:issue is:open",
-		},
-		{
-			name:  "closed",
-			query: IssueQuery{State: IssueStateClosed},
-			want:  "is:issue is:closed",
-		},
-		{
-			name:       "updated within days",
-			query:      IssueQuery{State: IssueStateOpen, UpdatedWithinDays: 7},
-			wantPrefix: "is:issue is:open updated:>=",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := tt.query.ToSearchQuery()
-			if tt.wantPrefix != "" {
-				assert.True(t, strings.HasPrefix(got, tt.wantPrefix), "got %q, want prefix %q", got, tt.wantPrefix)
-				return
-			}
 			assert.Equal(t, tt.want, got)
 		})
 	}

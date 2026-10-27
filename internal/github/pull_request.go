@@ -33,53 +33,6 @@ func (s PRState) IsValid() bool {
 	return false
 }
 
-// PRQuery specifies filters for listing pull requests.
-// TODO: add a ignore-users field, and thread it through from config
-// TODO: add default updated within days from config
-type PRQuery struct {
-	ClosedWithinDays  int     // 0 = no filter, uses closed:>= in search
-	MergedWithinDays  int     // 0 = no filter, uses merged:>= in search
-	State             PRState // Defaults to PRStateOpen if empty
-	UpdatedWithinDays int     // 0 = no filter, uses updated:>= in search
-}
-
-// ToSearchQuery converts the query to a GitHub search string for use with `gh pr list --search`.
-// Date filters are only applied when semantically valid for the given state.
-func (q PRQuery) ToSearchQuery() string {
-	state := q.State
-	if state == "" {
-		state = PRStateOpen
-	}
-
-	var parts []string
-
-	switch state {
-	case PRStateOpen:
-		parts = append(parts, "is:pr", "is:open", "draft:false")
-	case PRStateDraft:
-		parts = append(parts, "is:pr", "is:open", "draft:true")
-	case PRStateClosed:
-		parts = append(parts, "is:pr", "is:closed", "is:unmerged")
-		if q.ClosedWithinDays > 0 {
-			cutoff := time.Now().AddDate(0, 0, -q.ClosedWithinDays)
-			parts = append(parts, fmt.Sprintf("closed:>=%s", cutoff.Format("2006-01-02")))
-		}
-	case PRStateMerged:
-		parts = append(parts, "is:pr", "is:merged")
-		if q.MergedWithinDays > 0 {
-			cutoff := time.Now().AddDate(0, 0, -q.MergedWithinDays)
-			parts = append(parts, fmt.Sprintf("merged:>=%s", cutoff.Format("2006-01-02")))
-		}
-	}
-
-	if q.UpdatedWithinDays > 0 {
-		cutoff := time.Now().AddDate(0, 0, -q.UpdatedWithinDays)
-		parts = append(parts, fmt.Sprintf("updated:>=%s", cutoff.Format("2006-01-02")))
-	}
-
-	return strings.Join(parts, " ")
-}
-
 // Label is a GitHub label with its hex color.
 type Label struct {
 	Color string `json:"color"`
@@ -163,7 +116,9 @@ const (
 )
 
 // PullRequest is a GitHub pull request as gh returns it. Files is populated
-// only by GetPullRequest.
+// only by GetPullRequest. ListOpenPullRequests populates only AuthorLogin,
+// BaseRefName, BranchName, CreatedAt, IsCrossRepository, Labels, Number,
+// State, Title, UpdatedAt, and URL.
 type PullRequest struct {
 	AuthorLogin       string // May be empty if author's account was deleted
 	AuthorName        string // May be empty if author's account was deleted
@@ -331,20 +286,29 @@ func (pr *PullRequest) UnmarshalJSON(data []byte) error {
 		}
 	}
 
-	if raw.IsDraft && raw.State == "OPEN" {
-		pr.State = PRStateDraft
-	} else {
-		switch raw.State {
-		case "OPEN":
-			pr.State = PRStateOpen
-		case "CLOSED":
-			pr.State = PRStateClosed
-		case "MERGED":
-			pr.State = PRStateMerged
-		default:
-			return fmt.Errorf("unknown PR state: %s", raw.State)
-		}
+	state, err := parsePRState(raw.State, raw.IsDraft)
+	if err != nil {
+		return err
 	}
+	pr.State = state
 
 	return nil
+}
+
+// parsePRState maps the state GitHub reports to a PRState, reporting
+// PRStateDraft for an open draft. An unknown state is an error.
+func parsePRState(state string, isDraft bool) (PRState, error) {
+	switch state {
+	case "OPEN":
+		if isDraft {
+			return PRStateDraft, nil
+		}
+		return PRStateOpen, nil
+	case "CLOSED":
+		return PRStateClosed, nil
+	case "MERGED":
+		return PRStateMerged, nil
+	default:
+		return "", fmt.Errorf("unknown PR state: %s", state)
+	}
 }

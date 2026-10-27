@@ -26,14 +26,6 @@ func TestNew(t *testing.T) {
 	assert.True(t, ok, "expected *CLI")
 }
 
-func TestDefaultPRLimit(t *testing.T) {
-	assert.Equal(t, 20, DefaultPRLimit)
-}
-
-func TestDefaultIssueLimit(t *testing.T) {
-	assert.Equal(t, 20, DefaultIssueLimit)
-}
-
 // TestGhOnPath fails, rather than skipping, when gh is missing. The README
 // lists gh as a required external program, and the other tests in this
 // package run a fake gh, so this is the check that a runner without gh does
@@ -135,65 +127,6 @@ func TestCLIGetPullRequestByBranch(t *testing.T) {
 			assert.Equal(t, "feature/login", flagValue(args, "--head"))
 			assert.Equal(t, "all", flagValue(args, "--state"))
 			assert.Equal(t, "1", flagValue(args, "--limit"))
-		})
-	}
-}
-
-func TestCLIListIssues(t *testing.T) {
-	argsPath := installRecordingGh(t, 0, `[
-		{"author": {"login": "alice"}, "number": 17, "state": "OPEN", "title": "Fix login crash"},
-		{"author": {"login": "bob"}, "number": 18, "state": "OPEN", "title": "Add logout"}
-	]`)
-	gh := New(context.Background(), t.TempDir(), testTimeout, nil, nil)
-
-	issues, err := gh.ListIssues(IssueQuery{State: IssueStateOpen}, DefaultIssueLimit)
-
-	require.NoError(t, err)
-	require.Len(t, issues, 2)
-	assert.Equal(t, 17, issues[0].Number)
-	assert.Equal(t, 18, issues[1].Number)
-	args := recordedArgs(t, argsPath)
-	assert.Equal(t, []string{"issue", "list"}, args[:2])
-	assert.Equal(t, "is:issue is:open", flagValue(args, "--search"))
-	assert.Equal(t, "20", flagValue(args, "--limit"))
-}
-
-func TestCLIListPullRequests(t *testing.T) {
-	tests := []struct {
-		name        string
-		response    string
-		wantNumbers []int
-	}{
-		{
-			name:        "no open pull requests",
-			response:    "[]",
-			wantNumbers: []int{},
-		},
-		{
-			name:        "one open pull request",
-			response:    `[{"headRefName": "feature/login", "isDraft": false, "number": 42, "state": "OPEN", "title": "Fix login"}]`,
-			wantNumbers: []int{42},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			argsPath := installRecordingGh(t, 0, tt.response)
-			gh := New(context.Background(), t.TempDir(), testTimeout, nil, nil)
-
-			prs, err := gh.ListPullRequests(PRQuery{State: PRStateOpen}, DefaultPRLimit)
-
-			require.NoError(t, err)
-			require.NotNil(t, prs, "an empty result must still be a non-nil slice")
-			numbers := make([]int, 0, len(prs))
-			for _, pr := range prs {
-				numbers = append(numbers, pr.Number)
-			}
-			assert.Equal(t, tt.wantNumbers, numbers)
-			args := recordedArgs(t, argsPath)
-			assert.Equal(t, []string{"pr", "list"}, args[:2])
-			assert.Equal(t, "is:pr is:open draft:false", flagValue(args, "--search"))
-			assert.Equal(t, "20", flagValue(args, "--limit"))
 		})
 	}
 }
