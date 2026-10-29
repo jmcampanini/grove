@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io"
 	"strings"
 	"testing"
 
@@ -23,6 +22,8 @@ func TestExitStatusClassifiesInvocationFailures(t *testing.T) {
 		wantErr string
 	}{
 		{name: "unknown root command", args: []string{"nope"}, wantErr: `unknown command "nope" for "grove"`},
+		{name: "root operand after delimiter", args: []string{"--", "unexpected"}, wantErr: `unknown command "unexpected" for "grove"`},
+		{name: "version operand after delimiter", args: []string{"--version", "--", "unexpected"}, wantErr: `unknown command "unexpected" for "grove"`},
 		{name: "unknown root command with a quote", args: []string{`a"b`}, wantErr: `unknown command "a\"b" for "grove"`},
 		{name: "unknown group command", args: []string{"pr", "nope"}, wantErr: `unknown command "nope" for "grove pr"`},
 		{name: "operand on a help topic", args: []string{"exit-codes", "x"}, wantErr: `unknown command "x" for "grove exit-codes"`},
@@ -56,14 +57,6 @@ func TestExitStatusForOtherOutcomes(t *testing.T) {
 	assert.Equal(t, exitFailure, exitStatus(errors.New("git fetch failed")))
 	assert.Equal(t, exitFailure, exitStatus(errNotGitRepo))
 	assert.Equal(t, exitUsage, exitStatus(usageError{err: errors.New("accepts 1 arg(s), received 0")}))
-}
-
-func TestExecuteSucceedsWithoutARepository(t *testing.T) {
-	var stdout bytes.Buffer
-	err := executeWithFileLogging(strings.NewReader(""), &stdout, io.Discard, []string{"help", "nope"})
-	require.NoError(t, err)
-	assert.Equal(t, exitSuccess, exitStatus(err))
-	assert.Contains(t, stdout.String(), "Unknown help topic")
 }
 
 func TestReportFailureWritesOneLine(t *testing.T) {

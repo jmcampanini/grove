@@ -9,6 +9,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/jmcampanini/go-config-loader/configreporter"
+	"github.com/jmcampanini/grove/internal/config"
+	"github.com/jmcampanini/grove/internal/layout"
 	"github.com/spf13/cobra"
 )
 
@@ -55,8 +57,12 @@ and 4 follow the main worktree, so a worktree placed under worktree.root
 reads the same repository files as the main worktree; only step 5 is
 specific to it.
 
-By default the output is the merged TOML and nothing else; it reloads as a
-grove.toml.
+The output starts with the merged TOML and reloads as a grove.toml. A
+"# Effective worktree placement" comment block follows it: expanded_root
+shows the absolute worktree root after environment and ~ expansion, and
+requires_origin says whether the layout needs the origin remote. If the
+root or layout cannot be resolved, unresolved gives the reason and config
+still succeeds. These comments are informational, not configuration keys.
 
 --provenance (alias --sources) appends field-level provenance after the
 TOML: a blank line, a "# Provenance" line, then a tab-separated table with
@@ -118,8 +124,8 @@ Keys, shown with their defaults:
     and must render a relative path without "..".
   root = "$CODE_DIR/.worktrees"
     Directory that holds new worktrees; non-empty. $VAR, ${VAR}, and a
-    leading ~ expand when a command places a worktree, an unset or empty
-    variable fails that command, and the result must be absolute.
+    leading ~ expand to form the effective root. An unset or empty variable
+    prevents worktree placement, and the result must be absolute.
   space = "grove"
     One path segment that partitions worktrees by creator: non-empty, no
     slash, not "." or "..", not starting with "-", no control characters.
@@ -161,11 +167,26 @@ func runConfig(cmd *cobra.Command, provenance bool) error {
 	if err := reporter.WriteTOML(cmd.OutOrStdout()); err != nil {
 		return fmt.Errorf("failed to encode config: %w", err)
 	}
+	if err := writeEffectiveWorktreeConfig(cmd.OutOrStdout(), cfg.Worktree); err != nil {
+		return fmt.Errorf("write effective worktree config: %w", err)
+	}
 
 	if provenance {
 		return writeConfigProvenance(cmd.OutOrStdout(), reporter.ProvenanceHeaders(), reporter.ProvenanceRows())
 	}
 	return nil
+}
+
+func writeEffectiveWorktreeConfig(w io.Writer, cfg config.WorktreeConfig) error {
+	homeDir, _ := os.UserHomeDir()
+	resolver, err := layout.New(cfg, os.LookupEnv, homeDir)
+	if err != nil {
+		_, writeErr := fmt.Fprintf(w, "\n# Effective worktree placement\n# unresolved = %q\n", err.Error())
+		return writeErr
+	}
+
+	_, err = fmt.Fprintf(w, "\n# Effective worktree placement\n# expanded_root = %q\n# requires_origin = %t\n", resolver.Root(), resolver.NeedsRemote())
+	return err
 }
 
 // writeConfigProvenance appends the provenance table as TOML comment lines so

@@ -56,9 +56,8 @@ func markUsageErrors(root *cobra.Command) {
 }
 
 // unknownCommandText matches the untyped unknown-command error Cobra
-// reports from command discovery at the root and from its completion
-// command, which is added at execution time so markUsageErrors cannot wrap
-// its Args. The command path after "for" is deliberately not anchored.
+// reports from command discovery at the root. The command path after
+// "for" is deliberately not anchored.
 var unknownCommandText = regexp.MustCompile(`^unknown command ".*" for "`)
 
 // exitStatus maps the error an execution returned to the process exit

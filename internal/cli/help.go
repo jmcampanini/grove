@@ -1,6 +1,9 @@
 package cli
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/spf13/cobra"
 )
 
@@ -46,6 +49,71 @@ rejected invocation still exits 2.`
 
 // helpTopicContract states the stream contract every help topic shares.
 const helpTopicContract = `This topic prints on stdout and needs no repository, terminal, or network.`
+
+func newHelpCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "help [command...]",
+		Short: "Show help for a command or topic",
+		Long: `Print command or topic help on stdout. With no command, print grove's
+root help. A command path names each level with a separate word.
+Unknown command paths are usage errors.
+
+Help is never styled, never prompts, and needs no repository or network.
+It does not load configuration or create the log file.
+
+` + helpFailure,
+		Example: `  grove help
+  grove help pr list
+  grove help exit-codes`,
+		GroupID: "config",
+		Args: func(cmd *cobra.Command, args []string) error {
+			_, err := helpTarget(cmd.Root(), args)
+			return err
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			target, err := helpTarget(cmd.Root(), args)
+			if err != nil {
+				return err
+			}
+			target.InitDefaultHelpFlag()
+			return target.Help()
+		},
+		ValidArgsFunction: completeHelpCommand,
+	}
+}
+
+func completeHelpCommand(cmd *cobra.Command, args []string, prefix string) ([]cobra.Completion, cobra.ShellCompDirective) {
+	target, err := helpTarget(cmd.Root(), args)
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	var completions []cobra.Completion
+	for _, child := range target.Commands() {
+		if (child.IsAvailableCommand() || child == cmd) && strings.HasPrefix(child.Name(), prefix) {
+			completions = append(completions, cobra.CompletionWithDesc(child.Name(), child.Short))
+		}
+	}
+	return completions, cobra.ShellCompDirectiveNoFileComp
+}
+
+func helpTarget(root *cobra.Command, args []string) (*cobra.Command, error) {
+	target := root
+	for _, name := range args {
+		var match *cobra.Command
+		for _, child := range target.Commands() {
+			if child.Name() == name || child.HasAlias(name) {
+				match = child
+				break
+			}
+		}
+		if match == nil {
+			return nil, fmt.Errorf("unknown command %q for %q", name, target.CommandPath())
+		}
+		target = match
+	}
+	return target, nil
+}
 
 // newHelpTopicCmd builds a help topic: an application-owned command that
 // does no command work and prints its help whether invoked directly or
