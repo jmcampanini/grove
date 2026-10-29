@@ -49,6 +49,7 @@ func TestConfigCommandOutsideRepoRoundTrips(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("CODE_DIR", "")
 			configPath := isolatedConfigHome(t, "[naming]\nmax_length = 42\n")
 			workDir := tempDirResolved(t)
 			t.Chdir(workDir)
@@ -66,6 +67,8 @@ func TestConfigCommandOutsideRepoRoundTrips(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, want, reloaded, "config output should round-trip to the effective config")
 			assert.Equal(t, 42, reloaded.Naming.MaxLength)
+			assert.Contains(t, out.String(), "# Effective worktree placement\n# unresolved = ")
+			assert.Contains(t, out.String(), "unset environment variable CODE_DIR")
 
 			if !tt.wantProvenance {
 				assert.NotContains(t, out.String(), "# Provenance")
@@ -78,6 +81,77 @@ func TestConfigCommandOutsideRepoRoundTrips(t *testing.T) {
 			assert.Contains(t, provenance, "# naming.maxlength\t42\t"+configPath+"\n")
 		})
 	}
+}
+
+func TestWriteEffectiveWorktreeConfig(t *testing.T) {
+	t.Setenv("HOME", "/home/grove")
+	t.Setenv("GROVE_TEST_ROOT", "/workspace")
+	t.Setenv("GROVE_MISSING_ROOT", "")
+
+	tests := []struct {
+		name   string
+		root   string
+		layout string
+		want   string
+	}{
+		{
+			name:   "expanded environment root",
+			root:   "$GROVE_TEST_ROOT/.worktrees",
+			layout: "{{.Host}}/{{.Owner}}/{{.Repo}}/{{.Name}}",
+			want:   "# expanded_root = \"/workspace/.worktrees\"\n# requires_origin = true\n",
+		},
+		{
+			name:   "home expansion without remote",
+			root:   "~/.worktrees",
+			layout: "{{.Name}}",
+			want:   "# expanded_root = \"/home/grove/.worktrees\"\n# requires_origin = false\n",
+		},
+		{
+			name:   "control characters stay in one comment",
+			root:   "/workspace/\nname",
+			layout: "{{.Name}}",
+			want:   "# expanded_root = \"/workspace/\\nname\"\n# requires_origin = false\n",
+		},
+		{
+			name:   "unresolved root remains inspectable",
+			root:   "$GROVE_MISSING_ROOT/.worktrees",
+			layout: "{{.Name}}",
+			want:   "# unresolved = \"invalid worktree.root: ",
+		},
+		{
+			name:   "invalid layout remains inspectable",
+			root:   "/workspace",
+			layout: "{{.Missing}}",
+			want:   "# unresolved = \"invalid worktree.layout: ",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var out bytes.Buffer
+			cfg := config.WorktreeConfig{Root: tt.root, Layout: tt.layout}
+
+			err := writeEffectiveWorktreeConfig(&out, cfg)
+
+			if err != nil {
+				t.Fatalf("writeEffectiveWorktreeConfig() error = %v", err)
+			}
+			if !strings.HasPrefix(out.String(), "\n# Effective worktree placement\n"+tt.want) {
+				t.Errorf("writeEffectiveWorktreeConfig() = %q, want section with %q", out.String(), tt.want)
+			}
+			for _, line := range strings.Split(strings.TrimSpace(out.String()), "\n") {
+				if !strings.HasPrefix(line, "# ") {
+					t.Errorf("effective value escaped its TOML comment: %q", line)
+				}
+			}
+		})
+	}
+}
+
+func TestWriteEffectiveWorktreeConfigReportsWriteFailure(t *testing.T) {
+	err := writeEffectiveWorktreeConfig(failingWriter{}, defaultTestConfig().Worktree)
+
+	require.ErrorIs(t, err, errWriteFailed)
 }
 
 func TestConfigCommandSpaceFlagOverridesFile(t *testing.T) {

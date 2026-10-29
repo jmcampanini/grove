@@ -11,27 +11,19 @@ import (
 	"github.com/jmcampanini/grove/internal/render"
 )
 
-// promptOutput returns the stream a huh prompt flow draws on: os.Stderr,
-// or os.Stdout in the line-based accessible mode huh selects when
-// TERM=dumb. Every prompt reads os.Stdin.
-func promptOutput() io.Writer {
-	if os.Getenv("TERM") == "dumb" {
-		return os.Stdout
-	}
-	return os.Stderr
-}
-
 // checkPromptTerminal fails when a prompt flow cannot run on the given
 // streams: the stream it reads keys from and the stream it draws on must both
 // be terminals, because the prompt owns the cursor and the keyboard while it
 // runs. The accessible mode huh selects when TERM=dumb reads lines and
-// writes plain text, so it needs no terminal. Cursor control is inferred
-// deliberately: the libraries in use offer no probe for it, and TERM=dumb
-// is the one terminal that reports it absent. guidance completes the
-// diagnostic with the way around the prompt.
+// writes plain text, so it needs no terminal. Cursor control also requires
+// a nonempty TERM. guidance completes the diagnostic with the way around
+// the prompt.
 func checkPromptTerminal(in io.Reader, drawOn io.Writer, guidance string) error {
-	if os.Getenv("TERM") == "dumb" {
+	switch os.Getenv("TERM") {
+	case "dumb":
 		return nil
+	case "":
+		return fmt.Errorf("the prompt needs TERM set for cursor control; set TERM=dumb for a line-based prompt, or %s", guidance)
 	}
 	if !render.IsTerminal(in) {
 		return fmt.Errorf("the prompt needs a terminal on stdin; %s", guidance)
@@ -46,9 +38,9 @@ func checkPromptTerminal(in io.Reader, drawOn io.Writer, guidance string) error 
 // the color profile the --color mode resolves for the stream it draws on.
 // The profile never drops below ASCII: the no-color profile would also strip
 // the cursor control the prompt is made of. The accessible mode styles its
-// titles too, so its output goes through the writer the mode selects.
+// titles too, so both modes write to stderr.
 func runPrompt(form *huh.Form, mode render.ColorMode, guidance string) error {
-	drawOn := promptOutput()
+	drawOn := os.Stderr
 	if err := checkPromptTerminal(os.Stdin, drawOn, guidance); err != nil {
 		return err
 	}

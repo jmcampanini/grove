@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"os/signal"
@@ -31,6 +33,7 @@ type commandServices struct {
 // streams. Every execution gets its own tree; no state is shared across
 // constructions.
 func NewRootCommand(in io.Reader, out, errOut io.Writer) *cobra.Command {
+	var version bool
 	root := &cobra.Command{
 		Use:   "grove",
 		Short: "Git worktree manager",
@@ -69,8 +72,10 @@ input do not create the log file. Diagnostic logging defaults to info. Pass
 mutually exclusive and do not change stdout. When the log file cannot be
 opened, grove warns on stderr (unless --quiet) and continues without it.
 
-Only sync and prune prompt, and only in a terminal; every other command,
-including help, version, config, and the help topics, runs without one.
+Only sync and prune prompt. Their prompts require a terminal with TERM
+set, or TERM=dumb for accessible line-based input without cursor control.
+Every other command, including help, version, config, and the help topics,
+runs without a terminal.
 
 A failure prints one line on stderr as "grove: <message>" and exits 2 for
 a usage error or 1 otherwise; run grove help exit-codes for the contract.
@@ -84,11 +89,21 @@ Common tasks:
   Remove stale worktrees:    grove prune
 
 Command groups:
-  cache  The on-disk cache of gh output:               grove cache --help
-  issue  GitHub issues and worktrees for them:         grove issue --help
-  namer  Branch and worktree names from a phrase:      grove namer --help
-  pr     GitHub pull requests and worktrees for them:  grove pr --help`,
-		Version: Version,
+  cache       The on-disk cache of gh output:          grove cache --help
+  completion  Shell completion scripts:               grove completion --help
+  issue       GitHub issues and their worktrees:       grove issue --help
+  namer       Branch and worktree names from a phrase: grove namer --help
+  pr          Pull requests and their worktrees:      grove pr --help`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := cobra.NoArgs(cmd, args); err != nil {
+				return usageError{err: err}
+			}
+			if version {
+				_, err := fmt.Fprintf(cmd.OutOrStdout(), "grove version %s\n", Version)
+				return err
+			}
+			return cmd.Help()
+		},
 	}
 	root.SetIn(in)
 	root.SetOut(out)
@@ -106,7 +121,7 @@ Command groups:
 	// command "x". Registering them here keeps that ordering correct on a
 	// root that has no Args validator.
 	root.InitDefaultHelpFlag()
-	root.InitDefaultVersionFlag()
+	root.Flags().BoolVarP(&version, "version", "v", false, "Print the Grove version")
 
 	root.AddGroup(
 		&cobra.Group{ID: "worktree", Title: "Worktree Commands:"},
@@ -115,10 +130,11 @@ Command groups:
 		&cobra.Group{ID: "issue", Title: "Issue Commands:"},
 		&cobra.Group{ID: "config", Title: "Configuration Commands:"},
 		&cobra.Group{ID: "utility", Title: "Utility Commands:"},
-		&cobra.Group{ID: "topics", Title: "Help Topics (grove help <topic>):"},
+		&cobra.Group{ID: "topics", Title: "Help topics:"},
 	)
-	root.SetHelpCommandGroupID("config")
-	root.SetCompletionCommandGroupID("config")
+	help := newHelpCmd()
+	root.SetHelpCommand(help)
+	root.AddCommand(help, newCompletionCmd())
 
 	services := commandServices{loadRuntime: loadCommandRuntime}
 	root.AddCommand(
@@ -151,10 +167,26 @@ func registerDiagnosticFlags(flags *pflag.FlagSet) {
 }
 
 func executeRoot(root *cobra.Command, args []string) error {
+	// Cobra's help callback cannot return an error. Buffer its output so a
+	// failed write can be returned after execution through the normal error path.
+	renderHelp := root.HelpFunc()
+	var helpErr error
+	root.SetHelpFunc(func(cmd *cobra.Command, args []string) {
+		var output bytes.Buffer
+		destination := cmd.OutOrStdout()
+		cmd.SetOut(&output)
+		renderHelp(cmd, args)
+		cmd.SetOut(destination)
+		_, helpErr = output.WriteTo(destination)
+	})
+
 	root.SetArgs(args)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	return root.ExecuteContext(ctx)
+	if err := root.ExecuteContext(ctx); err != nil {
+		return err
+	}
+	return helpErr
 }
 
 // executeWithFileLogging builds a fresh tree on the given streams and runs
@@ -174,9 +206,9 @@ func executeWithFileLogging(in io.Reader, out, stderr io.Writer, args []string) 
 		if err := cmd.ValidateFlagGroups(); err != nil {
 			return usageError{err: err}
 		}
-		// Help topics and the help command only print help, so they neither
+		// Help, version, and completion only print metadata, so they neither
 		// create the log file nor warn when it cannot be opened.
-		if isHelpTopic(cmd) || cmd.Name() == "help" {
+		if cmd == root || isHelpTopic(cmd) || cmd.Name() == "help" || cmd.Parent().Name() == "completion" || cmd.Name() == "completion" {
 			return nil
 		}
 

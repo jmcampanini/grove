@@ -274,9 +274,8 @@ func writeOutputFile(path string, overwrite bool, write func(io.Writer) error) e
 // publishOutputFile moves the finished temporary file to path. With
 // overwrite it renames the file over path. Without it, link gives path a
 // second name for the file, which fails instead of replacing a file that
-// appeared since the command checked. A file system without hard links,
-// such as exFAT or an SMB share, falls back to checking path again and
-// renaming.
+// appeared since the command checked. A file system without hard links
+// fails rather than risk overwriting a concurrently created destination.
 func publishOutputFile(tmpPath, path string, overwrite bool, link func(oldname, newname string) error) error {
 	if overwrite {
 		if err := os.Rename(tmpPath, path); err != nil {
@@ -293,17 +292,7 @@ func publishOutputFile(tmpPath, path string, overwrite bool, link func(oldname, 
 		return fmt.Errorf("output file %q already exists; pass --overwrite to replace it", path)
 	}
 
-	_, statErr := os.Lstat(path)
-	switch {
-	case statErr == nil:
-		return fmt.Errorf("output file %q already exists; pass --overwrite to replace it", path)
-	case !errors.Is(statErr, fs.ErrNotExist):
-		return fmt.Errorf("failed to check output file %q: %w", path, statErr)
-	}
-	if err := os.Rename(tmpPath, path); err != nil {
-		return fmt.Errorf("failed to write output file %q: %w", path, err)
-	}
-	return nil
+	return fmt.Errorf("cannot publish output file %q without replacing an existing path; use a file system with hard links, or --overwrite if replacement is intended: %w", path, err)
 }
 
 // syncFile is the part of *os.File that writeAndClose uses.
@@ -365,7 +354,9 @@ instead of stdout. It refuses a path that already exists unless
 --overwrite is selected, which replaces the file at path or creates it.
 The output is written to a temporary file in the same directory, named
 .<file name>.tmp-<random>, and moved to path only when complete, so a
-failed run leaves path unchanged.`
+failed run leaves path unchanged. Without --overwrite, the destination's
+file system must support hard links; if it does not, publication fails
+without changing path. Select --overwrite only when replacement is intended.`
 )
 
 // helpListScope documents --limit, --all, and --cursor for a list command

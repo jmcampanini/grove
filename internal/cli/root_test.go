@@ -273,14 +273,13 @@ func commandChildrenByName(cmd *cobra.Command) map[string]*cobra.Command {
 func TestEveryCommandDeclaresItsGrammar(t *testing.T) {
 	root := newTestRootCommand()
 	assert.Nil(t, root.Args, "the root leaves Args unset so Cobra rejects unknown commands")
+	assert.Empty(t, root.Version, "version output belongs to Grove")
+	assert.NotNil(t, root.Flags().Lookup("version"), "the root registers its own version flag")
 	assert.True(t, root.DisableSuggestions)
 
 	var visit func(cmd *cobra.Command)
 	visit = func(cmd *cobra.Command) {
 		for _, child := range cmd.Commands() {
-			if child.Name() == "help" || child.Name() == "completion" || strings.HasPrefix(child.Name(), "__") {
-				continue
-			}
 			path := child.CommandPath()
 			assert.NotNilf(t, child.Args, "%s must declare an Args validator", path)
 			assert.Nilf(t, child.Run, "%s must use RunE, not Run", path)

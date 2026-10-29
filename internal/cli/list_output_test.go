@@ -325,14 +325,16 @@ func TestWriteOutputFile(t *testing.T) {
 func TestPublishOutputFileWithoutHardLinks(t *testing.T) {
 	noLinks := func(string, string) error { return errors.ErrUnsupported }
 
-	t.Run("renames into a missing path", func(t *testing.T) {
+	t.Run("leaves a missing path absent", func(t *testing.T) {
 		dir := t.TempDir()
 		tmp, path := filepath.Join(dir, ".out.json.tmp-x"), filepath.Join(dir, "out.json")
 		require.NoError(t, os.WriteFile(tmp, []byte("new\n"), 0o600))
 
-		require.NoError(t, publishOutputFile(tmp, path, false, noLinks))
-		assertFileContent(t, path, "new\n")
-		assert.NoFileExists(t, tmp)
+		err := publishOutputFile(tmp, path, false, noLinks)
+
+		require.ErrorIs(t, err, errors.ErrUnsupported)
+		assert.NoFileExists(t, path)
+		assertFileContent(t, tmp, "new\n")
 	})
 
 	t.Run("refuses a path that appeared since the check", func(t *testing.T) {
@@ -342,7 +344,7 @@ func TestPublishOutputFileWithoutHardLinks(t *testing.T) {
 		require.NoError(t, os.WriteFile(path, []byte("old\n"), 0o600))
 
 		err := publishOutputFile(tmp, path, false, noLinks)
-		require.ErrorContains(t, err, "already exists; pass --overwrite to replace it")
+		require.ErrorIs(t, err, errors.ErrUnsupported)
 		assertFileContent(t, path, "old\n")
 	})
 }

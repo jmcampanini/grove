@@ -27,10 +27,10 @@ The reset discards every uncommitted change and every local commit the
 tracking branch does not have. When the worktree has uncommitted changes,
 the git status is printed and a confirmation prompt is shown; declining
 prints "Sync aborted." on stdout and exits 0. The prompt reads stdin and
-draws on stderr and needs a terminal on both (with TERM=dumb it becomes a
-line-based prompt on stdin and stdout instead), so a script passes
---force, which discards the changes without asking. A branch without a
-tracking branch is reported on stdout and left alone.
+draws on stderr. It needs terminals on both streams with TERM set, or
+TERM=dumb for accessible line-based input without cursor control. A script
+can pass --force, which discards the changes without asking. A branch
+without a tracking branch is reported on stdout and left alone.
 
 ` + helpFailure,
 		Args:    cobra.NoArgs,

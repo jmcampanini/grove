@@ -36,12 +36,12 @@ A worktree is a candidate when:
 The main worktree and locked worktrees are never candidates; locked ones
 are listed on stdout and skipped. The command works only interactively:
 a selection prompt and a confirmation prompt read stdin and draw on
-stderr, and both need a terminal (with TERM=dumb they become line-based
-prompts on stdin and stdout instead). Removal is forced, so uncommitted
-changes in a selected worktree are discarded and an unmerged branch is
-deleted. Each selection is checked again right before removal and skipped
-when its state changed. Results go to stdout as a styled table; declining
-a prompt prints nothing or "Aborted." and exits 0.
+stderr. Both streams need terminals with TERM set, or TERM=dumb for
+accessible line-based input without cursor control. Removal is forced, so
+uncommitted changes in a selected worktree are discarded and an unmerged
+branch is deleted. Each selection is checked again right before removal
+and skipped when its state changed. Results go to stdout as a styled table;
+declining a prompt prints nothing or "Aborted." and exits 0.
 
 ` + helpGHUncached + `
 
@@ -96,7 +96,7 @@ const prunePromptGuidance = "run grove prune in a terminal"
 func (services commandServices) runPrune(cmd *cobra.Command, _ []string) error {
 	// The command is interactive only, so the terminal its prompts need is
 	// checked before configuration, git, or gh run.
-	if err := checkPromptTerminal(os.Stdin, promptOutput(), prunePromptGuidance); err != nil {
+	if err := checkPromptTerminal(os.Stdin, os.Stderr, prunePromptGuidance); err != nil {
 		return err
 	}
 

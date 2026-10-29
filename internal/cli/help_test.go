@@ -51,7 +51,7 @@ func TestRootHelpEndsWithGroupBlock(t *testing.T) {
 	var out bytes.Buffer
 	root.SetOut(&out)
 	require.NoError(t, root.Help())
-	assert.Contains(t, out.String(), "Help Topics")
+	assert.Contains(t, out.String(), "Help topics:")
 	var topics int
 	for _, child := range root.Commands() {
 		if isHelpTopic(child) {
@@ -101,9 +101,6 @@ func TestConfigHelpDocumentsEveryKey(t *testing.T) {
 func TestEveryApplicationCommandMeetsTheHelpBaseline(t *testing.T) {
 	var visit func(*cobra.Command)
 	visit = func(cmd *cobra.Command) {
-		if cmd.Name() == "help" || cmd.Name() == "completion" {
-			return
-		}
 		path := cmd.CommandPath()
 		assert.NotEmptyf(t, strings.TrimSpace(cmd.Short), "%s has no short help", path)
 		assert.NotEmptyf(t, strings.TrimSpace(cmd.Long), "%s has no long help", path)
@@ -132,4 +129,79 @@ func TestEveryApplicationCommandMeetsTheHelpBaseline(t *testing.T) {
 		}
 	}
 	visit(newTestRootCommand())
+}
+
+func TestHelpPrintsCommandHelp(t *testing.T) {
+	for _, path := range [][]string{nil, {"pr", "list"}, {"help"}} {
+		t.Run(strings.Join(path, " "), func(t *testing.T) {
+			want, _, err := executeForTest(append(path, "--help")...)
+			require.NoError(t, err)
+
+			got, stderr, err := executeForTest(append([]string{"help"}, path...)...)
+
+			require.NoError(t, err)
+			assert.Empty(t, stderr)
+			assert.Equal(t, want, got)
+		})
+	}
+}
+
+func TestHelpRejectsUnknownCommandPaths(t *testing.T) {
+	for _, args := range [][]string{
+		{"help", "nope"},
+		{"help", "pr", "nope"},
+		{"help", "pr", "list", "nope"},
+		{"help", "--", "--nope"},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			stdout, stderr, err := executeForTest(args...)
+
+			require.ErrorContains(t, err, "unknown command")
+			assert.Equal(t, exitUsage, exitStatus(err))
+			assert.Empty(t, stdout)
+			assert.Empty(t, stderr)
+		})
+	}
+}
+
+func TestHelpCompletesCommandPaths(t *testing.T) {
+	tests := []struct {
+		args []string
+		want []string
+	}{
+		{args: []string{"co"}, want: []string{"completion", "config"}},
+		{args: []string{"he"}, want: []string{"help"}},
+		{args: []string{"pr", ""}, want: []string{"checkout", "list", "preview"}},
+		{args: []string{"pr", "list", ""}},
+		{args: []string{"pr", "unknown", ""}},
+	}
+	for _, tt := range tests {
+		t.Run(strings.Join(tt.args, " "), func(t *testing.T) {
+			stdout, _, err := executeForTest(append([]string{"__complete", "help"}, tt.args...)...)
+			require.NoError(t, err)
+
+			lines := strings.Split(strings.TrimSuffix(stdout, "\n"), "\n")
+			assert.Equal(t, ":4", lines[len(lines)-1], "help completion must disable file completion")
+			var names []string
+			for _, line := range lines[:len(lines)-1] {
+				name, _, _ := strings.Cut(line, "\t")
+				names = append(names, name)
+			}
+			assert.Equal(t, tt.want, names)
+		})
+	}
+}
+
+func TestHelpReturnsOutputErrors(t *testing.T) {
+	for _, args := range [][]string{nil, {"--help"}, {"help", "pr", "list"}, {"completion"}, {"exit-codes"}} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			var stderr bytes.Buffer
+
+			err := executeWithFileLogging(strings.NewReader(""), failingWriter{}, &stderr, args)
+
+			require.ErrorIs(t, err, errWriteFailed)
+			assert.Equal(t, exitFailure, exitStatus(err))
+			assert.Empty(t, stderr.String(), "the entrypoint reports the returned failure once")
+		})
+	}
 }
