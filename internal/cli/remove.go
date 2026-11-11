@@ -43,8 +43,8 @@ main worktree cannot be removed. Nothing prompts.
 			return services.runRemove(cmd, args, force, keepBranch)
 		},
 	}
-	cmd.Flags().BoolVar(&force, "force", false, "Discard uncommitted changes and delete an unmerged branch")
-	cmd.Flags().BoolVar(&keepBranch, "keep-branch", false, "Keep the local branch after removing the worktree")
+	cmd.Flags().BoolVar(&force, "force", false, "Discard changes and delete an unmerged branch")
+	cmd.Flags().BoolVar(&keepBranch, "keep-branch", false, "Keep the worktree's local branch")
 	return cmd
 }
 
