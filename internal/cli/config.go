@@ -147,7 +147,7 @@ a rendered worktree name follows the space rules above.
 			return runConfig(cmd, provenance)
 		},
 	}
-	cmd.Flags().BoolVar(&provenance, "provenance", false, "Append the source of each value as TOML comments")
+	cmd.Flags().BoolVar(&provenance, "provenance", false, "Append each value's source as TOML comments")
 	cmd.Flags().BoolVar(&provenance, "sources", false, "Alias for --provenance")
 	return cmd
 }

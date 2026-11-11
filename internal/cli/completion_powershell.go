@@ -25,6 +25,6 @@ func newCompletionPowerShellCmd() *cobra.Command {
 		},
 		ValidArgsFunction: cobra.NoFileCompletions,
 	}
-	cmd.Flags().BoolVar(&noDescriptions, "no-descriptions", false, "Omit descriptions from completion suggestions")
+	cmd.Flags().BoolVar(&noDescriptions, "no-descriptions", false, "Omit descriptions from suggestions")
 	return cmd
 }

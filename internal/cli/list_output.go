@@ -48,7 +48,7 @@ type listFlags struct {
 
 func (f *listFlags) register(cmd *cobra.Command) {
 	flags := cmd.Flags()
-	flags.BoolVar(&f.fzf, "fzf", false, "Print <number>\\t<searchable>\\t<display> lines for fzf")
+	flags.BoolVar(&f.fzf, "fzf", false, "Print <number>\\t<searchable>\\t<display> for fzf")
 	flags.BoolVar(&f.json, "json", false, "Write one JSON object holding the records")
 	flags.BoolVar(&f.jsonl, "jsonl", false, "Write one JSON object per record per line")
 	flags.BoolVar(&f.csv, "csv", false, "Write CSV with a header line")

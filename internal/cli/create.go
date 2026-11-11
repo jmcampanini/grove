@@ -58,9 +58,9 @@ To check out an existing pull request, use grove pr checkout.`,
 		GroupID: "worktree",
 		RunE:    services.runCreate,
 	}
-	cmd.Flags().String("from", "", "Git ref to start the branch from (default HEAD)")
-	cmd.Flags().Bool("from-remote-primary", false, "Start from the fetched remote primary branch")
-	cmd.Flags().Bool("reuse", false, "Reuse the branch and worktree the phrase names")
+	cmd.Flags().String("from", "", "Git ref to start from (default HEAD)")
+	cmd.Flags().Bool("from-remote-primary", false, "Start from the fetched remote primary")
+	cmd.Flags().Bool("reuse", false, "Reuse an existing branch and worktree")
 	cmd.MarkFlagsMutuallyExclusive("from", "from-remote-primary", "reuse")
 	return cmd
 }

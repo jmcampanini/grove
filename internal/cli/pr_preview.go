@@ -34,7 +34,7 @@ clickable terminal hyperlinks. Only open links from PRs/authors you trust.
 			return services.runPRPreview(cmd, args, fzf)
 		},
 	}
-	cmd.Flags().BoolVar(&fzf, "fzf", false, "Print a failure on stdout and exit 0 (fzf preview pane mode)")
+	cmd.Flags().BoolVar(&fzf, "fzf", false, "Print a failure on stdout and exit 0 (fzf preview)")
 	return cmd
 }
 
