@@ -35,16 +35,14 @@ on stderr. Nothing prompts.
 
 ` + helpWorktreeCreate + `
 
-` + helpGHUncached + `
+` + helpGH + `
 
 ` + helpFailure + `
 
 To check out an existing pull request instead, use grove pr checkout.`,
-		Example: `  grove issue start 17
-  grove issue list --fzf | fzf --delimiter '\t' --with-nth 3 --accept-nth 1 \
-    | xargs grove issue start`,
-		Args: numberArgs("issue"),
-		RunE: services.runIssueStart,
+		Example: `  grove issue start 17`,
+		Args:    numberArgs("issue"),
+		RunE:    services.runIssueStart,
 	}
 }
 
@@ -61,7 +59,7 @@ func (services commandServices) runIssueStart(cmd *cobra.Command, args []string)
 
 	ctx := &issueStartContext{
 		cfg:       rt.Config,
-		ghClient:  rt.NewUncachedGitHubClient(),
+		ghClient:  rt.NewGitHubClient(),
 		gitClient: rt.GitClient,
 		logger:    rt.Logger,
 	}

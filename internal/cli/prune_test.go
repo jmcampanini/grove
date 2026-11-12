@@ -81,7 +81,6 @@ func TestFindPrunable(t *testing.T) {
 				{
 					AbsPath:    filepath.Join(workspace, "wt-gone"),
 					BranchName: "feature/gone",
-					Kind:       "local",
 					Tracking:   worktree.TrackingInfo{Upstream: "origin/feature/gone"},
 				},
 			},
@@ -96,7 +95,6 @@ func TestFindPrunable(t *testing.T) {
 				{
 					AbsPath:    filepath.Join(workspace, "wt-keep"),
 					BranchName: "feature/keep",
-					Kind:       "local",
 					Tracking:   worktree.TrackingInfo{Upstream: "origin/feature/keep"},
 				},
 			},
@@ -143,7 +141,6 @@ func TestFindPrunable(t *testing.T) {
 				{
 					AbsPath:    filepath.Join(workspace, "wt-gone"),
 					BranchName: "feature/gone",
-					Kind:       "local",
 					Tracking:   worktree.TrackingInfo{Upstream: "origin/feature/gone"},
 				},
 			},
@@ -207,7 +204,7 @@ func TestFindPrunableCapturesLocalState(t *testing.T) {
 func TestExecutePruneFailsBeforePromptWhenGitHubUnavailable(t *testing.T) {
 	path := t.TempDir()
 	commit := git.NewCommit("abc123", "test", time.Unix(0, 0), "tester")
-	branch := git.NewLocalBranch("feature/test", "origin/feature/test", path, true, 0, 0, commit)
+	branch := git.NewLocalBranch("feature/test", "origin/feature/test", path, true, commit)
 	gitMock := &mockGit{
 		isWorktreeDirtyFn: func(string) (bool, error) { return false, nil },
 		listLocalBranchesFn: func() ([]git.LocalBranch, error) {
@@ -235,7 +232,7 @@ func TestExecutePruneFailsBeforePromptWhenGitHubUnavailable(t *testing.T) {
 func TestExecutePruneReportsLockedWorktree(t *testing.T) {
 	path := t.TempDir()
 	commit := git.NewCommit("abc123", "test", time.Unix(0, 0), "tester")
-	branch := git.NewLocalBranch("feature/test", "", path, true, 0, 0, commit)
+	branch := git.NewLocalBranch("feature/test", "", path, true, commit)
 	gitMock := &mockGit{
 		listLocalBranchesFn: func() ([]git.LocalBranch, error) {
 			return []git.LocalBranch{branch}, nil
@@ -453,7 +450,7 @@ func TestRevalidatePrunable(t *testing.T) {
 				return git.NewCommit(currentHead, "test", time.Unix(0, 0), "tester")
 			}
 			makeBranch := func() git.LocalBranch {
-				return git.NewLocalBranch(currentBranch, currentUpstream, path, true, 0, 0, makeCommit())
+				return git.NewLocalBranch(currentBranch, currentUpstream, path, true, makeCommit())
 			}
 
 			gitMock := &mockGit{

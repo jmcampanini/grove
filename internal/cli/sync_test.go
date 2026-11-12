@@ -26,7 +26,7 @@ func TestExecuteSync(t *testing.T) {
 				getCurrentBranchFn: func() (string, error) { return "feature/my-branch", nil },
 				listLocalBranchesFn: func() ([]git.LocalBranch, error) {
 					return []git.LocalBranch{
-						git.NewLocalBranch("feature/my-branch", "origin/feature/my-branch", "", true, 0, 0, git.Commit{}),
+						git.NewLocalBranch("feature/my-branch", "origin/feature/my-branch", "", true, git.Commit{}),
 					}, nil
 				},
 				fetchRemoteFn:     func(string) (string, error) { return "", nil },
@@ -50,7 +50,7 @@ func TestExecuteSync(t *testing.T) {
 				getCurrentBranchFn: func() (string, error) { return "local-only", nil },
 				listLocalBranchesFn: func() ([]git.LocalBranch, error) {
 					return []git.LocalBranch{
-						git.NewLocalBranch("local-only", "", "", true, 0, 0, git.Commit{}),
+						git.NewLocalBranch("local-only", "", "", true, git.Commit{}),
 					}, nil
 				},
 			},
@@ -63,7 +63,7 @@ func TestExecuteSync(t *testing.T) {
 				getCurrentBranchFn: func() (string, error) { return "main", nil },
 				listLocalBranchesFn: func() ([]git.LocalBranch, error) {
 					return []git.LocalBranch{
-						git.NewLocalBranch("main", "origin/main", "", true, 0, 0, git.Commit{}),
+						git.NewLocalBranch("main", "origin/main", "", true, git.Commit{}),
 					}, nil
 				},
 				fetchRemoteFn:     func(string) (string, error) { return "", nil },
@@ -79,7 +79,7 @@ func TestExecuteSync(t *testing.T) {
 				getCurrentBranchFn: func() (string, error) { return "main", nil },
 				listLocalBranchesFn: func() ([]git.LocalBranch, error) {
 					return []git.LocalBranch{
-						git.NewLocalBranch("main", "origin/main", "", true, 0, 0, git.Commit{}),
+						git.NewLocalBranch("main", "origin/main", "", true, git.Commit{}),
 					}, nil
 				},
 				fetchRemoteFn: func(string) (string, error) { return "", errors.New("network error") },
@@ -93,7 +93,7 @@ func TestExecuteSync(t *testing.T) {
 				getCurrentBranchFn: func() (string, error) { return "feature/x", nil },
 				listLocalBranchesFn: func() ([]git.LocalBranch, error) {
 					return []git.LocalBranch{
-						git.NewLocalBranch("main", "origin/main", "", false, 0, 0, git.Commit{}),
+						git.NewLocalBranch("main", "origin/main", "", false, git.Commit{}),
 					}, nil
 				},
 			},
@@ -105,7 +105,7 @@ func TestExecuteSync(t *testing.T) {
 				getCurrentBranchFn: func() (string, error) { return "main", nil },
 				listLocalBranchesFn: func() ([]git.LocalBranch, error) {
 					return []git.LocalBranch{
-						git.NewLocalBranch("main", "origin/main", "", true, 0, 0, git.Commit{}),
+						git.NewLocalBranch("main", "origin/main", "", true, git.Commit{}),
 					}, nil
 				},
 				fetchRemoteFn:     func(string) (string, error) { return "", nil },
@@ -122,7 +122,7 @@ func TestExecuteSync(t *testing.T) {
 				getCurrentBranchFn: func() (string, error) { return "feature/my-branch", nil },
 				listLocalBranchesFn: func() ([]git.LocalBranch, error) {
 					return []git.LocalBranch{
-						git.NewLocalBranch("feature/my-branch", "origin/feature/my-branch", "", true, 0, 0, git.Commit{}),
+						git.NewLocalBranch("feature/my-branch", "origin/feature/my-branch", "", true, git.Commit{}),
 					}, nil
 				},
 				fetchRemoteFn: func(string) (string, error) { return "", nil },
@@ -137,7 +137,7 @@ func TestExecuteSync(t *testing.T) {
 				getCurrentBranchFn: func() (string, error) { return "feature/my-branch", nil },
 				listLocalBranchesFn: func() ([]git.LocalBranch, error) {
 					return []git.LocalBranch{
-						git.NewLocalBranch("feature/my-branch", "origin/feature/my-branch", "", true, 0, 0, git.Commit{}),
+						git.NewLocalBranch("feature/my-branch", "origin/feature/my-branch", "", true, git.Commit{}),
 					}, nil
 				},
 				fetchRemoteFn: func(string) (string, error) { return "", nil },
@@ -152,7 +152,7 @@ func TestExecuteSync(t *testing.T) {
 				getCurrentBranchFn: func() (string, error) { return "feature/my-branch", nil },
 				listLocalBranchesFn: func() ([]git.LocalBranch, error) {
 					return []git.LocalBranch{
-						git.NewLocalBranch("feature/my-branch", "origin/feature/my-branch", "", true, 0, 0, git.Commit{}),
+						git.NewLocalBranch("feature/my-branch", "origin/feature/my-branch", "", true, git.Commit{}),
 					}, nil
 				},
 				fetchRemoteFn:     func(string) (string, error) { return "", nil },

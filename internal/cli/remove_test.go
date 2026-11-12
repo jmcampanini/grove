@@ -14,7 +14,7 @@ import (
 
 func testWorktreeWithBranch(path, branchName string) git.Worktree {
 	commit := git.NewCommit("abc123", "test", time.Now(), "tester")
-	branch := git.NewLocalBranch(branchName, "", path, true, 0, 0, commit)
+	branch := git.NewLocalBranch(branchName, "", path, true, commit)
 	return git.Worktree{AbsolutePath: path, Ref: &branch}
 }
 

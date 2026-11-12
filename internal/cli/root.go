@@ -48,11 +48,11 @@ It creates a branch and worktree from a phrase, a pull request, or an
 issue, and lists, syncs, and prunes the worktrees it finds.
 
 Grove runs git for every command that reads or changes a repository, and
-gh for the pr and issue commands, prune, and the pull request column of
-status. gh must already be authenticated: grove disables the interactive
-prompts of both programs. Each git and gh command is subject to
-git.timeout, and its captured stdout and stderr are each capped at 8 MiB;
-exceeding either limit fails the command.
+gh for the pr and issue commands and prune. gh must already be
+authenticated: grove disables the interactive prompts of both programs.
+Each git and gh command is subject to git.timeout, and its captured stdout
+and stderr are each capped at 8 MiB; exceeding either limit fails the
+command.
 
 Configuration comes from TOML files and the --space and
 --worktree-template flags; run grove config --help for the file locations,
@@ -61,8 +61,7 @@ precedence, and every key.
 Styled output follows --color. auto, the default, colors a stream only
 when that stream is a terminal, TERM is not dumb, and NO_COLOR is empty;
 always and never override both the detection and NO_COLOR. Help, version,
-config, list, and the --fzf, --json, --jsonl, and --csv output of pr list
-and issue list are never styled.
+config, and list are never styled.
 
 Logs are appended to $XDG_STATE_HOME/grove/grove.log
 (~/.local/state/grove/grove.log when XDG_STATE_HOME is unset). Logging starts
@@ -85,11 +84,10 @@ Common tasks:
   Check out a branch:        grove checkout feature/fix-login
   Check out a pull request:  grove pr checkout 42
   Work on an issue:          grove issue start 17
-  See every worktree:        grove status
+  See every worktree:        grove list
   Remove stale worktrees:    grove prune
 
 Command groups:
-  cache       The on-disk cache of gh output:          grove cache --help
   completion  Shell completion scripts:               grove completion --help
   issue       GitHub issues and their worktrees:       grove issue --help
   namer       Branch and worktree names from a phrase: grove namer --help
@@ -138,8 +136,6 @@ Command groups:
 
 	services := commandServices{loadRuntime: loadCommandRuntime}
 	root.AddCommand(
-		newCacheCmd(services),
-		newCatchupCmd(services),
 		newCheckoutCmd(services),
 		newConfigCmd(services),
 		newCreateCmd(services),
@@ -153,7 +149,6 @@ Command groups:
 		newPruneCmd(services),
 		newRemoveCmd(services),
 		newResolveCmd(services),
-		newStatusCmd(services),
 		newSyncCmd(services),
 	)
 	markUsageErrors(root)

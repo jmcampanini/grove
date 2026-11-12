@@ -43,7 +43,7 @@ branch is deleted. Each selection is checked again right before removal
 and skipped when its state changed. Results go to stdout as a styled table;
 declining a prompt prints nothing or "Aborted." and exits 0.
 
-` + helpGHUncached + `
+` + helpGH + `
 
 ` + helpFailure,
 		Args:    cobra.NoArgs,
@@ -106,7 +106,7 @@ func (services commandServices) runPrune(cmd *cobra.Command, _ []string) error {
 	}
 
 	ctx := &worktree.StatusContext{
-		GitHubClient:     rt.NewUncachedGitHubClient(),
+		GitHubClient:     rt.NewGitHubClient(),
 		GitClient:        git.New(cmd.Context(), false, rt.MainWorktreePath, rt.Config.Git.Timeout, rt.Logger),
 		MainWorktreePath: rt.MainWorktreePath,
 	}
@@ -207,11 +207,6 @@ func buildPruneWorktreeStatus(ctx *worktree.StatusContext, wt git.Worktree, bran
 		return worktree.Status{}, fmt.Errorf("failed to get PR state for branch %q: %w", status.BranchName, err)
 	}
 	status.PR = pr
-	if pr != nil {
-		status.Kind = "PR"
-	} else {
-		status.Kind = "local"
-	}
 	return status, nil
 }
 

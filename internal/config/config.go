@@ -11,7 +11,6 @@ import (
 // Config represents the complete grove configuration.
 type Config struct {
 	Git         GitConfig         `toml:"git"`
-	GitHub      GitHubConfig      `toml:"github"`
 	Issue       IssueConfig       `toml:"issue"`
 	LocalBranch LocalBranchConfig `toml:"local_branch"`
 	Naming      NamingConfig      `toml:"naming"`
@@ -24,9 +23,6 @@ type Config struct {
 func (c Config) Validate() error {
 	if c.Git.Timeout < 0 {
 		return errors.New("git.timeout cannot be negative")
-	}
-	if c.GitHub.PreviewCacheTTL < 0 {
-		return errors.New("github.preview_cache_ttl cannot be negative")
 	}
 	if c.Issue.BranchTemplate == "" {
 		return errors.New("issue.branch_template cannot be empty")
@@ -86,11 +82,6 @@ func ValidateSpace(space string) error {
 // GitConfig configures git command execution.
 type GitConfig struct {
 	Timeout time.Duration `toml:"timeout"` // Timeout for git and gh commands; zero disables the deadline
-}
-
-// GitHubConfig configures GitHub-related behavior.
-type GitHubConfig struct {
-	PreviewCacheTTL time.Duration `toml:"preview_cache_ttl"` // TTL for FZF preview cache (e.g., "5m"); 0 disables
 }
 
 // IssueConfig configures issue naming.

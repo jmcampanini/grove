@@ -106,7 +106,6 @@ func TestFormatWorktree(t *testing.T) {
 					"origin/feature/add-auth",
 					"/ws/wt-add-auth",
 					true,
-					0, 0,
 					git.NewCommit("abc1234def5678", "Add auth", now, "user"),
 				),
 			},
@@ -124,7 +123,6 @@ func TestFormatWorktree(t *testing.T) {
 					"origin/main",
 					"/ws/main",
 					true,
-					0, 0,
 					git.NewCommit("abc1234def5678", "Initial", now, "user"),
 				),
 			},
@@ -193,7 +191,6 @@ func TestFormatWorktree(t *testing.T) {
 					"origin/feature/auth",
 					"/ws/review-42-feature-auth",
 					true,
-					0, 0,
 					git.NewCommit("abc1234def5678", "Add auth", now, "user"),
 				),
 			},
@@ -211,7 +208,6 @@ func TestFormatWorktree(t *testing.T) {
 					"origin/feature/auth",
 					"/ws/42-feature-auth",
 					true,
-					0, 0,
 					git.NewCommit("abc1234def5678", "Add auth", now, "user"),
 				),
 			},
@@ -243,7 +239,6 @@ func TestFormatWorktreeTabSeparation(t *testing.T) {
 			"",
 			"/ws/wt-test",
 			true,
-			0, 0,
 			git.NewCommit("abc1234", "Test", now, "user"),
 		),
 	}
@@ -323,7 +318,7 @@ func TestExecuteList(t *testing.T) {
 	branchWT := func(path, branchName, sha string) git.Worktree {
 		return git.Worktree{
 			AbsolutePath: path,
-			Ref:          git.NewLocalBranch(branchName, "", path, true, 0, 0, commit(sha)),
+			Ref:          git.NewLocalBranch(branchName, "", path, true, commit(sha)),
 		}
 	}
 

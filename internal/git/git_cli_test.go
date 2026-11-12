@@ -84,82 +84,6 @@ func TestSplitIntoBlocks(t *testing.T) {
 }
 
 // =============================================================================
-// parseTrackInfo tests
-// =============================================================================
-
-func TestParseTrackInfo(t *testing.T) {
-	tests := []struct {
-		name       string
-		input      string
-		wantAhead  int
-		wantBehind int
-	}{
-		{
-			name:       "empty string",
-			input:      "",
-			wantAhead:  0,
-			wantBehind: 0,
-		},
-		{
-			name:       "gone upstream",
-			input:      "[gone]",
-			wantAhead:  0,
-			wantBehind: 0,
-		},
-		{
-			name:       "ahead only",
-			input:      "[ahead 5]",
-			wantAhead:  5,
-			wantBehind: 0,
-		},
-		{
-			name:       "behind only",
-			input:      "[behind 3]",
-			wantAhead:  0,
-			wantBehind: 3,
-		},
-		{
-			name:       "ahead and behind",
-			input:      "[ahead 2, behind 4]",
-			wantAhead:  2,
-			wantBehind: 4,
-		},
-		{
-			name:       "large numbers",
-			input:      "[ahead 100, behind 200]",
-			wantAhead:  100,
-			wantBehind: 200,
-		},
-		{
-			name:       "single digit",
-			input:      "[ahead 1]",
-			wantAhead:  1,
-			wantBehind: 0,
-		},
-		{
-			name:       "invalid format",
-			input:      "[invalid]",
-			wantAhead:  0,
-			wantBehind: 0,
-		},
-		{
-			name:       "malformed brackets",
-			input:      "ahead 5",
-			wantAhead:  0,
-			wantBehind: 0,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ahead, behind := parseTrackInfo(tt.input)
-			assert.Equal(t, tt.wantAhead, ahead, "ahead mismatch")
-			assert.Equal(t, tt.wantBehind, behind, "behind mismatch")
-		})
-	}
-}
-
-// =============================================================================
 // parseISO8601Date tests
 // =============================================================================
 
@@ -222,7 +146,6 @@ func TestParseBranchBlock(t *testing.T) {
 				"checkedOut true",
 				"commit abc1234",
 				"upstream origin/main",
-				"track [ahead 2, behind 1]",
 				"committedOn 2024-01-15T10:30:00Z",
 				"committedBy John Doe",
 				"subject Initial commit",
@@ -233,8 +156,6 @@ func TestParseBranchBlock(t *testing.T) {
 				"origin/main",
 				"/home/user/project",
 				true,
-				2,
-				1,
 				NewCommit("abc1234", "Initial commit", time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC), "John Doe"),
 			),
 		},
@@ -254,55 +175,7 @@ func TestParseBranchBlock(t *testing.T) {
 				"",
 				"",
 				false,
-				0,
-				0,
 				NewCommit("def5678", "Add new feature", time.Date(2024, 2, 20, 14, 0, 0, 0, time.UTC), "Jane Smith"),
-			),
-		},
-		{
-			name: "branch with gone upstream",
-			input: []string{
-				"branch stale-branch",
-				"checkedOut false",
-				"commit ghi9012",
-				"upstream origin/deleted-branch",
-				"track [gone]",
-				"committedOn 2024-03-01T09:00:00Z",
-				"committedBy Developer",
-				"subject Some work",
-				"worktreepath ",
-			},
-			want: NewLocalBranch(
-				"stale-branch",
-				"origin/deleted-branch",
-				"",
-				false,
-				0,
-				0,
-				NewCommit("ghi9012", "Some work", time.Date(2024, 3, 1, 9, 0, 0, 0, time.UTC), "Developer"),
-			),
-		},
-		{
-			name: "branch with only ahead",
-			input: []string{
-				"branch dev",
-				"checkedOut true",
-				"commit jkl3456",
-				"upstream origin/dev",
-				"track [ahead 5]",
-				"committedOn 2024-04-10T11:30:00Z",
-				"committedBy Alice",
-				"subject WIP",
-				"worktreepath /workspace/dev",
-			},
-			want: NewLocalBranch(
-				"dev",
-				"origin/dev",
-				"/workspace/dev",
-				true,
-				5,
-				0,
-				NewCommit("jkl3456", "WIP", time.Date(2024, 4, 10, 11, 30, 0, 0, time.UTC), "Alice"),
 			),
 		},
 		{
@@ -321,15 +194,13 @@ func TestParseBranchBlock(t *testing.T) {
 				"",
 				"",
 				false,
-				0,
-				0,
 				NewCommit("xyz000", "Test", time.Time{}, "Unknown"),
 			),
 		},
 		{
 			name:  "empty input",
 			input: []string{},
-			want:  NewLocalBranch("", "", "", false, 0, 0, NewCommit("", "", time.Time{}, "")),
+			want:  NewLocalBranch("", "", "", false, NewCommit("", "", time.Time{}, "")),
 		},
 		{
 			name: "branch with slash in name",
@@ -347,8 +218,6 @@ func TestParseBranchBlock(t *testing.T) {
 				"",
 				"",
 				false,
-				0,
-				0,
 				NewCommit("abc123", "Feature work", time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC), "Dev"),
 			),
 		},
@@ -361,8 +230,6 @@ func TestParseBranchBlock(t *testing.T) {
 			assert.Equal(t, tt.want.UpstreamName, got.UpstreamName)
 			assert.Equal(t, tt.want.WorktreeAbsolutePath, got.WorktreeAbsolutePath)
 			assert.Equal(t, tt.want.IsCheckedOut, got.IsCheckedOut)
-			assert.Equal(t, tt.want.Ahead, got.Ahead)
-			assert.Equal(t, tt.want.Behind, got.Behind)
 			assert.Equal(t, tt.want.Commit().SHA, got.Commit().SHA)
 			assert.Equal(t, tt.want.Commit().Subject, got.Commit().Subject)
 			assert.Equal(t, tt.want.Commit().CommittedBy, got.Commit().CommittedBy)
@@ -858,9 +725,9 @@ func TestParseWorktreeBlock(t *testing.T) {
 	g := newTestCLI()
 
 	// Setup branch and tag maps for tests
-	mainBranch := NewLocalBranch("main", "", "/home/user/project", true, 0, 0,
+	mainBranch := NewLocalBranch("main", "", "/home/user/project", true,
 		NewCommit("abc1234567890abcdef1234567890abcdef12345", "Initial", time.Time{}, "John"))
-	featureBranch := NewLocalBranch("feature", "", "/home/user/feature", true, 0, 0,
+	featureBranch := NewLocalBranch("feature", "", "/home/user/feature", true,
 		NewCommit("def5678901234567890abcdef1234567890abcde", "Feature", time.Time{}, "Jane"))
 
 	branchMap := map[string]LocalBranch{
@@ -999,7 +866,7 @@ func TestParseWorktreeBlock(t *testing.T) {
 func TestParseWorktreeBlockUsesPorcelainHead(t *testing.T) {
 	g := newTestCLI()
 	branchCommit := NewCommit("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "Earlier", time.Time{}, "Jane")
-	branch := NewLocalBranch("feature", "", "/home/user/feature", true, 0, 0, branchCommit)
+	branch := NewLocalBranch("feature", "", "/home/user/feature", true, branchCommit)
 	porcelainHead := "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 
 	worktree, err := g.parseWorktreeBlock([]string{
@@ -1097,7 +964,7 @@ func TestTag_Date(t *testing.T) {
 
 func TestWorktreeRef_Type(t *testing.T) {
 	commit := NewCommit("abc123", "Subject", time.Now(), "Author")
-	branch := NewLocalBranch("main", "", "", true, 0, 0, commit)
+	branch := NewLocalBranch("main", "", "", true, commit)
 	tag := NewTag("v1.0.0", commit, "Msg", "Tagger", "t@e.com", time.Now())
 
 	assert.Equal(t, WorktreeRefTypeCommit, commit.Type())
@@ -1107,7 +974,7 @@ func TestWorktreeRef_Type(t *testing.T) {
 
 func TestWorktreeRef_FullBranch(t *testing.T) {
 	commit := NewCommit("abc123", "Subject", time.Now(), "Author")
-	branch := NewLocalBranch("main", "", "", true, 0, 0, commit)
+	branch := NewLocalBranch("main", "", "", true, commit)
 	tag := NewTag("v1.0.0", commit, "Msg", "Tagger", "t@e.com", time.Now())
 
 	b, ok := commit.FullBranch()
@@ -1126,7 +993,7 @@ func TestWorktreeRef_FullBranch(t *testing.T) {
 
 func TestWorktreeRef_FullTag(t *testing.T) {
 	commit := NewCommit("abc123", "Subject", time.Now(), "Author")
-	branch := NewLocalBranch("main", "", "", true, 0, 0, commit)
+	branch := NewLocalBranch("main", "", "", true, commit)
 	tag := NewTag("v1.0.0", commit, "Msg", "Tagger", "t@e.com", time.Now())
 
 	tg, ok := commit.FullTag()

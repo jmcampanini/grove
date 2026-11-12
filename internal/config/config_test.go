@@ -17,7 +17,6 @@ func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
 
 	assert.Equal(t, 5*time.Second, cfg.Git.Timeout)
-	assert.Equal(t, 5*time.Minute, cfg.GitHub.PreviewCacheTTL)
 	assert.Equal(t, IssueConfig{
 		BranchTemplate:   "issue/{{.Number}}-{{.TitleSlug}}",
 		WorktreeTemplate: "is-{{.Number}}-{{.TitleSlug}}",
@@ -62,13 +61,6 @@ func TestConfig_Validate(t *testing.T) {
 				cfg.Git.Timeout = -time.Second
 			},
 			wantErr: "git.timeout cannot be negative",
-		},
-		{
-			name: "negative GitHub preview cache TTL",
-			modify: func(cfg *Config) {
-				cfg.GitHub.PreviewCacheTTL = -time.Second
-			},
-			wantErr: "github.preview_cache_ttl cannot be negative",
 		},
 		{
 			name: "empty issue branch template",
@@ -430,24 +422,6 @@ timeout = "10s"
 			},
 		},
 		{
-			name: "GitHub preview cache TTL",
-			content: `[github]
-preview_cache_ttl = "10m"
-`,
-			check: func(t *testing.T, cfg Config) {
-				assert.Equal(t, 10*time.Minute, cfg.GitHub.PreviewCacheTTL)
-			},
-		},
-		{
-			name: "zero GitHub preview cache TTL",
-			content: `[github]
-preview_cache_ttl = "0s"
-`,
-			check: func(t *testing.T, cfg Config) {
-				assert.Zero(t, cfg.GitHub.PreviewCacheTTL)
-			},
-		},
-		{
 			name: "issue and pull request templates",
 			content: `[issue]
 branch_template = "ticket/{{.Number}}-{{.TitleSlug}}"
@@ -603,13 +577,6 @@ func TestLoad_InvalidConfig(t *testing.T) {
 timeout = "-5s"
 `,
 			wantErr: "git.timeout cannot be negative",
-		},
-		{
-			name: "negative GitHub preview cache TTL",
-			content: `[github]
-preview_cache_ttl = "-1s"
-`,
-			wantErr: "github.preview_cache_ttl cannot be negative",
 		},
 		{
 			name: "negative naming max length",

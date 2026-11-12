@@ -17,7 +17,7 @@ import (
 const testTimeout = 30 * time.Second
 
 func TestNew(t *testing.T) {
-	gh := New(context.Background(), "/some/path", 60*time.Second, nil, nil)
+	gh := New(context.Background(), "/some/path", 60*time.Second, nil)
 
 	require.NotNil(t, gh)
 
@@ -38,20 +38,17 @@ func TestGhOnPath(t *testing.T) {
 
 func TestCLIGetIssue(t *testing.T) {
 	argsPath := installRecordingGh(t, 0, `{
-		"author": {"login": "alice"},
-		"comments": [{"author": {"login": "bob"}, "body": "Reproduced."}],
 		"number": 17,
 		"state": "OPEN",
 		"title": "Fix login crash"
 	}`)
-	gh := New(context.Background(), t.TempDir(), testTimeout, nil, nil)
+	gh := New(context.Background(), t.TempDir(), testTimeout, nil)
 
 	issue, err := gh.GetIssue(17)
 
 	require.NoError(t, err)
 	assert.Equal(t, 17, issue.Number)
 	assert.Equal(t, "Fix login crash", issue.Title)
-	assert.Equal(t, []IssueComment{{AuthorLogin: "bob", Body: "Reproduced."}}, issue.Comments)
 	args := recordedArgs(t, argsPath)
 	assert.Equal(t, []string{"issue", "view", "17"}, args[:3])
 	assert.Equal(t, issueViewJSONFields, flagValue(args, "--json"))
@@ -59,7 +56,7 @@ func TestCLIGetIssue(t *testing.T) {
 
 func TestCLIGetIssueFailure(t *testing.T) {
 	installRecordingGh(t, 1, "")
-	gh := New(context.Background(), t.TempDir(), testTimeout, nil, nil)
+	gh := New(context.Background(), t.TempDir(), testTimeout, nil)
 
 	_, err := gh.GetIssue(17)
 
@@ -69,25 +66,22 @@ func TestCLIGetIssueFailure(t *testing.T) {
 
 func TestCLIGetPullRequest(t *testing.T) {
 	argsPath := installRecordingGh(t, 0, `{
-		"author": {"login": "alice"},
-		"files": [{"additions": 3, "deletions": 1, "path": "main.go"}],
 		"headRefName": "feature/login",
 		"isDraft": false,
 		"number": 42,
 		"state": "OPEN",
 		"title": "Fix login"
 	}`)
-	gh := New(context.Background(), t.TempDir(), testTimeout, nil, nil)
+	gh := New(context.Background(), t.TempDir(), testTimeout, nil)
 
 	pr, err := gh.GetPullRequest(42)
 
 	require.NoError(t, err)
 	assert.Equal(t, 42, pr.Number)
 	assert.Equal(t, "feature/login", pr.BranchName)
-	assert.Equal(t, []PullRequestFile{{Additions: 3, Deletions: 1, Path: "main.go"}}, pr.Files)
 	args := recordedArgs(t, argsPath)
 	assert.Equal(t, []string{"pr", "view", "42"}, args[:3])
-	assert.Contains(t, flagValue(args, "--json"), "files")
+	assert.Equal(t, prJSONFields, flagValue(args, "--json"))
 }
 
 func TestCLIGetPullRequestByBranch(t *testing.T) {
@@ -110,7 +104,7 @@ func TestCLIGetPullRequestByBranch(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			argsPath := installRecordingGh(t, 0, tt.response)
-			gh := New(context.Background(), t.TempDir(), testTimeout, nil, nil)
+			gh := New(context.Background(), t.TempDir(), testTimeout, nil)
 
 			pr, err := gh.GetPullRequestByBranch("feature/login")
 

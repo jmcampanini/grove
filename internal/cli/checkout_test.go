@@ -119,7 +119,7 @@ func TestExecuteCheckout(t *testing.T) {
 						return []git.Worktree{
 							{
 								AbsolutePath: filepath.Join(workspaceDir, "wt-fix-login"),
-								Ref:          git.NewLocalBranch("feature/fix-login", "", "", true, 0, 0, git.Commit{}),
+								Ref:          git.NewLocalBranch("feature/fix-login", "", "", true, git.Commit{}),
 							},
 						}, nil
 					},

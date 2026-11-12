@@ -8,9 +8,6 @@ func DefaultConfig() Config {
 		Git: GitConfig{
 			Timeout: 5 * time.Second,
 		},
-		GitHub: GitHubConfig{
-			PreviewCacheTTL: 5 * time.Minute,
-		},
 		Issue: IssueConfig{
 			BranchTemplate:   "issue/{{.Number}}-{{.TitleSlug}}",
 			WorktreeTemplate: "is-{{.Number}}-{{.TitleSlug}}",

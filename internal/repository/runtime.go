@@ -1,6 +1,6 @@
 // Package repository holds the per-command runtime: the loaded configuration
-// and the git client bound to one repository, plus constructors for GitHub
-// clients that share its context, directory, and timeout.
+// and the git client bound to one repository, plus the constructor for a
+// GitHub client that shares its context, directory, and timeout.
 package repository
 
 import (
@@ -8,7 +8,6 @@ import (
 
 	"charm.land/log/v2"
 	"github.com/jmcampanini/go-config-loader/configloader"
-	"github.com/jmcampanini/grove/internal/cache"
 	"github.com/jmcampanini/grove/internal/config"
 	"github.com/jmcampanini/grove/internal/git"
 	"github.com/jmcampanini/grove/internal/github"
@@ -25,17 +24,8 @@ type Runtime struct {
 	MainWorktreePath string
 }
 
-// NewCachedGitHubClient creates a GitHub client using the configured preview cache.
-func (rt *Runtime) NewCachedGitHubClient() (github.GitHub, error) {
-	dir, err := cache.DefaultDir()
-	if err != nil {
-		return nil, err
-	}
-	c := cache.New(dir, rt.Config.GitHub.PreviewCacheTTL, rt.Logger)
-	return github.New(rt.Context, rt.Directory, rt.Config.Git.Timeout, c, rt.Logger), nil
-}
-
-// NewUncachedGitHubClient creates a GitHub client without a cache.
-func (rt *Runtime) NewUncachedGitHubClient() github.GitHub {
-	return github.New(rt.Context, rt.Directory, rt.Config.Git.Timeout, nil, rt.Logger)
+// NewGitHubClient creates a GitHub client that shares the runtime's context,
+// directory, and timeout.
+func (rt *Runtime) NewGitHubClient() github.GitHub {
+	return github.New(rt.Context, rt.Directory, rt.Config.Git.Timeout, rt.Logger)
 }

@@ -218,28 +218,6 @@ func (g *CLI) ensureRemoteExists(remoteName string) error {
 	return nil
 }
 
-// GetRepoDefaultBranch resolves the default branch from the local
-// remote-tracking HEAD (<remote>/HEAD) without contacting the remote.
-// It returns ("", nil) when that ref is not set and an error when the
-// remote does not exist.
-func (g *CLI) GetRepoDefaultBranch(remoteName string) (string, error) {
-	if err := g.ensureRemoteExists(remoteName); err != nil {
-		return "", err
-	}
-
-	output, err := g.executeGitCommand("rev-parse", "--abbrev-ref", remoteName+"/HEAD")
-	if err != nil {
-		if strings.Contains(err.Error(), "unknown revision") {
-			g.log.Debug("Remote HEAD not configured", "remoteName", remoteName)
-			return "", nil
-		}
-		return "", fmt.Errorf("failed to get remote HEAD: %w", err)
-	}
-
-	branchName := strings.TrimPrefix(output, remoteName+"/")
-	return branchName, nil
-}
-
 // GetRemoteDefaultBranch asks the remote for its HEAD with git ls-remote
 // --symref. It returns ("", nil) when the remote HEAD is not a branch and
 // an error when the remote does not exist or cannot be reached.
@@ -275,14 +253,13 @@ func parseRemoteDefaultBranchFromLSRemote(output string) string {
 	return ""
 }
 
-// ListLocalBranches returns every local branch with its upstream, ahead and
-// behind counts, checkout state, and tip commit.
+// ListLocalBranches returns every local branch with its upstream, checkout
+// state, and tip commit.
 func (g *CLI) ListLocalBranches() ([]LocalBranch, error) {
 	format := `branch %(refname:short)
 checkedOut %(if)%(HEAD)%(then)true%(else)false%(end)
 commit %(objectname:short)
 %(if)%(upstream:short)%(then)upstream %(upstream:short)
-%(end)%(if)%(upstream:track)%(then)track %(upstream:track)
 %(end)committedOn %(committerdate:iso-strict)
 committedBy %(committername)
 subject %(contents:subject)
@@ -350,31 +327,13 @@ func parseBranchBlock(lines []string) LocalBranch {
 	isCheckedOut := fields["checkedOut"] == "true"
 	sha := fields["commit"]
 	upstreamName := fields["upstream"]
-	ahead, behind := parseTrackInfo(fields["track"])
 	committedOn := parseISO8601Date(fields["committedOn"])
 	committedBy := fields["committedBy"]
 	subject := fields["subject"]
 	worktreeAbsolutePath := fields["worktreepath"]
 
 	commit := NewCommit(sha, subject, committedOn, committedBy)
-	return NewLocalBranch(name, upstreamName, worktreeAbsolutePath, isCheckedOut, ahead, behind, commit)
-}
-
-// parseTrackInfo parses the upstream track info string like "[ahead 3, behind 2]"
-func parseTrackInfo(track string) (ahead, behind int) {
-	if track == "" || track == "[gone]" {
-		return 0, 0
-	}
-	if n, _ := fmt.Sscanf(track, "[ahead %d, behind %d]", &ahead, &behind); n == 2 {
-		return ahead, behind
-	}
-	if n, _ := fmt.Sscanf(track, "[ahead %d]", &ahead); n == 1 {
-		return ahead, 0
-	}
-	if n, _ := fmt.Sscanf(track, "[behind %d]", &behind); n == 1 {
-		return 0, behind
-	}
-	return 0, 0
+	return NewLocalBranch(name, upstreamName, worktreeAbsolutePath, isCheckedOut, commit)
 }
 
 // getCommitBySHA retrieves full commit information for a given SHA.
@@ -820,13 +779,6 @@ func (g *CLI) IsWorktreeDirty(absPath string) (bool, error) {
 		return false, fmt.Errorf("failed to check worktree dirty state: %w", err)
 	}
 	return output != "", nil
-}
-
-// Merge merges ref into the current branch with --no-edit and returns
-// git's output. Mutating.
-func (g *CLI) Merge(ref string) (string, error) {
-	g.log.Info("Merging ref", "ref", ref)
-	return g.executeMutatingGitCommandWithOutput("failed to merge", "merge", "--no-edit", ref)
 }
 
 // ResetHard moves the current branch to ref and discards uncommitted

@@ -172,7 +172,7 @@ func TestExecuteCreate(t *testing.T) {
 						return []git.Worktree{
 							{
 								AbsolutePath: filepath.Join(workspaceDir, "wt-add-logging-support"),
-								Ref:          git.NewLocalBranch("feature/add-logging-support", "", "", false, 0, 0, git.Commit{}),
+								Ref:          git.NewLocalBranch("feature/add-logging-support", "", "", false, git.Commit{}),
 							},
 						}, nil
 					},
@@ -197,7 +197,7 @@ func TestExecuteCreate(t *testing.T) {
 						return []git.Worktree{
 							{
 								AbsolutePath: filepath.Join(workspaceDir, "nonexistent-dir"),
-								Ref:          git.NewLocalBranch("feature/add-logging-support", "", "", false, 0, 0, git.Commit{}),
+								Ref:          git.NewLocalBranch("feature/add-logging-support", "", "", false, git.Commit{}),
 							},
 						}, nil
 					},
@@ -218,7 +218,7 @@ func TestExecuteCreate(t *testing.T) {
 						return []git.Worktree{
 							{
 								AbsolutePath: filepath.Join(workspaceDir, "nonexistent-dir"),
-								Ref:          git.NewLocalBranch("feature/add-logging-support", "", "", false, 0, 0, git.Commit{}),
+								Ref:          git.NewLocalBranch("feature/add-logging-support", "", "", false, git.Commit{}),
 							},
 						}, nil
 					},
@@ -340,7 +340,7 @@ func TestExecuteCreate(t *testing.T) {
 						return []git.Worktree{
 							{
 								AbsolutePath: filepath.Join(workspaceDir, "wt-something-else"),
-								Ref:          git.NewLocalBranch("feature/something-else", "", "", false, 0, 0, git.Commit{}),
+								Ref:          git.NewLocalBranch("feature/something-else", "", "", false, git.Commit{}),
 							},
 						}, nil
 					},

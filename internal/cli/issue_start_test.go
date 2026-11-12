@@ -15,7 +15,7 @@ import (
 )
 
 func createTestLocalBranch(name string) git.LocalBranch {
-	return git.NewLocalBranch(name, "", "", false, 0, 0, git.Commit{})
+	return git.NewLocalBranch(name, "", "", false, git.Commit{})
 }
 
 func TestStartIssueWorktree(t *testing.T) {

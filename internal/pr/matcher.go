@@ -8,17 +8,6 @@ import (
 	"github.com/jmcampanini/grove/internal/naming"
 )
 
-// Match represents a PR with its worktree matching status.
-type Match struct {
-	PR           github.PullRequest
-	WorktreePath string
-}
-
-// HasWorktree reports whether a worktree was found for the pull request.
-func (m Match) HasWorktree() bool {
-	return m.WorktreePath != ""
-}
-
 // Matcher matches pull requests to existing worktrees.
 type Matcher struct {
 	log   *clog.Logger
@@ -35,18 +24,6 @@ func NewMatcher(namer *naming.PullRequestNamer, logger *clog.Logger) *Matcher {
 		log:   logger.WithPrefix("pr"),
 		namer: namer,
 	}
-}
-
-// MatchAll returns a Match for each PR, indicating whether a worktree exists.
-func (m *Matcher) MatchAll(prs []github.PullRequest, worktrees []git.Worktree) []Match {
-	result := make([]Match, len(prs))
-	for i, p := range prs {
-		result[i] = Match{PR: p}
-		if wt := m.FindWorktreeForPR(p, worktrees); wt != nil {
-			result[i].WorktreePath = wt.AbsolutePath
-		}
-	}
-	return result
 }
 
 // FindWorktreeForPR searches worktrees for one that matches the given PR.

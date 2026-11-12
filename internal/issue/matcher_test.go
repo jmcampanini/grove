@@ -35,7 +35,7 @@ func createNamer(t *testing.T, issueCfg config.IssueConfig) *naming.IssueNamer {
 
 func createWorktree(path string, branchName string) git.Worktree {
 	commit := git.NewCommit("abc123", "Test commit", time.Now(), "tester")
-	branch := git.NewLocalBranch(branchName, "", path, true, 0, 0, commit)
+	branch := git.NewLocalBranch(branchName, "", path, true, commit)
 	return git.Worktree{
 		AbsolutePath: path,
 		Ref:          branch,
@@ -52,10 +52,9 @@ func createCommitWorktree(path string) git.Worktree {
 
 func createIssue(number int, title string) github.Issue {
 	return github.Issue{
-		AuthorLogin: "testuser",
-		Number:      number,
-		State:       github.IssueStateOpen,
-		Title:       title,
+		Number: number,
+		State:  github.IssueStateOpen,
+		Title:  title,
 	}
 }
 
@@ -172,64 +171,6 @@ func TestMatcher_FindWorktreeForIssue(t *testing.T) {
 			} else {
 				require.NotNil(t, got)
 				assert.Equal(t, tt.worktrees[tt.wantMatchIndex].AbsolutePath, got.AbsolutePath)
-			}
-		})
-	}
-}
-
-func TestMatcher_MatchAll(t *testing.T) {
-	tests := []struct {
-		name      string
-		issues    []github.Issue
-		worktrees []git.Worktree
-		wantPaths []string // WorktreePath for each issue (empty if no match)
-	}{
-		{
-			name: "multiple issues with some matching",
-			issues: []github.Issue{
-				createIssue(123, "Fix login crash"),
-				createIssue(456, "No worktree yet"),
-				createIssue(789, "Add dark mode"),
-			},
-			worktrees: []git.Worktree{
-				createWorktree("/workspace/main", "main"),
-				createWorktree("/workspace/is-123-fix-login-crash", "issue/123-fix-login-crash"),
-				createWorktree("/workspace/is-789-add-dark-mode", "issue/789-add-dark-mode"),
-			},
-			wantPaths: []string{"/workspace/is-123-fix-login-crash", "", "/workspace/is-789-add-dark-mode"},
-		},
-		{
-			name:      "empty issues list",
-			issues:    []github.Issue{},
-			worktrees: []git.Worktree{createWorktree("/workspace/main", "main")},
-			wantPaths: []string{},
-		},
-		{
-			name: "no issues match",
-			issues: []github.Issue{
-				createIssue(1, "One"),
-				createIssue(2, "Two"),
-			},
-			worktrees: []git.Worktree{
-				createWorktree("/workspace/main", "main"),
-				createWorktree("/workspace/wt-other", "feature/other"),
-			},
-			wantPaths: []string{"", ""},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			namer := createNamer(t, defaultIssueConfig())
-			matcher := NewMatcher(namer, nil)
-
-			got := matcher.MatchAll(tt.issues, tt.worktrees)
-
-			require.Len(t, got, len(tt.issues))
-			for i, match := range got {
-				assert.Equal(t, tt.issues[i].Number, match.Issue.Number, "issue number mismatch at index %d", i)
-				assert.Equal(t, tt.wantPaths[i] != "", match.HasWorktree(), "HasWorktree mismatch at index %d", i)
-				assert.Equal(t, tt.wantPaths[i], match.WorktreePath, "WorktreePath mismatch at index %d", i)
 			}
 		})
 	}

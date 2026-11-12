@@ -9,8 +9,6 @@ type mockGitHub struct {
 	getIssueFn               func(issueNum int) (github.Issue, error)
 	getPullRequestByBranchFn func(branchName string) (*github.PullRequest, error)
 	getPullRequestFn         func(prNum int) (github.PullRequest, error)
-	listOpenIssuesFn         func(req github.ListRequest) (github.IssueList, error)
-	listOpenPullRequestsFn   func(req github.ListRequest) (github.PullRequestList, error)
 }
 
 func (m *mockGitHub) GetIssue(issueNum int) (github.Issue, error) {
@@ -27,29 +25,11 @@ func (m *mockGitHub) GetPullRequest(prNum int) (github.PullRequest, error) {
 	return github.PullRequest{}, nil
 }
 
-func (m *mockGitHub) GetPullRequestActivity(_, _ string, _ int) ([]github.ReviewThread, []github.TimelineEvent, error) {
-	return nil, nil, nil
-}
-
 func (m *mockGitHub) GetPullRequestByBranch(branchName string) (*github.PullRequest, error) {
 	if m.getPullRequestByBranchFn != nil {
 		return m.getPullRequestByBranchFn(branchName)
 	}
 	return nil, nil
-}
-
-func (m *mockGitHub) ListOpenIssues(req github.ListRequest) (github.IssueList, error) {
-	if m.listOpenIssuesFn != nil {
-		return m.listOpenIssuesFn(req)
-	}
-	return github.IssueList{}, nil
-}
-
-func (m *mockGitHub) ListOpenPullRequests(req github.ListRequest) (github.PullRequestList, error) {
-	if m.listOpenPullRequestsFn != nil {
-		return m.listOpenPullRequestsFn(req)
-	}
-	return github.PullRequestList{}, nil
 }
 
 type mockGit struct {
@@ -66,7 +46,6 @@ type mockGit struct {
 	getDefaultRemoteFn                  func(fallback string) (string, error)
 	getMainWorktreePathFn               func() (string, error)
 	getRemoteDefaultBranchFn            func(remoteName string) (string, error)
-	getRepoDefaultBranchFn              func(remoteName string) (string, error)
 	getStatusFn                         func(absPath string) (string, error)
 	getRemoteURLFn                      func(remoteName string) (string, error)
 	getWorktreeRootFn                   func() (string, error)
@@ -76,7 +55,6 @@ type mockGit struct {
 	listRemotesFn                       func() ([]string, error)
 	listTagsFn                          func() ([]git.Tag, error)
 	listWorktreesFn                     func() ([]git.Worktree, error)
-	mergeFn                             func(ref string) (string, error)
 	pruneWorktreesFn                    func() error
 	refExistsFn                         func(ref string) (bool, error)
 	removeWorktreeFn                    func(absPath string, force bool) error
@@ -175,13 +153,6 @@ func (m *mockGit) GetRemoteDefaultBranch(remoteName string) (string, error) {
 	return "main", nil
 }
 
-func (m *mockGit) GetRepoDefaultBranch(remoteName string) (string, error) {
-	if m.getRepoDefaultBranchFn != nil {
-		return m.getRepoDefaultBranchFn(remoteName)
-	}
-	return "main", nil
-}
-
 func (m *mockGit) GetStatus(absPath string) (string, error) {
 	if m.getStatusFn != nil {
 		return m.getStatusFn(absPath)
@@ -243,13 +214,6 @@ func (m *mockGit) IsWorktreeDirty(absPath string) (bool, error) {
 		return m.isWorktreeDirtyFn(absPath)
 	}
 	return false, nil
-}
-
-func (m *mockGit) Merge(ref string) (string, error) {
-	if m.mergeFn != nil {
-		return m.mergeFn(ref)
-	}
-	return "", nil
 }
 
 func (m *mockGit) PruneWorktrees() error {
