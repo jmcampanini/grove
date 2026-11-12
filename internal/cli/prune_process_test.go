@@ -62,7 +62,7 @@ fi
 printf '[{"headRefName":"feature/test","isDraft":false,"number":42,"state":"MERGED","title":"Test PR"}]\n'
 `), 0o755))
 
-	pruneOutput := runPruneCommandProcess(t, mainDir, "prune", "0\n")
+	pruneOutput := runPruneCommandProcess(t, mainDir, "0\n")
 
 	assert.Contains(t, pruneOutput, "PR #42 merged")
 	assert.NotContains(t, pruneOutput, "Nothing to prune.")
@@ -73,7 +73,7 @@ func TestPruneCommandProcess(_ *testing.T) {
 		return
 	}
 
-	err := executeWithFileLogging(os.Stdin, os.Stdout, os.Stderr, []string{os.Getenv("GROVE_PRUNE_COMMAND")})
+	err := executeWithFileLogging(os.Stdin, os.Stdout, os.Stderr, []string{"prune"})
 	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -81,15 +81,12 @@ func TestPruneCommandProcess(_ *testing.T) {
 	os.Exit(0)
 }
 
-func runPruneCommandProcess(t *testing.T, dir, command, input string) string {
+func runPruneCommandProcess(t *testing.T, dir, input string) string {
 	t.Helper()
 
 	process := exec.Command(os.Args[0], "-test.run=^TestPruneCommandProcess$")
 	process.Dir = dir
-	process.Env = append(os.Environ(),
-		"GROVE_PRUNE_COMMAND_PROCESS=1",
-		"GROVE_PRUNE_COMMAND="+command,
-	)
+	process.Env = append(os.Environ(), "GROVE_PRUNE_COMMAND_PROCESS=1")
 	process.Stdin = strings.NewReader(input)
 	var stdout, stderr bytes.Buffer
 	process.Stdout = &stdout
