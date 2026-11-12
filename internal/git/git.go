@@ -130,11 +130,9 @@ func (t Tag) IsAnnotated() bool {
 	return t.TaggerName != "" || t.TaggerEmail != "" || !t.TaggedOn.IsZero() || t.Message != ""
 }
 
-// LocalBranch is a local branch with its upstream tracking state and, when
-// checked out, the worktree that holds it.
+// LocalBranch is a local branch with its upstream and, when checked out, the
+// worktree that holds it.
 type LocalBranch struct {
-	Ahead                int // Commits ahead of upstream
-	Behind               int // Commits behind upstream
 	commit               Commit
 	IsCheckedOut         bool
 	Name                 string // Short branch name (e.g., "main", not "refs/heads/main")
@@ -146,10 +144,8 @@ var _ WorktreeRef = &LocalBranch{}
 
 // NewLocalBranch returns a LocalBranch holding the given values as is, with
 // commit as its tip; it does not consult the repository.
-func NewLocalBranch(name, upstreamName, worktreeAbsolutePath string, isCheckedOut bool, ahead, behind int, commit Commit) LocalBranch {
+func NewLocalBranch(name, upstreamName, worktreeAbsolutePath string, isCheckedOut bool, commit Commit) LocalBranch {
 	return LocalBranch{
-		Ahead:                ahead,
-		Behind:               behind,
 		IsCheckedOut:         isCheckedOut,
 		Name:                 name,
 		UpstreamName:         upstreamName,
@@ -222,17 +218,6 @@ type Git interface {
 	// GetDefaultRemote returns the default remote name.
 	// Returns the value of git config remote.pushDefault if set, otherwise returns the fallback parameter.
 	GetDefaultRemote(fallback string) (string, error)
-
-	// GetRepoDefaultBranch returns the default branch name from the local
-	// remote-tracking HEAD reference (e.g., refs/remotes/origin/HEAD).
-	// Returns the branch name (e.g., "main") if the local remote HEAD is configured.
-	// Returns ("", nil) if the remote exists but the local remote HEAD is not set.
-	// Returns an error if:
-	//   - The remote does not exist
-	//   - Not in a git repository
-	//   - Git command fails (e.g., git not installed)
-	// This works in both regular repositories and worktrees.
-	GetRepoDefaultBranch(remoteName string) (string, error)
 
 	// GetRemoteDefaultBranch returns the default branch name by querying the
 	// remote's live HEAD reference.
@@ -315,11 +300,6 @@ type Git interface {
 	// IsWorktreeDirty returns true if the worktree at absPath has uncommitted changes
 	// (modified, staged, or untracked files).
 	IsWorktreeDirty(absPath string) (bool, error)
-
-	// Merge merges the given ref into the current branch using --no-edit.
-	// Returns the merge output (e.g., fast-forward info, file change summary).
-	// Will mutate the current git state.
-	Merge(ref string) (string, error)
 
 	// ResetHard resets the current branch to the given ref, discarding all local changes.
 	// Will mutate the current git state.

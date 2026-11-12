@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"strings"
 	"time"
@@ -23,6 +24,12 @@ func testLogger() *log.Logger {
 func plainWriter(w io.Writer) io.Writer {
 	return &colorprofile.Writer{Forward: w, Profile: colorprofile.NoTTY}
 }
+
+var errWriteFailed = errors.New("write failed")
+
+type failingWriter struct{}
+
+func (failingWriter) Write([]byte) (int, error) { return 0, errWriteFailed }
 
 func newTestRootCommand() *cobra.Command {
 	return NewRootCommand(strings.NewReader(""), io.Discard, io.Discard)
@@ -62,7 +69,7 @@ func testConfigRootedAt(dir string) config.Config {
 
 func createTestWorktree(path string, branchName string) git.Worktree {
 	commit := git.NewCommit("abc123", "Test commit", time.Now(), "tester")
-	branch := git.NewLocalBranch(branchName, "", path, true, 0, 0, commit)
+	branch := git.NewLocalBranch(branchName, "", path, true, commit)
 	return git.Worktree{
 		AbsolutePath: path,
 		Ref:          branch,

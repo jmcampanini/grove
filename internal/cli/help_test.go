@@ -132,7 +132,7 @@ func TestEveryApplicationCommandMeetsTheHelpBaseline(t *testing.T) {
 }
 
 func TestHelpPrintsCommandHelp(t *testing.T) {
-	for _, path := range [][]string{nil, {"pr", "list"}, {"help"}} {
+	for _, path := range [][]string{nil, {"pr", "checkout"}, {"help"}} {
 		t.Run(strings.Join(path, " "), func(t *testing.T) {
 			want, _, err := executeForTest(append(path, "--help")...)
 			require.NoError(t, err)
@@ -150,7 +150,7 @@ func TestHelpRejectsUnknownCommandPaths(t *testing.T) {
 	for _, args := range [][]string{
 		{"help", "nope"},
 		{"help", "pr", "nope"},
-		{"help", "pr", "list", "nope"},
+		{"help", "pr", "checkout", "nope"},
 		{"help", "--", "--nope"},
 	} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
@@ -171,8 +171,8 @@ func TestHelpCompletesCommandPaths(t *testing.T) {
 	}{
 		{args: []string{"co"}, want: []string{"completion", "config"}},
 		{args: []string{"he"}, want: []string{"help"}},
-		{args: []string{"pr", ""}, want: []string{"checkout", "list", "preview"}},
-		{args: []string{"pr", "list", ""}},
+		{args: []string{"pr", ""}, want: []string{"checkout"}},
+		{args: []string{"pr", "checkout", ""}},
 		{args: []string{"pr", "unknown", ""}},
 	}
 	for _, tt := range tests {
@@ -193,7 +193,7 @@ func TestHelpCompletesCommandPaths(t *testing.T) {
 }
 
 func TestHelpReturnsOutputErrors(t *testing.T) {
-	for _, args := range [][]string{nil, {"--help"}, {"help", "pr", "list"}, {"completion"}, {"exit-codes"}} {
+	for _, args := range [][]string{nil, {"--help"}, {"help", "pr", "checkout"}, {"completion"}, {"exit-codes"}} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			var stderr bytes.Buffer
 

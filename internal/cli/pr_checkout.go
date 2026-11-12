@@ -34,16 +34,14 @@ is checked out with a warning on stderr. Nothing prompts.
 
 ` + helpWorktreeCreate + `
 
-` + helpGHUncached + `
+` + helpGH + `
 
 ` + helpFailure + `
 
 To start new local work that has no pull request yet, use grove create.`,
-		Example: `  grove pr checkout 42
-  grove pr list --fzf | fzf --delimiter '\t' --with-nth 3 --accept-nth 1 \
-    | xargs grove pr checkout`,
-		Args: numberArgs("pull request"),
-		RunE: services.runPRCheckout,
+		Example: `  grove pr checkout 42`,
+		Args:    numberArgs("pull request"),
+		RunE:    services.runPRCheckout,
 	}
 }
 
@@ -60,7 +58,7 @@ func (services commandServices) runPRCheckout(cmd *cobra.Command, args []string)
 
 	ctx := &prCheckoutContext{
 		cfg:       rt.Config,
-		ghClient:  rt.NewUncachedGitHubClient(),
+		ghClient:  rt.NewGitHubClient(),
 		gitClient: rt.GitClient,
 		logger:    rt.Logger,
 	}

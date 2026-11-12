@@ -14,10 +14,8 @@ type StatusContext struct {
 	MainWorktreePath string
 }
 
-// TrackingInfo records the upstream and commit counts for a local branch.
+// TrackingInfo records the upstream of a local branch.
 type TrackingInfo struct {
-	Ahead    int
-	Behind   int
 	Upstream string
 }
 
@@ -28,7 +26,6 @@ type Status struct {
 	Dirty      bool
 	HeadSHA    string
 	IsMain     bool
-	Kind       string
 	Locked     bool
 	PR         *github.PullRequest
 	Tracking   TrackingInfo
@@ -62,11 +59,7 @@ func NewStatus(mainWorktreePath string, wt git.Worktree, branchMap map[string]gi
 	ws.BranchName = ExtractBranchName(&wt)
 	ws.HeadSHA = wt.CommitSHA()
 	if b, ok := branchMap[ws.BranchName]; ok {
-		ws.Tracking = TrackingInfo{
-			Ahead:    b.Ahead,
-			Behind:   b.Behind,
-			Upstream: b.UpstreamName,
-		}
+		ws.Tracking = TrackingInfo{Upstream: b.UpstreamName}
 	}
 	return ws
 }

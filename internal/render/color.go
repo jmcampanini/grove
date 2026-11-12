@@ -5,9 +5,7 @@ import (
 	"io"
 	"os"
 	"strings"
-	"sync"
 
-	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/colorprofile"
 	"golang.org/x/term"
 )
@@ -84,31 +82,4 @@ func IsTerminal(stream any) bool {
 // and a stream without color also loses hyperlinks.
 func StyledWriter(mode ColorMode, w io.Writer) io.Writer {
 	return &colorprofile.Writer{Forward: w, Profile: ResolveProfile(mode, w)}
-}
-
-var (
-	backgroundOnce sync.Once
-	backgroundDark bool
-)
-
-// HasDarkBackground reports whether the terminal behind in and out has a
-// dark background. COLORFGBG answers without a query. Otherwise the terminal
-// is queried at most once per process, and only when profile can render
-// color and both streams are terminals; every other case, including a
-// failed query, is treated as dark. lipgloss retries a query that got no
-// answer on the other descriptor of the same terminal; its public API
-// offers no single-descriptor query, so that one retry is accepted.
-func HasDarkBackground(profile colorprofile.Profile, in io.Reader, out io.Writer) bool {
-	if dark, ok := DetectDarkBackgroundFromEnv(); ok {
-		return dark
-	}
-	inFile, inOK := in.(*os.File)
-	outFile, outOK := out.(*os.File)
-	if profile < colorprofile.ANSI || !inOK || !outOK || !IsTerminal(inFile) || !IsTerminal(outFile) {
-		return true
-	}
-	backgroundOnce.Do(func() {
-		backgroundDark = lipgloss.HasDarkBackground(inFile, outFile)
-	})
-	return backgroundDark
 }

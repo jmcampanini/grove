@@ -1,3 +1,3 @@
-// Package render draws styled terminal output: pull request and issue
-// previews, and the color resolution every styled stream shares.
+// Package render holds the color resolution every styled stream shares and
+// the palette of colors and glyphs styled output draws with.
 package render

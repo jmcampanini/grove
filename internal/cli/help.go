@@ -27,24 +27,8 @@ worktree.layout renders (run grove help layout); the global --space flag
 selects the space segment for one invocation. Nothing is created when a
 worktree for the branch already exists.`
 
-	// helpGH states the gh dependency and the cache the read-only GitHub
-	// commands consult.
-	helpGH = `The command runs gh, which must already be authenticated, and reads the
-gh output cache described in grove cache --help before querying GitHub; a
-miss stores the fresh gh output there.`
-
-	// helpGHUncached states the gh dependency of the commands that bypass
-	// the cache.
-	helpGHUncached = `The command runs gh, which must already be authenticated, and always
-queries GitHub; it does not read the gh output cache.`
-
-	// helpFzfPreview states the preview presentation mode shared by the pr
-	// and issue preview commands.
-	helpFzfPreview = `--fzf is the presentation mode for an fzf preview pane. It changes only
-how a failure is shown: once the invocation is accepted, an error such as
-an unknown number or a failed gh call is printed on stdout as
-"grove: <message>" and the command exits 0, so the pane shows it. A
-rejected invocation still exits 2.`
+	// helpGH states the gh dependency of the commands that query GitHub.
+	helpGH = `The command runs gh, which must already be authenticated.`
 )
 
 // helpTopicContract states the stream contract every help topic shares.
@@ -63,7 +47,7 @@ It does not load configuration or create the log file.
 
 ` + helpFailure,
 		Example: `  grove help
-  grove help pr list
+  grove help pr checkout
   grove help exit-codes`,
 		GroupID: "config",
 		Args: func(cmd *cobra.Command, args []string) error {

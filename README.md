@@ -60,7 +60,7 @@ Run these from inside a repository: the clone or any of its worktrees.
 | `grove checkout feature/fix-login` | Check out an existing local or remote branch into a new worktree. |
 | `grove pr checkout 42` | Check out a pull request into a worktree. |
 | `grove issue start 17` | Create a branch and worktree to work on an issue. |
-| `grove status` | Show a dashboard of every worktree with branch tracking, dirty state, and pull request information. |
+| `grove list` | Print the path of every worktree, the main worktree first. |
 | `grove sync` | Fetch and hard-reset the current branch to its remote tracking branch. |
 | `grove prune` | Interactively remove worktrees that are likely no longer needed. |
 
@@ -70,7 +70,7 @@ Run these from inside a repository: the clone or any of its worktrees.
 ## Required external programs
 
 - `git`: every command that reads or changes a repository runs it.
-- `gh`: the `pr` and `issue` commands, `grove prune`, and the pull request data in `grove status` need it, and it must already be authenticated because grove disables its prompts.
+- `gh`: the `pr` and `issue` commands and `grove prune` need it, and it must already be authenticated because grove disables its prompts.
 
 
 ## Configuration

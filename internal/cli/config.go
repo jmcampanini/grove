@@ -81,12 +81,6 @@ Keys, shown with their defaults:
     stdout and stderr are each capped at 8 MiB, and both programs run with
     their interactive prompts disabled.
 
-  [github]
-  preview_cache_ttl = "5m"
-    How long cached gh output stays valid for pr list, pr preview, issue
-    list, issue preview, and status; zero or positive. Zero disables the
-    cache. Run grove cache --help for the directory.
-
   [issue]
   branch_template = "issue/{{.Number}}-{{.TitleSlug}}"
     Branch name for grove issue start; non-empty, and it must render

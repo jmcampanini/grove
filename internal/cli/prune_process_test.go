@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPruneUsesUncachedGitHubState(t *testing.T) {
+func TestPruneOffersWorktreeOfMergedPullRequest(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("fake gh process uses a POSIX shell")
 	}
@@ -32,7 +32,6 @@ func TestPruneUsesUncachedGitHubState(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	t.Setenv("PATH", fakeBinDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("TERM", "dumb")
-	t.Setenv("XDG_CACHE_HOME", filepath.Join(testDir, "cache"))
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(testDir, "config"))
 	t.Setenv("XDG_STATE_HOME", filepath.Join(testDir, "state"))
 
@@ -46,10 +45,6 @@ func TestPruneUsesUncachedGitHubState(t *testing.T) {
 	runPruneTestGit(t, mainDir, "update-ref", "refs/remotes/origin/feature/test", head)
 	runPruneTestGit(t, mainDir, "branch", "--set-upstream-to=origin/feature/test", "feature/test")
 
-	statePath := filepath.Join(testDir, "gh-state")
-	logPath := filepath.Join(testDir, "gh.log")
-	t.Setenv("FAKE_GH_LOG", logPath)
-	t.Setenv("FAKE_GH_STATE", statePath)
 	require.NoError(t, os.WriteFile(filepath.Join(fakeBinDir, "gh"), []byte(`#!/bin/sh
 set -eu
 branch=""
@@ -64,23 +59,13 @@ if [ "$branch" != "feature/test" ]; then
   printf '[]\n'
   exit 0
 fi
-printf '%s\n' "$branch" >>"$FAKE_GH_LOG"
-state=$(cat "$FAKE_GH_STATE")
-printf '[{"headRefName":"feature/test","isDraft":false,"number":42,"state":"%s","title":"Test PR"}]\n' "$state"
+printf '[{"headRefName":"feature/test","isDraft":false,"number":42,"state":"MERGED","title":"Test PR"}]\n'
 `), 0o755))
 
-	require.NoError(t, os.WriteFile(statePath, []byte("OPEN\n"), 0o600))
-	statusOutput := runPruneCommandProcess(t, mainDir, "status", "")
-	require.Contains(t, statusOutput, "#42 open")
-
-	require.NoError(t, os.WriteFile(statePath, []byte("MERGED\n"), 0o600))
 	pruneOutput := runPruneCommandProcess(t, mainDir, "prune", "0\n")
+
 	assert.Contains(t, pruneOutput, "PR #42 merged")
 	assert.NotContains(t, pruneOutput, "Nothing to prune.")
-
-	logData, err := os.ReadFile(logPath)
-	require.NoError(t, err)
-	assert.Equal(t, 2, strings.Count(string(logData), "feature/test"))
 }
 
 func TestPruneCommandProcess(_ *testing.T) {

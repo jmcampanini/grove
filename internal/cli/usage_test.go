@@ -34,7 +34,7 @@ func TestExitStatusClassifiesInvocationFailures(t *testing.T) {
 		{name: "blank namer phrase", args: []string{"namer", "slug", ""}, wantErr: "phrase cannot be empty"},
 		{name: "extra operand", args: []string{"checkout", "a", "b"}, wantErr: "accepts 1 arg(s), received 2"},
 		{name: "pull request number not numeric", args: []string{"pr", "checkout", "abc"}, wantErr: `invalid pull request number "abc"`},
-		{name: "pull request number not positive", args: []string{"pr", "preview", "--fzf", "0"}, wantErr: `invalid pull request number "0"`},
+		{name: "pull request number not positive", args: []string{"pr", "checkout", "0"}, wantErr: `invalid pull request number "0"`},
 		{name: "issue number not numeric", args: []string{"issue", "start", "x"}, wantErr: `invalid issue number "x"`},
 		{name: "invalid color mode", args: []string{"--color", "sometimes", "list"}, wantErr: `invalid argument "sometimes" for "--color" flag: valid values are auto, always, never`},
 		{name: "conflicting diagnostic flags", args: []string{"--debug", "--quiet", "exit-codes"}, wantErr: "none of the others can be"},

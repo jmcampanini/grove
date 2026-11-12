@@ -288,9 +288,6 @@ func TestListLocalBranches_Integration_WithTracking(t *testing.T) {
 	repo.commit("initial commit")
 	repo.addRemote("origin")
 
-	// Make a local commit to be ahead
-	repo.commit("local commit")
-
 	branches, err := repo.Git.ListLocalBranches()
 
 	require.NoError(t, err)
@@ -299,8 +296,6 @@ func TestListLocalBranches_Integration_WithTracking(t *testing.T) {
 	main := branches[0]
 	assert.Equal(t, "main", main.Name)
 	assert.Equal(t, "origin/main", main.UpstreamName)
-	assert.Equal(t, 1, main.Ahead)
-	assert.Equal(t, 0, main.Behind)
 }
 
 func TestListLocalBranches_Integration_CheckedOutBranch(t *testing.T) {
@@ -763,63 +758,6 @@ func TestGetDefaultRemote_Integration_Fallback(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "my-fallback", remote)
-}
-
-// =============================================================================
-// GetRepoDefaultBranch tests
-// =============================================================================
-
-func TestGetRepoDefaultBranch_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
-	repo := newTestRepo(t)
-	repo.commit("initial commit")
-	repo.addRemote("origin")
-
-	// Set the remote HEAD
-	runGit(t, repo.path(), "remote", "set-head", "origin", "main")
-
-	branch, err := repo.Git.GetRepoDefaultBranch("origin")
-
-	require.NoError(t, err)
-	assert.Equal(t, "main", branch)
-}
-
-func TestGetRepoDefaultBranch_Integration_RemoteExistsWithoutHead(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
-	repo := newTestRepo(t)
-	repo.commit("initial commit")
-	repo.addRemote("origin")
-
-	// Remote exists but HEAD is not set - should return empty string, not error
-	// (remote HEAD is only set after fetch or explicit set-head)
-	runGit(t, repo.path(), "remote", "set-head", "origin", "-d")
-
-	branch, err := repo.Git.GetRepoDefaultBranch("origin")
-
-	require.NoError(t, err)
-	assert.Empty(t, branch)
-}
-
-func TestGetRepoDefaultBranch_Integration_RemoteDoesNotExist(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
-	repo := newTestRepo(t)
-	repo.commit("initial commit")
-
-	// No remote configured - should return an error
-	branch, err := repo.Git.GetRepoDefaultBranch("nonexistent")
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "does not exist")
-	assert.Empty(t, branch)
 }
 
 // =============================================================================
