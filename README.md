@@ -14,7 +14,7 @@ mise use -g github:jmcampanini/grove
 mise upgrade github:jmcampanini/grove
 ```
 
-For archive installs or upgrades, after installing Git and GitHub CLI, download your platform's [release archive](https://github.com/jmcampanini/grove/releases), then extract it and copy `grove` into a directory on `PATH`:
+For archive installs or upgrades, install Git and GitHub CLI first, then download your platform's [release archive](https://github.com/jmcampanini/grove/releases), extract it, and copy `grove` into a directory on `PATH`:
 
 ```sh
 tar -xzf "<downloaded-archive>.tar.gz"
