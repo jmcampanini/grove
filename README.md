@@ -5,7 +5,7 @@ Grove manages git worktrees: one directory per branch, placed under a configurab
 
 ## Install
 
-Grove publishes versioned binaries for Linux and macOS on amd64 and arm64, with prerequisites and channel-switching guidance in the [installation notes](docs/installation.md).
+Grove publishes versioned releases with prebuilt binaries for Linux and macOS on amd64 and arm64, with prerequisites in the [installation notes](docs/installation.md).
 
 Install or upgrade the latest release with [mise](https://mise.jdx.dev), after installing Git and [GitHub CLI](https://cli.github.com):
 
@@ -14,26 +14,11 @@ mise use -g github:jmcampanini/grove
 mise upgrade github:jmcampanini/grove
 ```
 
-Install or upgrade with Homebrew, which also installs Git, GitHub CLI, and shell completions:
-
-```sh
-brew install --cask jmcampanini/tap/grove
-brew upgrade --cask jmcampanini/tap/grove
-```
-
-For archive installs or upgrades, download your platform's [release archive](https://github.com/jmcampanini/grove/releases), then extract it and copy `grove` into a directory on `PATH`:
+For archive installs or upgrades, install Git and GitHub CLI first, then download your platform's [release archive](https://github.com/jmcampanini/grove/releases), extract it, and copy `grove` into a directory on `PATH`:
 
 ```sh
 tar -xzf "<downloaded-archive>.tar.gz"
 install -m 755 grove "<directory-on-PATH>/grove"
-```
-
-Install or upgrade the latest `main` commit with the alternative Homebrew HEAD formula:
-
-```sh
-brew tap jmcampanini/grove https://github.com/jmcampanini/grove
-brew install --HEAD jmcampanini/grove/grove
-brew upgrade --fetch-HEAD jmcampanini/grove/grove
 ```
 
 Build from source with mise, Git, and GitHub CLI installed; [CONTRIBUTING.md](CONTRIBUTING.md) covers development and tool upgrades:
